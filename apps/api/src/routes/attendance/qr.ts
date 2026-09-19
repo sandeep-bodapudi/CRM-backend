@@ -173,7 +173,7 @@ router.post(
     try {
       const rawPayload = req.body.qrPayload || req.body.qr_token || req.body.payload;
       const payload = parseAndVerifyQR(req, rawPayload);
-      if (!payload) return res.status(400).json({ error: 'Invalid or forged QR Code token' });
+      if (!payload) return res.status(400).json({ error: 'Invalid QR Code.' });
 
       const targetEmployeeId = payload.employeeId;
 
@@ -184,25 +184,23 @@ router.post(
 
       if (!scannedEmployee) return res.status(404).json({ error: 'Employee not found' });
       if (scannedEmployee.company_id !== targetCompanyId) {
-        return res.status(403).json({ error: 'Employee does not belong to your company' });
+        return res.status(403).json({ error: 'Company mismatch.' });
       }
       if (scannedEmployee.status !== 'ACTIVE' || !scannedEmployee.attendance_required) {
-        return res.status(403).json({ error: 'Employee is not eligible for attendance' });
+        return res.status(403).json({ error: 'Not eligible for attendance.' });
       }
 
       const now = new Date();
       const { dateString, timeString } = getISTComponents(now);
 
       if (getISTDayOfWeek(dateString) === 0) {
-        return res.status(400).json({ error: 'Today is a holiday, attendance cannot be stamped' });
+        return res.status(400).json({ error: 'Today is a holiday.' });
       }
       const holidayCheck = await p.companyHoliday.findFirst({
         where: { company_id: targetCompanyId, date: toHolidayDateKey(dateString) },
       });
       if (holidayCheck) {
-        return res
-          .status(400)
-          .json({ error: 'Today is a company holiday, attendance cannot be stamped' });
+        return res.status(400).json({ error: 'Today is a holiday.' });
       }
 
       // Concurrency Protection via Transaction
@@ -287,7 +285,7 @@ router.post(
         });
       }
       logger.error('Scan attendance error:', error);
-      return res.status(500).json({ error: 'Attendance scan verification failed' });
+      return res.status(500).json({ error: 'Scan failed, please try again.' });
     }
   },
 );
@@ -304,28 +302,26 @@ router.post(
     try {
       const rawPayload = req.body.qrPayload || req.body.qr_token || req.body.payload;
       const payload = parseAndVerifyQR(req, rawPayload);
-      if (!payload) return res.status(400).json({ error: 'Invalid or forged QR Code token' });
+      if (!payload) return res.status(400).json({ error: 'Invalid QR Code.' });
 
       const targetEmployeeId = payload.employeeId;
 
       const scannedEmployee = await p.employee.findUnique({ where: { id: targetEmployeeId } });
       if (!scannedEmployee || scannedEmployee.company_id !== targetCompanyId) {
-        return res.status(403).json({ error: 'Employee does not belong to your company' });
+        return res.status(403).json({ error: 'Company mismatch.' });
       }
 
       const now = new Date();
       const { dateString, timeString } = getISTComponents(now);
 
       if (getISTDayOfWeek(dateString) === 0) {
-        return res.status(400).json({ error: 'Today is a holiday, attendance cannot be stamped' });
+        return res.status(400).json({ error: 'Today is a holiday.' });
       }
       const holidayCheck = await p.companyHoliday.findFirst({
         where: { company_id: targetCompanyId, date: toHolidayDateKey(dateString) },
       });
       if (holidayCheck) {
-        return res
-          .status(400)
-          .json({ error: 'Today is a company holiday, attendance cannot be stamped' });
+        return res.status(400).json({ error: 'Today is a holiday.' });
       }
 
       if (timeString < '18:00:00') {
@@ -363,8 +359,7 @@ router.post(
         });
         if (!todayReport) {
           return res.status(400).json({
-            error:
-              "Please submit today's daily report before logging out. Go to your account, submit the report, then come back and scan out.",
+            error: 'Please submit your daily report first.',
           });
         }
       }
@@ -377,7 +372,8 @@ router.post(
             orderBy: { check_in_at: 'desc' },
           });
 
-          if (!activeLog) return { error: 'No active check-in found for today' };
+          if (!activeLog)
+            return { error: 'Already logged out, no need to scan again. You can leave now.' };
 
           const checkInTime = new Date(activeLog.check_in_at).getTime();
           const diffMs = now.getTime() - checkInTime;
