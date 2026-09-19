@@ -176,8 +176,18 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
       const dayStr = getISTComponents(new Date(p.target_date)).dateString;
       if (calendarMap[dayStr]) {
         if (p.type === 'LEAVE') {
-          calendarMap[dayStr].status = 'LEAVE';
-          calendarMap[dayStr].isLeave = true;
+          if (p.leave_type === 'FIRST_HALF' || p.leave_type === 'SECOND_HALF') {
+            // Half-day leave still counts as a working day for the other
+            // half — show HALF_DAY (consistent with the status HR uses for
+            // manual half-day entries) instead of the blanket LEAVE a full
+            // day gets, and carry leave_type so the UI can label which half.
+            calendarMap[dayStr].status = 'HALF_DAY';
+            calendarMap[dayStr].isHalfDayLeave = true;
+            calendarMap[dayStr].leaveType = p.leave_type;
+          } else {
+            calendarMap[dayStr].status = 'LEAVE';
+            calendarMap[dayStr].isLeave = true;
+          }
         } else if (p.type === 'LATE_CHECKIN') {
           calendarMap[dayStr].hasApprovedLateProposal = true;
         }
@@ -198,6 +208,8 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
         // Usually if they punch in, the punch status overrides. But let's check if it's LEAVE.
         if (calendarMap[dateString].isLeave) {
           adjustedStatus = 'LEAVE';
+        } else if (calendarMap[dateString].isHalfDayLeave) {
+          adjustedStatus = 'HALF_DAY';
         }
 
         // Prevent later SYSTEM_AUTO logs from overwriting earlier MANUAL or QR_SCAN logs

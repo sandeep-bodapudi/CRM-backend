@@ -468,7 +468,10 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
                       {item.employee?.employee_code || '---'})
                     </span>
                     <span className="ml-2 text-slate-500 font-mono">
-                      {item.type}{' '}
+                      {item.type}
+                      {item.type === 'LEAVE' && item.leave_type && item.leave_type !== 'FULL_DAY'
+                        ? ` (${item.leave_type === 'FIRST_HALF' ? '1st Half' : '2nd Half'})`
+                        : ''}{' '}
                       {item.target_date ? new Date(item.target_date).toLocaleDateString() : ''}
                     </span>
                     <p className="text-slate-600 mt-0.5 font-medium">{item.reason}</p>

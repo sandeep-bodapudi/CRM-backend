@@ -892,6 +892,7 @@ export interface ProposalItem {
   employee_id: number;
   employee?: { id: number; full_name?: string | null; employee_code?: string } | null;
   type: string;
+  leave_type?: string | null;
   target_date: ISODateTime;
   reason: string;
   status: string;

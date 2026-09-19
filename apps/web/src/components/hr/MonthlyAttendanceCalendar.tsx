@@ -116,7 +116,9 @@ export const MonthlyAttendanceCalendar: React.FC<CalendarProps> = ({ employeeId 
           statusText = 'Late';
         } else if (status === 'HALF_DAY') {
           statusColor = 'bg-purple-100 border-purple-300';
-          statusText = 'Half Day';
+          statusText = dayData.leaveType
+            ? `Half Day (Leave - ${dayData.leaveType === 'FIRST_HALF' ? '1st Half' : '2nd Half'})`
+            : 'Half Day';
         } else if (status === 'HOLIDAY') {
           statusColor = 'bg-slate-200 border-slate-300';
           statusText = dayData.holidayName || 'Holiday';
@@ -152,7 +154,7 @@ export const MonthlyAttendanceCalendar: React.FC<CalendarProps> = ({ employeeId 
                       ? 'text-emerald-700'
                       : statusText === 'Late'
                         ? 'text-amber-700'
-                        : statusText === 'Half Day'
+                        : statusText.startsWith('Half Day')
                           ? 'text-purple-700'
                           : statusText === 'Paid Leave'
                             ? 'text-orange-700'
