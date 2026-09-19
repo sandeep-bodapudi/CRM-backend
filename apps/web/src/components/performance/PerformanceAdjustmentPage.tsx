@@ -23,7 +23,7 @@ export default function PerformanceAdjustmentPage() {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/employees`, {
+      const res = await fetch(`${API_BASE_URL}/employees`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (res.ok) {
@@ -61,7 +61,7 @@ export default function PerformanceAdjustmentPage() {
     setSuccessMessage(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/performance-adjustments`, {
+      const res = await fetch(`${API_BASE_URL}/performance-adjustments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

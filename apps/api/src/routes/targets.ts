@@ -16,7 +16,7 @@ const p = prisma;
 const generateBasicSchema = (metrics: string[], hasChecklist = false): any[] => {
   const schema: any[] = metrics.map((m) => ({
     id: m,
-    label: m.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
+    label: m.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase()),
     type: 'COUNT',
     required: true,
     targetValue: 0, // Will be overridden manually by MD, but provides structure
@@ -26,55 +26,67 @@ const generateBasicSchema = (metrics: string[], hasChecklist = false): any[] => 
       id: 'dailyTaskListCompleted',
       label: 'Daily Task List Completed',
       type: 'CHECKLIST',
-      required: true
+      required: true,
     });
     schema.push({
       id: 'endOfDayCleanup',
       label: 'End Of Day Cleanup',
       type: 'CHECKLIST',
-      required: true
+      required: true,
     });
   }
   schema.push({
     id: 'feedback',
     label: 'Daily Feedback & Notes',
     type: 'LONG_TEXT',
-    required: false
+    required: false,
   });
   return schema;
 };
 
 // Standard 1-Click Role Presets (Saving MD & Marketing Director time)
-const ROLE_PRESETS: Record<string, { target_type: string; targets_json: Record<string, any>, form_schema_json: any[] }> = {
+const ROLE_PRESETS: Record<
+  string,
+  { target_type: string; targets_json: Record<string, any>; form_schema_json: any[] }
+> = {
   [Roles.TELECALLER]: {
     target_type: 'COUNT',
     targets_json: { callsMade: 50, leadsQualified: 5, followupsDone: 15 },
-    form_schema_json: generateBasicSchema(['callsMade', 'leadsQualified', 'followupsDone'])
+    form_schema_json: generateBasicSchema(['callsMade', 'leadsQualified', 'followupsDone']),
   },
   [Roles.PROJECT_MANAGER]: {
     target_type: 'COUNT',
     targets_json: { siteVisits: 3, propertyVerifications: 2 },
-    form_schema_json: generateBasicSchema(['siteVisits', 'propertyVerifications'])
+    form_schema_json: generateBasicSchema(['siteVisits', 'propertyVerifications']),
   },
   [Roles.DIGITAL_LEAD_OPERATOR]: {
     target_type: 'COUNT',
     targets_json: { leadsProcessed: 100, telecallerAssignments: 5 },
-    form_schema_json: generateBasicSchema(['leadsProcessed', 'telecallerAssignments'])
+    form_schema_json: generateBasicSchema(['leadsProcessed', 'telecallerAssignments']),
   },
   [Roles.DIGITAL_MARKETING_HEAD]: {
     target_type: 'COUNT',
     targets_json: { adSpendMonitored: 1, contentPosts: 3, leadsGenerated: 20 },
-    form_schema_json: generateBasicSchema(['adSpendMonitored', 'contentPosts', 'leadsGenerated'])
+    form_schema_json: generateBasicSchema(['adSpendMonitored', 'contentPosts', 'leadsGenerated']),
   },
   [Roles.HR_MANAGER]: {
     target_type: 'COUNT',
     targets_json: { interviewsConducted: 5, attendanceQueueCleared: 1 },
-    form_schema_json: generateBasicSchema(['interviewsConducted', 'attendanceQueueCleared'])
+    form_schema_json: generateBasicSchema(['interviewsConducted', 'attendanceQueueCleared']),
   },
   [Roles.FINANCE]: {
     target_type: 'COUNT',
     targets_json: { invoicesProcessed: 10, paymentAudits: 1 },
-    form_schema_json: generateBasicSchema(['invoicesProcessed', 'paymentAudits'])
+    form_schema_json: generateBasicSchema(['invoicesProcessed', 'paymentAudits']),
+  },
+  [Roles.CHANNEL_PARTNER_MANAGER]: {
+    target_type: 'COUNT',
+    targets_json: { referralLeadsGenerated: 10, siteVisitsCoordinated: 5, partnerMeetings: 3 },
+    form_schema_json: generateBasicSchema([
+      'referralLeadsGenerated',
+      'siteVisitsCoordinated',
+      'partnerMeetings',
+    ]),
   },
 };
 
@@ -88,7 +100,8 @@ router.get('/my-target', authenticateToken, async (req: AuthenticatedRequest, re
   try {
     const employeeId = req.user!.employeeId;
     const requestedRole = req.query.role as string;
-    const roleName = (requestedRole && req.user!.roles.includes(requestedRole)) ? requestedRole : req.user!.roles[0];
+    const roleName =
+      requestedRole && req.user!.roles.includes(requestedRole) ? requestedRole : req.user!.roles[0];
 
     // Priority 1: Employee-Specific Target (if active)
     let empTarget: any = null;
@@ -133,9 +146,9 @@ router.get('/my-target', authenticateToken, async (req: AuthenticatedRequest, re
     const preset = ROLE_PRESETS[roleName] || {
       target_type: 'COUNT',
       targets_json: {},
-      form_schema_json: generateBasicSchema([])
+      form_schema_json: generateBasicSchema([]),
     };
-    
+
     return res.status(200).json({
       source: 'SYSTEM_PRESET',
       target: {
@@ -155,8 +168,14 @@ router.get('/my-target', authenticateToken, async (req: AuthenticatedRequest, re
 router.get('/all', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const roles = req.user!.roles;
-    if (!roles.includes(Roles.MD) && !roles.includes(Roles.MARKETING_DIRECTOR) && !roles.includes(Roles.ADMIN)) {
-      return res.status(403).json({ error: 'Access denied: MD or Marketing Director permission required.' });
+    if (
+      !roles.includes(Roles.MD) &&
+      !roles.includes(Roles.MARKETING_DIRECTOR) &&
+      !roles.includes(Roles.ADMIN)
+    ) {
+      return res
+        .status(403)
+        .json({ error: 'Access denied: MD or Marketing Director permission required.' });
     }
 
     let targets: any[] = [];
@@ -175,61 +194,74 @@ router.get('/all', authenticateToken, async (req: AuthenticatedRequest, res: Res
 });
 
 // POST /api/v1/targets - Set/Update Target (MD & Marketing Director)
-router.post('/', authenticateToken, requireAuthz(Permissions.REPORTS_TARGETS_CONFIGURE), validateRequestBody(DailyTargetSetSchema), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const { role_name, employee_id, target_type, targets_json, form_schema_json } = req.body;
-    const creatorId = req.user!.employeeId;
+router.post(
+  '/',
+  authenticateToken,
+  requireAuthz(Permissions.REPORTS_TARGETS_CONFIGURE),
+  validateRequestBody(DailyTargetSetSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { role_name, employee_id, target_type, targets_json, form_schema_json } = req.body;
+      const creatorId = req.user!.employeeId;
 
-    if (employee_id) {
-      const targetEmployee = await p.employee.findUnique({
-        where: { id: employee_id }
-      });
-      if (!targetEmployee) {
-        return res.status(404).json({ error: 'Target employee not found' });
+      if (employee_id) {
+        const targetEmployee = await p.employee.findUnique({
+          where: { id: employee_id },
+        });
+        if (!targetEmployee) {
+          return res.status(404).json({ error: 'Target employee not found' });
+        }
+
+        if (!can(req.user!, Permissions.REPORTS_TARGETS_CONFIGURE, targetEmployee)) {
+          return res
+            .status(403)
+            .json({ error: 'Forbidden: Cannot configure targets for this employee' });
+        }
+
+        const downstreamIds = await getDownstreamEmployeeIds(
+          req.user!.companyId,
+          req.user!.employeeId,
+        );
+        const isMDOrAdmin = req.user!.roles.some((r) => [Roles.MD, Roles.ADMIN].includes(r as any));
+        if (!isMDOrAdmin && !downstreamIds.includes(employee_id)) {
+          return res
+            .status(403)
+            .json({ error: 'Forbidden: Employee is not within your reporting hierarchy' });
+        }
       }
 
-      if (!can(req.user!, Permissions.REPORTS_TARGETS_CONFIGURE, targetEmployee)) {
-        return res.status(403).json({ error: 'Forbidden: Cannot configure targets for this employee' });
+      let newTarget: any = null;
+      if (p.dailyTarget) {
+        newTarget = await p.dailyTarget.create({
+          data: {
+            company_id: req.user!.companyId,
+            role_name,
+            employee_id: employee_id || null,
+            calls_target: targets_json?.callsMade || 50,
+            site_visits_target: targets_json?.siteVisits || 3,
+            closed_deals_target: targets_json?.closedDeals || 1,
+            form_schema_json: form_schema_json || null,
+          },
+        });
       }
-      
-      const downstreamIds = await getDownstreamEmployeeIds(req.user!.companyId, req.user!.employeeId);
-      const isMDOrAdmin = req.user!.roles.some((r) => [Roles.MD, Roles.ADMIN].includes(r as any));
-      if (!isMDOrAdmin && !downstreamIds.includes(employee_id)) {
-        return res.status(403).json({ error: 'Forbidden: Employee is not within your reporting hierarchy' });
-      }
-    }
 
-    let newTarget: any = null;
-    if (p.dailyTarget) {
-      newTarget = await p.dailyTarget.create({
+      // Write Audit Event
+      await p.auditEvent.create({
         data: {
-          company_id: req.user!.companyId,
-          role_name,
-          employee_id: employee_id || null,
-          calls_target: targets_json?.callsMade || 50,
-          site_visits_target: targets_json?.siteVisits || 3,
-          closed_deals_target: targets_json?.closedDeals || 1,
-          form_schema_json: form_schema_json || null,
+          actor_id: creatorId,
+          action: 'SET_DAILY_TARGET',
+          entity_type: 'DAILY_TARGET',
+          entity_id: newTarget?.id || 1,
+          new_value: JSON.stringify({ role_name, employee_id, target_type, targets_json }),
         },
       });
+
+      return res.status(201).json({ message: 'Daily target set successfully', target: newTarget });
+    } catch (error) {
+      logger.error('Set target error:', error);
+      return res.status(500).json({ error: 'Failed to set target' });
     }
-
-    // Write Audit Event
-    await p.auditEvent.create({
-      data: {
-        actor_id: creatorId,
-        action: 'SET_DAILY_TARGET',
-        entity_type: 'DAILY_TARGET',
-        entity_id: newTarget?.id || 1,
-        new_value: JSON.stringify({ role_name, employee_id, target_type, targets_json }),
-      },
-    });
-
-    return res.status(201).json({ message: 'Daily target set successfully', target: newTarget });
-  } catch (error) {
-    logger.error('Set target error:', error);
-    return res.status(500).json({ error: 'Failed to set target' });
-  }
-});
+  },
+);
 
 export default router;

@@ -131,6 +131,16 @@ export const can = (user: TokenPayload, action: Permission, resource?: any): boo
       if (!resource) return false;
       return ExpenseRefundPolicy.canMarkRefunded(user, resource);
 
+    // -- REPORTS / TARGETS --
+    case Permissions.REPORTS_TARGETS_CONFIGURE:
+      // Resource is the target employee being configured. Company isolation
+      // only here — reporting-hierarchy is already re-checked separately by
+      // the caller (targets.ts) right after this authz check.
+      if (!resource) return true;
+      if (user.roles.includes(Roles.ADMIN)) return true;
+      if (resource.company_id && resource.company_id !== user.companyId) return false;
+      return true;
+
     // -- TASKS --
     case Permissions.TASKS_UPDATE:
       if (!resource) return false;
