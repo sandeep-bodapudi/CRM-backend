@@ -18,7 +18,11 @@ export const PerformanceHistoryTimeline: React.FC = () => {
   }, []);
 
   if (isLoading) {
-    return <div className="p-6 bg-white rounded-2xl border border-slate-200 text-xs text-slate-400">Loading performance history timeline...</div>;
+    return (
+      <div className="p-6 bg-white rounded-2xl border border-slate-200 text-xs text-slate-400">
+        Loading performance history timeline...
+      </div>
+    );
   }
 
   return (
@@ -28,7 +32,9 @@ export const PerformanceHistoryTimeline: React.FC = () => {
           <History className="w-5 h-5 text-navy-700" />
           <div>
             <h3 className="text-lg font-bold text-slate-800">Performance History & Audit Log</h3>
-            <p className="text-xs text-slate-500">Track every score boost, attendance stamp, and daily target outcome</p>
+            <p className="text-xs text-slate-500">
+              Track every score boost, attendance stamp, and daily target outcome
+            </p>
           </div>
         </div>
         <span className="text-xs font-mono font-bold text-navy-800 bg-navy-50 border border-navy-200 px-3 py-1 rounded-xl">
@@ -37,7 +43,9 @@ export const PerformanceHistoryTimeline: React.FC = () => {
       </div>
 
       {events.length === 0 ? (
-        <div className="py-8 text-center text-xs text-slate-400">No performance events recorded yet.</div>
+        <div className="py-8 text-center text-xs text-slate-400">
+          No performance events recorded yet.
+        </div>
       ) : (
         <div className="relative border-l-2 border-slate-100 ml-4 pl-6 space-y-6">
           {events.map((ev) => {
@@ -51,7 +59,11 @@ export const PerformanceHistoryTimeline: React.FC = () => {
                     isBoost ? 'bg-emerald-600' : 'bg-red-500'
                   }`}
                 >
-                  {isBoost ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                  {isBoost ? (
+                    <TrendingUp className="w-3.5 h-3.5" />
+                  ) : (
+                    <TrendingDown className="w-3.5 h-3.5" />
+                  )}
                 </div>
 
                 {/* Content Box */}
@@ -71,7 +83,7 @@ export const PerformanceHistoryTimeline: React.FC = () => {
 
                   <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-mono">
                     <Calendar className="w-3 h-3 text-slate-400" />
-                    <span>{new Date(ev.timestamp || '').toLocaleString()}</span>
+                    <span>{new Date(ev.timestamp || '').toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>

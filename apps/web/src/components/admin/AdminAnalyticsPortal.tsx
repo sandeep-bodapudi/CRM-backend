@@ -310,7 +310,7 @@ export const AdminAnalyticsPortal: React.FC = () => {
                               {alert.new_value || alert.action}
                             </div>
                             <div className="text-[9px] font-mono text-rose-500 mt-1">
-                              {new Date(alert.created_at).toLocaleString()} | ACTOR_ID:{' '}
+                              {new Date(alert.created_at).toLocaleString('en-IN')} | ACTOR_ID:{' '}
                               {alert.actor_id}
                             </div>
                           </div>
@@ -340,7 +340,7 @@ export const AdminAnalyticsPortal: React.FC = () => {
                             })}
                           </div>
                           <div className="text-[9px] text-slate-300 font-mono">
-                            {new Date(log.created_at).toLocaleDateString()}
+                            {new Date(log.created_at).toLocaleDateString('en-IN')}
                           </div>
                         </div>
 

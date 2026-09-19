@@ -715,7 +715,7 @@ export const SiteVisitManagement: React.FC = () => {
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
                   <div className="flex items-center gap-2 text-slate-700 font-semibold">
                     <Calendar className="w-4 h-4 text-navy-600 shrink-0" />
-                    <span>Scheduled: {new Date(visit.scheduled_date).toLocaleString()}</span>
+                    <span>Scheduled: {new Date(visit.scheduled_date).toLocaleString('en-IN')}</span>
                   </div>
 
                   <div className="text-[11px] text-slate-500">
@@ -1379,7 +1379,7 @@ export const SiteVisitManagement: React.FC = () => {
                   onClick={() => {
                     sendWhatsAppMessage('RESCHEDULE_CONFIRMED', selectedVisit.lead.phone, {
                       customer_name: selectedVisit.lead.customer_name,
-                      visit_date: new Date(rescheduleDate).toLocaleDateString(),
+                      visit_date: new Date(rescheduleDate).toLocaleDateString('en-IN'),
                       visit_time: new Date(rescheduleDate).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',

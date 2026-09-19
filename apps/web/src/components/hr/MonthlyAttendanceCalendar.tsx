@@ -191,7 +191,7 @@ export const MonthlyAttendanceCalendar: React.FC<CalendarProps> = ({ employeeId 
             <ChevronLeft className="w-5 h-5 text-slate-600" />
           </button>
           <span className="font-semibold text-slate-700 min-w-[120px] text-center">
-            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            {currentDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
           </span>
           <button
             onClick={handleNextMonth}

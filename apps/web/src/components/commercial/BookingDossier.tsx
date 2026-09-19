@@ -251,7 +251,7 @@ export const BookingDossier: React.FC = () => {
                     </p>
                     <p className="text-[10px] text-slate-400">
                       Ref: {p.reference_number || 'N/A'} •{' '}
-                      {new Date(p.payment_date).toLocaleDateString()}
+                      {new Date(p.payment_date).toLocaleDateString('en-IN')}
                     </p>
                   </div>
                   <div className="text-right">

@@ -714,12 +714,14 @@ export const ProjectDashboard: React.FC = () => {
                 ['Phase', project.project_phase || '—'],
                 [
                   'Launch Date',
-                  project.launch_date ? new Date(project.launch_date).toLocaleDateString() : 'TBA',
+                  project.launch_date
+                    ? new Date(project.launch_date).toLocaleDateString('en-IN')
+                    : 'TBA',
                 ],
                 [
                   'Expected Completion',
                   project.completion_date
-                    ? new Date(project.completion_date).toLocaleDateString()
+                    ? new Date(project.completion_date).toLocaleDateString('en-IN')
                     : 'TBA',
                 ],
               ].map(([label, value]) => (

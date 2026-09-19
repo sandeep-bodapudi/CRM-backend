@@ -107,7 +107,7 @@ export const ApprovalsDashboard: React.FC = () => {
                       {item.employee?.employee_code || '---'})
                     </span>
                     <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-mono">
-                      Target: {new Date(item.target_date).toLocaleDateString()}
+                      Target: {new Date(item.target_date).toLocaleDateString('en-IN')}
                     </span>
                     {item.type === 'LEAVE' && (
                       <span className="text-xs bg-navy-50 text-navy-700 border border-navy-200 px-2 py-0.5 rounded-md font-semibold">
@@ -191,7 +191,7 @@ export const ApprovalsDashboard: React.FC = () => {
                       {item.employee?.employee_code || '---'})
                     </span>
                     <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-mono">
-                      Target: {new Date(item.target_date).toLocaleDateString()}
+                      Target: {new Date(item.target_date).toLocaleDateString('en-IN')}
                     </span>
                     {item.type === 'LEAVE' && (
                       <span className="text-xs bg-navy-50 text-navy-700 border border-navy-200 px-2 py-0.5 rounded-md font-semibold">
@@ -202,7 +202,7 @@ export const ApprovalsDashboard: React.FC = () => {
                   <p className="text-slate-600 mt-2 text-sm font-medium">"{item.reason}"</p>
                   {item.reviewed_at && (
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Reviewed {new Date(item.reviewed_at).toLocaleString()}
+                      Reviewed {new Date(item.reviewed_at).toLocaleString('en-IN')}
                     </p>
                   )}
                 </div>

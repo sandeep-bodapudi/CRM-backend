@@ -38,10 +38,12 @@ export const DailyReportsView: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Employee Daily Reports</h1>
-            <p className="text-sm text-slate-500">View end-of-day submissions and target metrics.</p>
+            <p className="text-sm text-slate-500">
+              View end-of-day submissions and target metrics.
+            </p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="relative">
             <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -67,16 +69,27 @@ export const DailyReportsView: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {reports.map(report => (
-              <div key={report.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-navy-200 transition-all flex flex-col">
+            {reports.map((report) => (
+              <div
+                key={report.id}
+                className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-navy-200 transition-all flex flex-col"
+              >
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="font-bold text-slate-800 text-lg">{report.employee?.full_name || 'Unknown'}</h3>
-                    <p className="text-xs text-slate-500 font-mono">{report.employee?.employee_code}</p>
+                    <h3 className="font-bold text-slate-800 text-lg">
+                      {report.employee?.full_name || 'Unknown'}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-mono">
+                      {report.employee?.employee_code}
+                    </p>
                   </div>
                   <div className="text-right">
                     <span className="text-xs text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                      {new Date(report.submitted_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                      {new Date(report.submitted_at).toLocaleTimeString('en-IN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true,
+                      })}
                     </span>
                   </div>
                 </div>
@@ -98,14 +111,27 @@ export const DailyReportsView: React.FC = () => {
                 <div className="flex-1">
                   {report.metrics_json && Object.keys(report.metrics_json).length > 0 ? (
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      {Object.entries(report.metrics_json).slice(0, 4).map(([key, value]) => (
-                        <div key={key} className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                          <p className="text-[10px] uppercase font-bold text-slate-400 truncate" title={key}>{key}</p>
-                          <p className="text-sm font-black text-slate-700 truncate" title={String(value)}>
-                            {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
-                          </p>
-                        </div>
-                      ))}
+                      {Object.entries(report.metrics_json)
+                        .slice(0, 4)
+                        .map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="bg-slate-50 p-2.5 rounded-xl border border-slate-100"
+                          >
+                            <p
+                              className="text-[10px] uppercase font-bold text-slate-400 truncate"
+                              title={key}
+                            >
+                              {key}
+                            </p>
+                            <p
+                              className="text-sm font-black text-slate-700 truncate"
+                              title={String(value)}
+                            >
+                              {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
+                            </p>
+                          </div>
+                        ))}
                       {Object.keys(report.metrics_json).length > 4 && (
                         <div className="col-span-2 text-xs text-center text-slate-400 mt-1 italic">
                           +{Object.keys(report.metrics_json).length - 4} more metrics
@@ -113,7 +139,9 @@ export const DailyReportsView: React.FC = () => {
                       )}
                     </div>
                   ) : (
-                    <p className="text-sm text-slate-400 italic mb-4">No dynamic metrics available.</p>
+                    <p className="text-sm text-slate-400 italic mb-4">
+                      No dynamic metrics available.
+                    </p>
                   )}
                 </div>
 
@@ -138,7 +166,8 @@ export const DailyReportsView: React.FC = () => {
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Report Details</h2>
                 <p className="text-sm text-slate-500">
-                  {selectedReport.employee?.full_name} • {new Date(selectedReport.submitted_at).toLocaleDateString()}
+                  {selectedReport.employee?.full_name} •{' '}
+                  {new Date(selectedReport.submitted_at).toLocaleDateString('en-IN')}
                 </p>
               </div>
               <button
@@ -149,7 +178,6 @@ export const DailyReportsView: React.FC = () => {
               </button>
             </div>
             <div className="p-6 overflow-y-auto space-y-6">
-              
               {!selectedReport.target_met && selectedReport.below_target_reason && (
                 <div className="bg-rose-50 border border-rose-100 rounded-xl p-4">
                   <h3 className="text-sm font-bold text-rose-800 flex items-center gap-2 mb-2">
@@ -167,21 +195,24 @@ export const DailyReportsView: React.FC = () => {
                 </div>
               </div>
 
-              {selectedReport.metrics_json && Object.keys(selectedReport.metrics_json).length > 0 && (
-                <div>
-                  <h3 className="text-sm font-bold text-slate-700 mb-2">Dynamic Metrics</h3>
-                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 grid grid-cols-2 gap-4">
-                    {Object.entries(selectedReport.metrics_json).map(([key, value]) => (
-                      <div key={key}>
-                        <div className="text-xs text-slate-500 truncate" title={key}>{key}</div>
-                        <div className="text-sm font-bold text-slate-800">
-                          {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
+              {selectedReport.metrics_json &&
+                Object.keys(selectedReport.metrics_json).length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-700 mb-2">Dynamic Metrics</h3>
+                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 grid grid-cols-2 gap-4">
+                      {Object.entries(selectedReport.metrics_json).map(([key, value]) => (
+                        <div key={key}>
+                          <div className="text-xs text-slate-500 truncate" title={key}>
+                            {key}
+                          </div>
+                          <div className="text-sm font-bold text-slate-800">
+                            {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
               <button

@@ -418,7 +418,7 @@ export const SalesOpportunityDetails: React.FC<SalesOpportunityDetailsProps> = (
                               : 'Unknown Stage'}
                           </div>
                           <time className="text-[10px] text-slate-400 font-medium">
-                            {new Date(hist.created_at || '').toLocaleDateString()}
+                            {new Date(hist.created_at || '').toLocaleDateString('en-IN')}
                           </time>
                         </div>
                         <div className="text-[10px] text-slate-500">

@@ -628,7 +628,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 Created
               </span>
               <div className="font-semibold text-navy-900 mt-0.5">
-                {new Date(lead.created_at).toLocaleDateString()}
+                {new Date(lead.created_at).toLocaleDateString('en-IN')}
               </div>
             </div>
 
@@ -989,7 +989,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                             </div>
                             <h4 className="font-bold text-navy-900 text-sm mt-0.5">{title}</h4>
                             <p className="text-xs text-slate-500 mt-1">
-                              Saved on {new Date(interest.created_at).toLocaleDateString()}
+                              Saved on {new Date(interest.created_at).toLocaleDateString('en-IN')}
                             </p>
                           </div>
                           <button
@@ -1036,7 +1036,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                           )}
                           <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
                             <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{new Date(visit.scheduled_date).toLocaleString()}</span>
+                            <span>{new Date(visit.scheduled_date).toLocaleString('en-IN')}</span>
                           </div>
                         </div>
                       </div>
@@ -1070,7 +1070,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                           )}
                           <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
                             <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{new Date(demo.scheduled_at).toLocaleString()}</span>
+                            <span>{new Date(demo.scheduled_at).toLocaleString('en-IN')}</span>
                           </div>
                         </div>
                       </div>
@@ -1158,7 +1158,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                           )}
                           <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
                             <Calendar className="w-3 h-3" />
-                            {new Date(task.target_date).toLocaleString()}
+                            {new Date(task.target_date).toLocaleString('en-IN')}
                           </div>
                         </div>
                       ))}
@@ -1276,7 +1276,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                   onClick={() => {
                     sendWhatsAppMessage('SITE_VISIT_SCHEDULED', lead.phone, {
                       customer_name: lead.customer_name,
-                      visit_date: new Date(scheduleDate).toLocaleDateString(),
+                      visit_date: new Date(scheduleDate).toLocaleDateString('en-IN'),
                       visit_time: new Date(scheduleDate).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -1458,7 +1458,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                   onClick={() => {
                     sendWhatsAppMessage('DEMO_SCHEDULED', lead.phone, {
                       customer_name: lead.customer_name,
-                      visit_date: new Date(demoScheduleDate).toLocaleDateString(),
+                      visit_date: new Date(demoScheduleDate).toLocaleDateString('en-IN'),
                       visit_time: new Date(demoScheduleDate).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',

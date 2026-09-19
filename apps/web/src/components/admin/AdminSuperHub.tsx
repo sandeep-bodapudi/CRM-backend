@@ -169,14 +169,14 @@ export const AdminSuperHub: React.FC = () => {
   const securityItems: ListItem[] = securityAlerts.map((alert) => ({
     id: alert.id,
     title: alert.new_value || alert.action,
-    subtitle: `${new Date(alert.created_at).toLocaleString()} · Actor #${alert.actor_id} ${alert.entity_type ? `· ${alert.entity_type} #${alert.entity_id}` : ''}`,
+    subtitle: `${new Date(alert.created_at).toLocaleString('en-IN')} · Actor #${alert.actor_id} ${alert.entity_type ? `· ${alert.entity_type} #${alert.entity_id}` : ''}`,
     icon: ShieldAlert,
   }));
 
   const auditItems: ListItem[] = auditLogs.map((log) => ({
     id: log.id,
     title: `${log.action} ${formatEntityType(log.entity_type)} #${log.entity_id}`,
-    subtitle: `Actor: ${log.actor_code} (${log.actor_role}) · ${new Date(log.created_at).toLocaleString()}`,
+    subtitle: `Actor: ${log.actor_code} (${log.actor_role}) · ${new Date(log.created_at).toLocaleString('en-IN')}`,
     meta:
       log.old_value || log.new_value ? (
         <div className="text-[10px] font-mono bg-slate-50 border border-slate-100 rounded px-1 max-w-[150px] truncate text-slate-500">

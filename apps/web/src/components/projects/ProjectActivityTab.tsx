@@ -65,7 +65,7 @@ export const ProjectActivityTab: React.FC<{ projectId: number }> = ({ projectId 
             </p>
           )}
           <p className="text-[11px] text-slate-400 mt-0.5">
-            {new Date(e.created_at).toLocaleString()}
+            {new Date(e.created_at).toLocaleString('en-IN')}
           </p>
         </div>
       ))}

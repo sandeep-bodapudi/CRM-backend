@@ -80,7 +80,7 @@ export const SalesManagerDashboard: React.FC = () => {
       id: String(l.id),
       title: `Lead #${l.id} - ${l.customer_name || 'No Name'}`,
       subtitle: 'Waiting for Assignment',
-      value: new Date(l.created_at || '').toLocaleDateString(),
+      value: new Date(l.created_at || '').toLocaleDateString('en-IN'),
       icon: AlertCircle,
       color: 'text-amber-500',
       link: `/leads/${l.id}`,
@@ -91,7 +91,7 @@ export const SalesManagerDashboard: React.FC = () => {
     id: String(l.id),
     title: `Lead #${l.id}`,
     subtitle: l.assigned_to?.full_name || 'Unassigned',
-    value: new Date(l.last_contacted_at || l.created_at || '').toLocaleDateString(),
+    value: new Date(l.last_contacted_at || l.created_at || '').toLocaleDateString('en-IN'),
     icon: ShieldAlert,
     link: `/leads/${l.id}`,
   }));
@@ -101,7 +101,7 @@ export const SalesManagerDashboard: React.FC = () => {
     id: String(t.id),
     title: t.lead?.customer_name || 'No Lead',
     subtitle: t.assignee?.full_name || 'Unassigned',
-    value: new Date(t.target_date || '').toLocaleDateString(),
+    value: new Date(t.target_date || '').toLocaleDateString('en-IN'),
     icon: Clock,
     link: `/tasks`,
   }));

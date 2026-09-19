@@ -391,7 +391,7 @@ export const UnitDetail: React.FC = () => {
                         {e.action.replace(/_/g, ' ')}
                       </span>
                       <span className="text-slate-400">
-                        {new Date(e.created_at).toLocaleString()}
+                        {new Date(e.created_at).toLocaleString('en-IN')}
                       </span>
                     </div>
                     {(e.old_value || e.new_value) && (

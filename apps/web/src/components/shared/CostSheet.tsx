@@ -157,7 +157,7 @@ export const CostSheet: React.FC<CostSheetProps> = ({
             <p className="text-[10px] text-amber-600">
               {overriddenByName ? `by ${overriddenByName}` : ''}
               {overriddenByName && overriddenAt ? ' · ' : ''}
-              {overriddenAt ? new Date(overriddenAt).toLocaleString() : ''}
+              {overriddenAt ? new Date(overriddenAt).toLocaleString('en-IN') : ''}
             </p>
           )}
         </div>

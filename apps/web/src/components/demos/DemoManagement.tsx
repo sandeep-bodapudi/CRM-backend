@@ -232,7 +232,7 @@ export const DemoManagement: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
                       <span className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
                         <Calendar className="w-4 h-4 text-slate-400" />
-                        {new Date(demo.scheduled_at).toLocaleString()}
+                        {new Date(demo.scheduled_at).toLocaleString('en-IN')}
                       </span>
                       <span className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
                         <PhoneCall className="w-4 h-4 text-slate-400" />

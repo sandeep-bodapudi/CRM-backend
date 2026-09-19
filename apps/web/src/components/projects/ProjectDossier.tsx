@@ -265,7 +265,7 @@ export const ProjectDossier: React.FC<ProjectDossierProps> = ({ projectId, onClo
                     <span className="font-bold text-slate-700 flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-slate-400" />
                       {project.launch_date
-                        ? new Date(project.launch_date).toLocaleDateString()
+                        ? new Date(project.launch_date).toLocaleDateString('en-IN')
                         : 'TBA'}
                     </span>
                   </div>

@@ -472,7 +472,9 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
                       {item.type === 'LEAVE' && item.leave_type && item.leave_type !== 'FULL_DAY'
                         ? ` (${item.leave_type === 'FIRST_HALF' ? '1st Half' : '2nd Half'})`
                         : ''}{' '}
-                      {item.target_date ? new Date(item.target_date).toLocaleDateString() : ''}
+                      {item.target_date
+                        ? new Date(item.target_date).toLocaleDateString('en-IN')
+                        : ''}
                     </span>
                     <p className="text-slate-600 mt-0.5 font-medium">{item.reason}</p>
                     {item.monthlyStats && (

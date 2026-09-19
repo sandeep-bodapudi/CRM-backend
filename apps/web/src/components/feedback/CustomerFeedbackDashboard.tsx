@@ -98,7 +98,7 @@ export const CustomerFeedbackDashboard: React.FC = () => {
                 </p>
                 <p className="text-xs text-slate-400 dark:text-slate-500">
                   {item.customerName} ·{' '}
-                  {item.submittedAt ? new Date(item.submittedAt).toLocaleDateString() : ''}
+                  {item.submittedAt ? new Date(item.submittedAt).toLocaleDateString('en-IN') : ''}
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">

@@ -433,9 +433,9 @@ export const UserSettings: React.FC = () => {
                       {cred.device_label || 'Unnamed device'}
                     </p>
                     <p className="text-xs text-slate-400 dark:text-slate-500">
-                      Added {new Date(cred.created_at).toLocaleDateString()}
+                      Added {new Date(cred.created_at).toLocaleDateString('en-IN')}
                       {cred.last_used_at
-                        ? ` · last used ${new Date(cred.last_used_at).toLocaleDateString()}`
+                        ? ` · last used ${new Date(cred.last_used_at).toLocaleDateString('en-IN')}`
                         : ''}
                     </p>
                   </div>

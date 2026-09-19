@@ -62,7 +62,7 @@ export const PMDashboard: React.FC = () => {
           responses.push({
             id: v.id.toString(),
             title: `Visit for ${v.customer?.customer_name || 'Customer'}`,
-            subtitle: `Requested for ${new Date(v.scheduled_date).toLocaleDateString()}`,
+            subtitle: `Requested for ${new Date(v.scheduled_date).toLocaleDateString('en-IN')}`,
             icon: MapPin,
             link: '/site-visits',
           });

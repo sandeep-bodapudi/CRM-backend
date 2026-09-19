@@ -129,7 +129,7 @@ export const ProjectDocumentsTab: React.FC<{ projectId: number }> = ({ projectId
                   </p>
                   <p className="text-[11px] text-slate-400">
                     {KIND_LABELS.find((k) => k.value === doc.kind)?.label} ·{' '}
-                    {new Date(doc.created_at).toLocaleDateString()}
+                    {new Date(doc.created_at).toLocaleDateString('en-IN')}
                   </p>
                 </div>
               </div>
