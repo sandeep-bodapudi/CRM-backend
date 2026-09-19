@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `lead` ADD COLUMN `referral_employee_id` INTEGER NULL,
+ALTER TABLE `Lead` ADD COLUMN `referral_employee_id` INTEGER NULL,
     ADD COLUMN `referral_person_name` VARCHAR(191) NULL;
 
 -- AddForeignKey

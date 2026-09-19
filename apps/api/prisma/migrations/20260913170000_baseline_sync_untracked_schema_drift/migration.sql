@@ -16,109 +16,109 @@
 -- columns/tables would fail.
 
 -- DropForeignKey
-ALTER TABLE `booking` DROP FOREIGN KEY `Booking_company_id_fkey`;
+ALTER TABLE `Booking` DROP FOREIGN KEY `Booking_company_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `booking` DROP FOREIGN KEY `Booking_customer_id_fkey`;
+ALTER TABLE `Booking` DROP FOREIGN KEY `Booking_customer_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `booking` DROP FOREIGN KEY `Booking_property_id_fkey`;
+ALTER TABLE `Booking` DROP FOREIGN KEY `Booking_property_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `branch` DROP FOREIGN KEY `Branch_company_id_fkey`;
+ALTER TABLE `Branch` DROP FOREIGN KEY `Branch_company_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `customer` DROP FOREIGN KEY `Customer_company_id_fkey`;
+ALTER TABLE `Customer` DROP FOREIGN KEY `Customer_company_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `employee` DROP FOREIGN KEY `Employee_company_id_fkey`;
+ALTER TABLE `Employee` DROP FOREIGN KEY `Employee_company_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `installment` DROP FOREIGN KEY `Installment_customer_id_fkey`;
+ALTER TABLE `Installment` DROP FOREIGN KEY `Installment_customer_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `leadpropertyinterest` DROP FOREIGN KEY `LeadPropertyInterest_created_by_fkey`;
+ALTER TABLE `LeadPropertyInterest` DROP FOREIGN KEY `LeadPropertyInterest_created_by_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `opportunity` DROP FOREIGN KEY `Opportunity_company_id_fkey`;
+ALTER TABLE `Opportunity` DROP FOREIGN KEY `Opportunity_company_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `payment` DROP FOREIGN KEY `Payment_company_id_fkey`;
+ALTER TABLE `Payment` DROP FOREIGN KEY `Payment_company_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `project` DROP FOREIGN KEY `Project_company_id_fkey`;
+ALTER TABLE `Project` DROP FOREIGN KEY `Project_company_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `property` DROP FOREIGN KEY `Property_company_id_fkey`;
+ALTER TABLE `Property` DROP FOREIGN KEY `Property_company_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `property` DROP FOREIGN KEY `Property_created_by_id_fkey`;
+ALTER TABLE `Property` DROP FOREIGN KEY `Property_created_by_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `propertyimage` DROP FOREIGN KEY `PropertyImage_uploaded_by_id_fkey`;
+ALTER TABLE `PropertyImage` DROP FOREIGN KEY `PropertyImage_uploaded_by_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `propertyverificationlog` DROP FOREIGN KEY `PropertyVerificationLog_actor_id_fkey`;
+ALTER TABLE `PropertyVerificationLog` DROP FOREIGN KEY `PropertyVerificationLog_actor_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `sitevisitbooking` DROP FOREIGN KEY `SiteVisitBooking_assigned_to_fkey`;
+ALTER TABLE `SiteVisitBooking` DROP FOREIGN KEY `SiteVisitBooking_assigned_to_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `sitevisitbooking` DROP FOREIGN KEY `SiteVisitBooking_customer_id_fkey`;
+ALTER TABLE `SiteVisitBooking` DROP FOREIGN KEY `SiteVisitBooking_customer_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `sitevisitbooking` DROP FOREIGN KEY `SiteVisitBooking_property_id_fkey`;
+ALTER TABLE `SiteVisitBooking` DROP FOREIGN KEY `SiteVisitBooking_property_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `sitevisitbooking` DROP FOREIGN KEY `sitevisitbooking_project_id_fkey`;
+ALTER TABLE `SiteVisitBooking` DROP FOREIGN KEY `sitevisitbooking_project_id_fkey`;
 
 -- DropForeignKey
-ALTER TABLE `sitevisitreassignment` DROP FOREIGN KEY `SiteVisitReassignment_to_employee_id_fkey`;
+ALTER TABLE `SiteVisitReassignment` DROP FOREIGN KEY `SiteVisitReassignment_to_employee_id_fkey`;
 
 -- DropIndex
-DROP INDEX `AttendanceLog_employee_id_date_idx` ON `attendancelog`;
+DROP INDEX `AttendanceLog_employee_id_date_idx` ON `AttendanceLog`;
 
 -- DropIndex
-DROP INDEX `Complaint_branch_id_idx` ON `complaint`;
+DROP INDEX `Complaint_branch_id_idx` ON `Complaint`;
 
 -- DropIndex
-DROP INDEX `DailyReport_employee_id_date_idx` ON `dailyreport`;
+DROP INDEX `DailyReport_employee_id_date_idx` ON `DailyReport`;
 
 -- DropIndex
-DROP INDEX `DailyTarget_employee_id_date_idx` ON `dailytarget`;
+DROP INDEX `DailyTarget_employee_id_date_idx` ON `DailyTarget`;
 
 -- DropIndex
-DROP INDEX `EmployeeBranch_employee_id_idx` ON `employeebranch`;
+DROP INDEX `EmployeeBranch_employee_id_idx` ON `EmployeeBranch`;
 
 -- DropIndex
-DROP INDEX `EmployeePermissionOverride_employee_id_idx` ON `employeepermissionoverride`;
+DROP INDEX `EmployeePermissionOverride_employee_id_idx` ON `EmployeePermissionOverride`;
 
 -- DropIndex
-DROP INDEX `EmployeeQrCode_slug_key` ON `employeeqrcode`;
+DROP INDEX `EmployeeQrCode_slug_key` ON `EmployeeQrCode`;
 
 -- DropIndex
-DROP INDEX `EmployeeRole_employee_id_idx` ON `employeerole`;
+DROP INDEX `EmployeeRole_employee_id_idx` ON `EmployeeRole`;
 
 -- DropIndex
-DROP INDEX `LeadMatchingRequirement_lead_id_idx` ON `leadmatchingrequirement`;
+DROP INDEX `LeadMatchingRequirement_lead_id_idx` ON `LeadMatchingRequirement`;
 
 -- DropIndex
-DROP INDEX `Opportunity_stage_idx` ON `opportunity`;
+DROP INDEX `Opportunity_stage_idx` ON `Opportunity`;
 
 -- DropIndex
-DROP INDEX `Property_slug_key` ON `property`;
+DROP INDEX `Property_slug_key` ON `Property`;
 
 -- DropIndex
-DROP INDEX `Task_branch_id_idx` ON `task`;
+DROP INDEX `Task_branch_id_idx` ON `Task`;
 
 -- DropIndex
-DROP INDEX `Task_company_id_idx` ON `task`;
+DROP INDEX `Task_company_id_idx` ON `Task`;
 
 -- DropIndex
-DROP INDEX `Task_created_by_idx` ON `task`;
+DROP INDEX `Task_created_by_idx` ON `Task`;
 
 -- AlterTable
-ALTER TABLE `attendancelog` DROP COLUMN `check_in`,
+ALTER TABLE `AttendanceLog` DROP COLUMN `check_in`,
     DROP COLUMN `check_out`,
     DROP COLUMN `created_at`,
     DROP COLUMN `date`,
@@ -134,11 +134,11 @@ ALTER TABLE `attendancelog` DROP COLUMN `check_in`,
     MODIFY `notes` varchar(191) NULL;
 
 -- AlterTable
-ALTER TABLE `auditevent` DROP COLUMN `deleted_at`,
+ALTER TABLE `AuditEvent` DROP COLUMN `deleted_at`,
     DROP COLUMN `updated_at`;
 
 -- AlterTable
-ALTER TABLE `booking` DROP COLUMN `deleted_at`,
+ALTER TABLE `Booking` DROP COLUMN `deleted_at`,
     ADD COLUMN `area_sqyd` DOUBLE NULL,
     ADD COLUMN `booking_amount_words` VARCHAR(191) NULL,
     ADD COLUMN `charges_per_sqyd` DOUBLE NULL,
@@ -174,7 +174,7 @@ ALTER TABLE `booking` DROP COLUMN `deleted_at`,
     MODIFY `balance_amount` double NOT NULL;
 
 -- AlterTable
-ALTER TABLE `complaint` DROP COLUMN `branch_id`,
+ALTER TABLE `Complaint` DROP COLUMN `branch_id`,
     DROP COLUMN `complaint_type`,
     DROP COLUMN `deleted_at`,
     ADD COLUMN `assigned_employee_id` INTEGER NULL,
@@ -192,14 +192,14 @@ ALTER TABLE `complaint` DROP COLUMN `branch_id`,
     MODIFY `customer_id` int(11) NOT NULL;
 
 -- AlterTable
-ALTER TABLE `customer` DROP COLUMN `deleted_at`,
+ALTER TABLE `Customer` DROP COLUMN `deleted_at`,
     ADD COLUMN `avatar_url` VARCHAR(191) NULL,
     ADD COLUMN `force_password_reset` BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN `password_hash` VARCHAR(191) NULL,
     ADD COLUMN `temp_password_expiry` DATETIME(3) NULL;
 
 -- AlterTable
-ALTER TABLE `customernotification` DROP COLUMN `deleted_at`,
+ALTER TABLE `CustomerNotification` DROP COLUMN `deleted_at`,
     DROP COLUMN `description`,
     ADD COLUMN `booking_id` INTEGER NULL,
     ADD COLUMN `company_id` INTEGER NOT NULL,
@@ -207,7 +207,7 @@ ALTER TABLE `customernotification` DROP COLUMN `deleted_at`,
     ADD COLUMN `type` VARCHAR(191) NOT NULL;
 
 -- AlterTable
-ALTER TABLE `dailyreport` DROP COLUMN `attachments`,
+ALTER TABLE `DailyReport` DROP COLUMN `attachments`,
     DROP COLUMN `content`,
     DROP COLUMN `created_at`,
     DROP COLUMN `date`,
@@ -224,7 +224,7 @@ ALTER TABLE `dailyreport` DROP COLUMN `attachments`,
     ADD COLUMN `target_met` BOOLEAN NOT NULL DEFAULT true;
 
 -- AlterTable
-ALTER TABLE `dailytarget` DROP COLUMN `actual_value`,
+ALTER TABLE `DailyTarget` DROP COLUMN `actual_value`,
     DROP COLUMN `date`,
     DROP COLUMN `deleted_at`,
     DROP COLUMN `target_type`,
@@ -239,11 +239,11 @@ ALTER TABLE `dailytarget` DROP COLUMN `actual_value`,
     MODIFY `employee_id` int(11) NULL;
 
 -- AlterTable
-ALTER TABLE `employee` ADD COLUMN `profile_image_url` VARCHAR(191) NULL,
+ALTER TABLE `Employee` ADD COLUMN `profile_image_url` VARCHAR(191) NULL,
     MODIFY `salary_ctc` double NULL;
 
 -- AlterTable
-ALTER TABLE `employeebranch` DROP PRIMARY KEY,
+ALTER TABLE `EmployeeBranch` DROP PRIMARY KEY,
     DROP COLUMN `created_at`,
     DROP COLUMN `deleted_at`,
     DROP COLUMN `id`,
@@ -252,7 +252,7 @@ ALTER TABLE `employeebranch` DROP PRIMARY KEY,
     ADD PRIMARY KEY (`employee_id` ASC, `branch_id` ASC);
 
 -- AlterTable
-ALTER TABLE `employeepermissionoverride` DROP PRIMARY KEY,
+ALTER TABLE `EmployeePermissionOverride` DROP PRIMARY KEY,
     DROP COLUMN `created_at`,
     DROP COLUMN `deleted_at`,
     DROP COLUMN `id`,
@@ -264,7 +264,7 @@ ALTER TABLE `employeepermissionoverride` DROP PRIMARY KEY,
     ADD PRIMARY KEY (`employee_id` ASC, `permission_id` ASC);
 
 -- AlterTable
-ALTER TABLE `employeeqrcode` DROP COLUMN `active`,
+ALTER TABLE `EmployeeQrCode` DROP COLUMN `active`,
     DROP COLUMN `created_at`,
     DROP COLUMN `deleted_at`,
     DROP COLUMN `slug`,
@@ -274,7 +274,7 @@ ALTER TABLE `employeeqrcode` DROP COLUMN `active`,
     ADD COLUMN `qr_token` VARCHAR(191) NOT NULL;
 
 -- AlterTable
-ALTER TABLE `employeerole` DROP PRIMARY KEY,
+ALTER TABLE `EmployeeRole` DROP PRIMARY KEY,
     DROP COLUMN `created_at`,
     DROP COLUMN `deleted_at`,
     DROP COLUMN `id`,
@@ -284,7 +284,7 @@ ALTER TABLE `employeerole` DROP PRIMARY KEY,
     ADD PRIMARY KEY (`employee_id` ASC, `role_id` ASC);
 
 -- AlterTable
-ALTER TABLE `installment` DROP COLUMN `amount_due`,
+ALTER TABLE `Installment` DROP COLUMN `amount_due`,
     DROP COLUMN `amount_paid`,
     DROP COLUMN `customer_id`,
     DROP COLUMN `deleted_at`,
@@ -299,7 +299,7 @@ ALTER TABLE `installment` DROP COLUMN `amount_due`,
     MODIFY `due_date` datetime(3) NOT NULL;
 
 -- AlterTable
-ALTER TABLE `lead` DROP COLUMN `deleted_at`,
+ALTER TABLE `Lead` DROP COLUMN `deleted_at`,
     DROP COLUMN `demo_handler_id`,
     DROP COLUMN `demo_scheduled_at`,
     DROP COLUMN `expected_bedrooms`,
@@ -336,24 +336,24 @@ ALTER TABLE `lead` DROP COLUMN `deleted_at`,
     MODIFY `exit_reason` enum('NO_MATCHING_INVENTORY','CHOSE_COMPETITOR','BUDGET_MISMATCH','NOT_READY','DO_NOT_CONTACT','UNRESPONSIVE','INVALID_CONTACT','DUPLICATE_LEAD','FINANCING_ISSUE','LOCATION_MISMATCH','ALREADY_PURCHASED','JUST_ENQUIRING','SITE_VISIT_NO_SHOW','NEGOTIATION_FAILED','OUT_OF_SERVICE_AREA','OTHER') NULL;
 
 -- AlterTable
-ALTER TABLE `leadactivity` DROP COLUMN `deleted_at`,
+ALTER TABLE `LeadActivity` DROP COLUMN `deleted_at`,
     DROP COLUMN `updated_at`;
 
 -- AlterTable
-ALTER TABLE `leadmatchingrequirement` DROP COLUMN `updated_at`,
+ALTER TABLE `LeadMatchingRequirement` DROP COLUMN `updated_at`,
     MODIFY `max_budget` double NOT NULL;
 
 -- AlterTable
-ALTER TABLE `leadpropertyinterest` DROP COLUMN `deleted_at`,
+ALTER TABLE `LeadPropertyInterest` DROP COLUMN `deleted_at`,
     DROP COLUMN `updated_at`,
     ADD COLUMN `project_unit_id` INTEGER NULL,
     MODIFY `property_id` int(11) NULL;
 
 -- AlterTable
-ALTER TABLE `messagetemplate` DROP COLUMN `deleted_at`;
+ALTER TABLE `MessageTemplate` DROP COLUMN `deleted_at`;
 
 -- AlterTable
-ALTER TABLE `opportunity` DROP COLUMN `customer_id`,
+ALTER TABLE `Opportunity` DROP COLUMN `customer_id`,
     DROP COLUMN `deleted_at`,
     DROP COLUMN `stage`,
     ADD COLUMN `branch_id` INTEGER NULL,
@@ -364,7 +364,7 @@ ALTER TABLE `opportunity` DROP COLUMN `customer_id`,
     MODIFY `budget_max` double NULL;
 
 -- AlterTable
-ALTER TABLE `payment` DROP COLUMN `deleted_at`,
+ALTER TABLE `Payment` DROP COLUMN `deleted_at`,
     DROP COLUMN `receipt_text`,
     DROP COLUMN `transaction_id`,
     ADD COLUMN `external_transaction_id` VARCHAR(191) NULL,
@@ -378,7 +378,7 @@ ALTER TABLE `payment` DROP COLUMN `deleted_at`,
     ALTER COLUMN `payment_method` DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE `project` DROP COLUMN `deleted_at`,
+ALTER TABLE `Project` DROP COLUMN `deleted_at`,
     ADD COLUMN `address` TEXT NULL,
     ADD COLUMN `approval_authorities` LONGTEXT NULL,
     ADD COLUMN `approval_authority` VARCHAR(191) NULL,
@@ -417,7 +417,7 @@ ALTER TABLE `project` DROP COLUMN `deleted_at`,
     ALTER COLUMN `slug` DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE `property` DROP COLUMN `deleted_at`,
+ALTER TABLE `Property` DROP COLUMN `deleted_at`,
     DROP COLUMN `details`,
     DROP COLUMN `price`,
     ADD COLUMN `area_sqyd` DOUBLE NULL,
@@ -468,22 +468,22 @@ ALTER TABLE `property` DROP COLUMN `deleted_at`,
     MODIFY `longitude` double NULL;
 
 -- AlterTable
-ALTER TABLE `propertyimage` DROP COLUMN `deleted_at`,
+ALTER TABLE `PropertyImage` DROP COLUMN `deleted_at`,
     DROP COLUMN `updated_at`;
 
 -- AlterTable
-ALTER TABLE `propertylayoutregion` ADD COLUMN `project_unit_id` INTEGER NULL,
+ALTER TABLE `PropertyLayoutRegion` ADD COLUMN `project_unit_id` INTEGER NULL,
     MODIFY `property_id` int(11) NULL;
 
 -- AlterTable
-ALTER TABLE `propertypublication` DROP COLUMN `deleted_at`;
+ALTER TABLE `PropertyPublication` DROP COLUMN `deleted_at`;
 
 -- AlterTable
-ALTER TABLE `propertyverificationlog` DROP COLUMN `deleted_at`,
+ALTER TABLE `PropertyVerificationLog` DROP COLUMN `deleted_at`,
     DROP COLUMN `updated_at`;
 
 -- AlterTable
-ALTER TABLE `sitevisitbooking` DROP COLUMN `accepted_at`,
+ALTER TABLE `SiteVisitBooking` DROP COLUMN `accepted_at`,
     DROP COLUMN `assigned_to`,
     DROP COLUMN `cancelled_at`,
     DROP COLUMN `current_location`,
@@ -518,7 +518,7 @@ ALTER TABLE `sitevisitbooking` DROP COLUMN `accepted_at`,
     MODIFY `status` enum('REQUESTED','PENDING_ACCEPTANCE','REASSIGNED','ESCALATED_TO_MARKETING_DIRECTOR','ACCEPTED','PENDING_CUSTOMER_RECONFIRMATION','RESCHEDULE_REQUESTED','PENDING_PM_RECONFIRMATION','CONFIRMED','ACTIVE','COMPLETED','CANCELLED','ON_HOLD','CANCELLATION_PENDING_PM_CONFIRMATION') NOT NULL DEFAULT 'REQUESTED';
 
 -- AlterTable
-ALTER TABLE `sitevisitproperty` DROP COLUMN `deleted_at`,
+ALTER TABLE `SiteVisitProperty` DROP COLUMN `deleted_at`,
     DROP COLUMN `notes`,
     DROP COLUMN `status`,
     DROP COLUMN `visit_duration_minutes`,
@@ -529,14 +529,14 @@ ALTER TABLE `sitevisitproperty` DROP COLUMN `deleted_at`,
     MODIFY `property_id` int(11) NULL;
 
 -- AlterTable
-ALTER TABLE `sitevisitreassignment` DROP COLUMN `deleted_at`,
+ALTER TABLE `SiteVisitReassignment` DROP COLUMN `deleted_at`,
     DROP COLUMN `issue_date`,
     DROP COLUMN `outcome`,
     DROP COLUMN `outcome_reason`,
     DROP COLUMN `updated_at`;
 
 -- AlterTable
-ALTER TABLE `task` DROP COLUMN `branch_id`,
+ALTER TABLE `Task` DROP COLUMN `branch_id`,
     DROP COLUMN `company_id`,
     DROP COLUMN `deleted_at`,
     DROP COLUMN `due_date`,
@@ -563,7 +563,7 @@ DROP TABLE `employeenotification`;
 DROP TABLE `opportunityhistory`;
 
 -- CreateTable
-CREATE TABLE `amenity` (
+CREATE TABLE `Amenity` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `company_id` INTEGER NOT NULL,
     `name` VARCHAR(191) NOT NULL,
@@ -579,7 +579,7 @@ CREATE TABLE `amenity` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `attendanceproposal` (
+CREATE TABLE `AttendanceProposal` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `employee_id` INTEGER NOT NULL,
     `type` VARCHAR(191) NOT NULL,
@@ -595,7 +595,7 @@ CREATE TABLE `attendanceproposal` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `authsession` (
+CREATE TABLE `AuthSession` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `employee_id` INTEGER NOT NULL,
     `family_token` VARCHAR(191) NOT NULL,
@@ -614,7 +614,7 @@ CREATE TABLE `authsession` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `bookingportalmapping` (
+CREATE TABLE `BookingPortalMapping` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `company_id` INTEGER NOT NULL,
     `crms_booking_id` INTEGER NOT NULL,
@@ -636,7 +636,7 @@ CREATE TABLE `bookingportalmapping` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `companyholiday` (
+CREATE TABLE `CompanyHoliday` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `company_id` INTEGER NOT NULL,
     `date` DATE NOT NULL,
@@ -651,7 +651,7 @@ CREATE TABLE `companyholiday` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `demo` (
+CREATE TABLE `Demo` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `lead_id` INTEGER NOT NULL,
     `handler_id` INTEGER NOT NULL,
@@ -669,7 +669,7 @@ CREATE TABLE `demo` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `demointerestedproperty` (
+CREATE TABLE `DemoInterestedProperty` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `demo_id` INTEGER NOT NULL,
     `property_id` INTEGER NULL,
@@ -684,7 +684,7 @@ CREATE TABLE `demointerestedproperty` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `expenserefund` (
+CREATE TABLE `ExpenseRefund` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `employee_id` INTEGER NOT NULL,
     `company_id` INTEGER NOT NULL,
@@ -713,7 +713,7 @@ CREATE TABLE `expenserefund` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `integrationevent` (
+CREATE TABLE `IntegrationEvent` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `event_type` VARCHAR(191) NOT NULL,
     `payload` TEXT NOT NULL,
@@ -736,7 +736,7 @@ CREATE TABLE `integrationevent` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `inventoryfeature` (
+CREATE TABLE `InventoryFeature` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `project_unit_id` INTEGER NULL,
     `property_id` INTEGER NULL,
@@ -753,7 +753,7 @@ CREATE TABLE `inventoryfeature` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `kioskcredential` (
+CREATE TABLE `KioskCredential` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `company_id` INTEGER NOT NULL,
     `branch_id` INTEGER NOT NULL,
@@ -774,7 +774,7 @@ CREATE TABLE `kioskcredential` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `leadpreferredlocation` (
+CREATE TABLE `LeadPreferredLocation` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `lead_id` INTEGER NOT NULL,
     `location` VARCHAR(191) NOT NULL,
@@ -787,7 +787,7 @@ CREATE TABLE `leadpreferredlocation` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `notification` (
+CREATE TABLE `Notification` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `employee_id` INTEGER NOT NULL,
     `type` VARCHAR(191) NOT NULL,
@@ -801,7 +801,7 @@ CREATE TABLE `notification` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `performancesnapshot` (
+CREATE TABLE `PerformanceSnapshot` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `employee_id` INTEGER NOT NULL,
     `snapshot_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -817,7 +817,7 @@ CREATE TABLE `performancesnapshot` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `permission` (
+CREATE TABLE `Permission` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(191) NOT NULL,
     `description` VARCHAR(191) NULL,
@@ -827,7 +827,7 @@ CREATE TABLE `permission` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `pmlocationassignment` (
+CREATE TABLE `PMLocationAssignment` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `pm_id` INTEGER NOT NULL,
     `location` VARCHAR(191) NOT NULL,
@@ -840,7 +840,7 @@ CREATE TABLE `pmlocationassignment` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `pmreassignmenthistory` (
+CREATE TABLE `PMReassignmentHistory` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `site_visit_booking_id` INTEGER NOT NULL,
     `reassigned_by_pm_id` INTEGER NOT NULL,
@@ -854,7 +854,7 @@ CREATE TABLE `pmreassignmenthistory` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `priceline` (
+CREATE TABLE `PriceLine` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `project_unit_id` INTEGER NULL,
     `property_id` INTEGER NULL,
@@ -881,7 +881,7 @@ CREATE TABLE `priceline` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `projectamenity` (
+CREATE TABLE `ProjectAmenity` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `project_id` INTEGER NOT NULL,
     `amenity_id` INTEGER NOT NULL,
@@ -902,7 +902,7 @@ CREATE TABLE `projectamenity` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `projectdocument` (
+CREATE TABLE `ProjectDocument` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `project_id` INTEGER NOT NULL,
     `kind` ENUM('RERA', 'APPROVAL', 'LEGAL', 'OTHER') NOT NULL DEFAULT 'OTHER',
@@ -917,7 +917,7 @@ CREATE TABLE `projectdocument` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `projectmedia` (
+CREATE TABLE `ProjectMedia` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `project_id` INTEGER NOT NULL,
     `kind` ENUM('COVER', 'GALLERY', 'VIDEO', 'BROCHURE', 'MASTER_PLAN', 'LAYOUT_PLAN', 'FLOOR_PLAN') NOT NULL,
@@ -933,7 +933,7 @@ CREATE TABLE `projectmedia` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `projectpricingrule` (
+CREATE TABLE `ProjectPricingRule` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `project_id` INTEGER NOT NULL,
     `label` VARCHAR(191) NOT NULL,
@@ -967,7 +967,7 @@ CREATE TABLE `projectpricingrule` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `projectunit` (
+CREATE TABLE `ProjectUnit` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `unit_code` VARCHAR(191) NOT NULL,
     `project_id` INTEGER NOT NULL,
@@ -1062,7 +1062,7 @@ CREATE TABLE `projectunit` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `projectunitdocument` (
+CREATE TABLE `ProjectUnitDocument` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `project_unit_id` INTEGER NOT NULL,
     `url` TEXT NOT NULL,
@@ -1076,7 +1076,7 @@ CREATE TABLE `projectunitdocument` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `projectunitimage` (
+CREATE TABLE `ProjectUnitImage` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `project_unit_id` INTEGER NOT NULL,
     `image_url` TEXT NOT NULL,
@@ -1092,7 +1092,7 @@ CREATE TABLE `projectunitimage` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `propertyapartmentdetails` (
+CREATE TABLE `PropertyApartmentDetails` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `property_id` INTEGER NOT NULL,
     `tower` VARCHAR(191) NULL,
@@ -1140,7 +1140,7 @@ CREATE TABLE `propertyapartmentdetails` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `propertycommercialofficedetails` (
+CREATE TABLE `PropertyCommercialOfficeDetails` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `property_id` INTEGER NOT NULL,
     `office_number` VARCHAR(191) NULL,
@@ -1171,7 +1171,7 @@ CREATE TABLE `propertycommercialofficedetails` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `propertycommercialshopdetails` (
+CREATE TABLE `PropertyCommercialShopDetails` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `property_id` INTEGER NOT NULL,
     `shop_number` VARCHAR(191) NULL,
@@ -1200,7 +1200,7 @@ CREATE TABLE `propertycommercialshopdetails` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `propertyfarmlanddetails` (
+CREATE TABLE `PropertyFarmLandDetails` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `property_id` INTEGER NOT NULL,
     `farm_land_number` VARCHAR(191) NULL,
@@ -1225,7 +1225,7 @@ CREATE TABLE `propertyfarmlanddetails` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `propertyhousedetails` (
+CREATE TABLE `PropertyHouseDetails` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `property_id` INTEGER NOT NULL,
     `house_number` VARCHAR(191) NULL,
@@ -1248,7 +1248,7 @@ CREATE TABLE `propertyhousedetails` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `propertyplotdetails` (
+CREATE TABLE `PropertyPlotDetails` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `property_id` INTEGER NOT NULL,
     `plot_number` VARCHAR(191) NULL,
@@ -1278,7 +1278,7 @@ CREATE TABLE `propertyplotdetails` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `propertypricing` (
+CREATE TABLE `PropertyPricing` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `property_id` INTEGER NOT NULL,
     `base_price_per_unit` DOUBLE NULL,
@@ -1301,7 +1301,7 @@ CREATE TABLE `propertypricing` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `propertypricingrule` (
+CREATE TABLE `PropertyPricingRule` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `property_id` INTEGER NOT NULL,
     `label` VARCHAR(191) NOT NULL,
@@ -1329,7 +1329,7 @@ CREATE TABLE `propertypricingrule` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `propertyvilladetails` (
+CREATE TABLE `PropertyVillaDetails` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `property_id` INTEGER NOT NULL,
     `villa_number` VARCHAR(191) NULL,
@@ -1358,7 +1358,7 @@ CREATE TABLE `propertyvilladetails` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `publicapikey` (
+CREATE TABLE `PublicApiKey` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `api_key` VARCHAR(191) NOT NULL,
     `company_id` INTEGER NOT NULL,
@@ -1373,7 +1373,7 @@ CREATE TABLE `publicapikey` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `pushsubscription` (
+CREATE TABLE `PushSubscription` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `employee_id` INTEGER NOT NULL,
     `endpoint` TEXT NOT NULL,
@@ -1388,7 +1388,7 @@ CREATE TABLE `pushsubscription` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `role` (
+CREATE TABLE `Role` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(191) NOT NULL,
     `is_system` BOOLEAN NOT NULL DEFAULT false,
@@ -1399,7 +1399,7 @@ CREATE TABLE `role` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `rolepermission` (
+CREATE TABLE `RolePermission` (
     `role_id` INTEGER NOT NULL,
     `permission_id` INTEGER NOT NULL,
 
@@ -1408,7 +1408,7 @@ CREATE TABLE `rolepermission` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `sitevisitescalation` (
+CREATE TABLE `SiteVisitEscalation` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `site_visit_booking_id` INTEGER NOT NULL,
     `marketing_director_notified_at` DATETIME(3) NULL,
@@ -1419,7 +1419,7 @@ CREATE TABLE `sitevisitescalation` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `sitevisitfeedback` (
+CREATE TABLE `SiteVisitFeedback` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `site_visit_id` INTEGER NOT NULL,
     `rated_employee_id` INTEGER NOT NULL,
@@ -1441,7 +1441,7 @@ CREATE TABLE `sitevisitfeedback` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `webauthncredential` (
+CREATE TABLE `WebAuthnCredential` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `employee_id` INTEGER NOT NULL,
     `credential_id` VARCHAR(191) NOT NULL,
@@ -1458,7 +1458,7 @@ CREATE TABLE `webauthncredential` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `websiteaccount` (
+CREATE TABLE `WebsiteAccount` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `company_id` INTEGER NOT NULL,
     `email` VARCHAR(191) NOT NULL,
@@ -1475,7 +1475,7 @@ CREATE TABLE `websiteaccount` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `websiteactivityevent` (
+CREATE TABLE `WebsiteActivityEvent` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `company_id` INTEGER NOT NULL,
     `account_id` INTEGER NULL,
@@ -1496,7 +1496,7 @@ CREATE TABLE `websiteactivityevent` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `websitecompareitem` (
+CREATE TABLE `WebsiteCompareItem` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `account_id` INTEGER NOT NULL,
     `property_id` INTEGER NULL,
@@ -1512,7 +1512,7 @@ CREATE TABLE `websitecompareitem` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `websiteshortlistitem` (
+CREATE TABLE `WebsiteShortlistItem` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `account_id` INTEGER NOT NULL,
     `property_id` INTEGER NULL,
@@ -1528,713 +1528,713 @@ CREATE TABLE `websiteshortlistitem` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateIndex
-CREATE INDEX `AttendanceLog_employee_id_check_in_at_idx` ON `attendancelog`(`employee_id` ASC, `check_in_at` ASC);
+CREATE INDEX `AttendanceLog_employee_id_check_in_at_idx` ON `AttendanceLog`(`employee_id` ASC, `check_in_at` ASC);
 
 -- CreateIndex
-CREATE INDEX `AttendanceLog_employee_id_check_out_at_idx` ON `attendancelog`(`employee_id` ASC, `check_out_at` ASC);
+CREATE INDEX `AttendanceLog_employee_id_check_out_at_idx` ON `AttendanceLog`(`employee_id` ASC, `check_out_at` ASC);
 
 -- CreateIndex
-CREATE INDEX `AttendanceLog_employee_id_idx` ON `attendancelog`(`employee_id` ASC);
+CREATE INDEX `AttendanceLog_employee_id_idx` ON `AttendanceLog`(`employee_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Booking_form_status_idx` ON `booking`(`form_status` ASC);
+CREATE INDEX `Booking_form_status_idx` ON `Booking`(`form_status` ASC);
 
 -- CreateIndex
-CREATE INDEX `Booking_form_submitted_by_id_fkey` ON `booking`(`form_submitted_by_id` ASC);
+CREATE INDEX `Booking_form_submitted_by_id_fkey` ON `Booking`(`form_submitted_by_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Booking_is_legacy_idx` ON `booking`(`is_legacy` ASC);
+CREATE INDEX `Booking_is_legacy_idx` ON `Booking`(`is_legacy` ASC);
 
 -- CreateIndex
-CREATE INDEX `Booking_md_approved_by_id_fkey` ON `booking`(`md_approved_by_id` ASC);
+CREATE INDEX `Booking_md_approved_by_id_fkey` ON `Booking`(`md_approved_by_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Booking_project_unit_id_idx` ON `booking`(`project_unit_id` ASC);
+CREATE INDEX `Booking_project_unit_id_idx` ON `Booking`(`project_unit_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Complaint_assigned_employee_id_idx` ON `complaint`(`assigned_employee_id` ASC);
+CREATE INDEX `Complaint_assigned_employee_id_idx` ON `Complaint`(`assigned_employee_id` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `Complaint_complaint_code_key` ON `complaint`(`complaint_code` ASC);
+CREATE UNIQUE INDEX `Complaint_complaint_code_key` ON `Complaint`(`complaint_code` ASC);
 
 -- CreateIndex
-CREATE INDEX `Complaint_created_at_idx` ON `complaint`(`created_at` ASC);
+CREATE INDEX `Complaint_created_at_idx` ON `Complaint`(`created_at` ASC);
 
 -- CreateIndex
-CREATE INDEX `Complaint_priority_idx` ON `complaint`(`priority` ASC);
+CREATE INDEX `Complaint_priority_idx` ON `Complaint`(`priority` ASC);
 
 -- CreateIndex
-CREATE INDEX `Complaint_project_unit_id_fkey` ON `complaint`(`project_unit_id` ASC);
+CREATE INDEX `Complaint_project_unit_id_fkey` ON `Complaint`(`project_unit_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Complaint_status_idx` ON `complaint`(`status` ASC);
+CREATE INDEX `Complaint_status_idx` ON `Complaint`(`status` ASC);
 
 -- CreateIndex
-CREATE INDEX `Customer_kyc_status_idx` ON `customer`(`kyc_status` ASC);
+CREATE INDEX `Customer_kyc_status_idx` ON `Customer`(`kyc_status` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `Customer_origin_lead_id_key` ON `customer`(`origin_lead_id` ASC);
+CREATE UNIQUE INDEX `Customer_origin_lead_id_key` ON `Customer`(`origin_lead_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `CustomerNotification_company_id_customer_id_created_at_idx` ON `customernotification`(`company_id` ASC, `customer_id` ASC, `created_at` ASC);
+CREATE INDEX `CustomerNotification_company_id_customer_id_created_at_idx` ON `CustomerNotification`(`company_id` ASC, `customer_id` ASC, `created_at` ASC);
 
 -- CreateIndex
-CREATE INDEX `CustomerNotification_company_id_idx` ON `customernotification`(`company_id` ASC);
+CREATE INDEX `CustomerNotification_company_id_idx` ON `CustomerNotification`(`company_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `CustomerNotification_created_at_idx` ON `customernotification`(`created_at` ASC);
+CREATE INDEX `CustomerNotification_created_at_idx` ON `CustomerNotification`(`created_at` ASC);
 
 -- CreateIndex
-CREATE INDEX `CustomerNotification_customer_id_is_read_idx` ON `customernotification`(`customer_id` ASC, `is_read` ASC);
+CREATE INDEX `CustomerNotification_customer_id_is_read_idx` ON `CustomerNotification`(`customer_id` ASC, `is_read` ASC);
 
 -- CreateIndex
-CREATE INDEX `CustomerNotification_is_read_idx` ON `customernotification`(`is_read` ASC);
+CREATE INDEX `CustomerNotification_is_read_idx` ON `CustomerNotification`(`is_read` ASC);
 
 -- CreateIndex
-CREATE INDEX `DailyReport_employee_id_idx` ON `dailyreport`(`employee_id` ASC);
+CREATE INDEX `DailyReport_employee_id_idx` ON `DailyReport`(`employee_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `DailyTarget_company_id_fkey` ON `dailytarget`(`company_id` ASC);
+CREATE INDEX `DailyTarget_company_id_fkey` ON `DailyTarget`(`company_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `DailyTarget_employee_id_idx` ON `dailytarget`(`employee_id` ASC);
+CREATE INDEX `DailyTarget_employee_id_idx` ON `DailyTarget`(`employee_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `DailyTarget_role_name_idx` ON `dailytarget`(`role_name` ASC);
+CREATE INDEX `DailyTarget_role_name_idx` ON `DailyTarget`(`role_name` ASC);
 
 -- CreateIndex
-CREATE INDEX `Employee_company_id_created_at_idx` ON `employee`(`company_id` ASC, `created_at` ASC);
+CREATE INDEX `Employee_company_id_created_at_idx` ON `Employee`(`company_id` ASC, `created_at` ASC);
 
 -- CreateIndex
-CREATE INDEX `Employee_email_idx` ON `employee`(`email` ASC);
+CREATE INDEX `Employee_email_idx` ON `Employee`(`email` ASC);
 
 -- CreateIndex
-CREATE INDEX `Employee_phone_idx` ON `employee`(`phone` ASC);
+CREATE INDEX `Employee_phone_idx` ON `Employee`(`phone` ASC);
 
 -- CreateIndex
-CREATE INDEX `EmployeePermissionOverride_permission_id_fkey` ON `employeepermissionoverride`(`permission_id` ASC);
+CREATE INDEX `EmployeePermissionOverride_permission_id_fkey` ON `EmployeePermissionOverride`(`permission_id` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `EmployeeQrCode_qr_token_key` ON `employeeqrcode`(`qr_token` ASC);
+CREATE UNIQUE INDEX `EmployeeQrCode_qr_token_key` ON `EmployeeQrCode`(`qr_token` ASC);
 
 -- CreateIndex
-CREATE INDEX `EmployeeRole_role_id_fkey` ON `employeerole`(`role_id` ASC);
+CREATE INDEX `EmployeeRole_role_id_fkey` ON `EmployeeRole`(`role_id` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `Installment_booking_id_installment_number_key` ON `installment`(`booking_id` ASC, `installment_number` ASC);
+CREATE UNIQUE INDEX `Installment_booking_id_installment_number_key` ON `Installment`(`booking_id` ASC, `installment_number` ASC);
 
 -- CreateIndex
-CREATE INDEX `Installment_recorded_by_id_fkey` ON `installment`(`recorded_by_id` ASC);
+CREATE INDEX `Installment_recorded_by_id_fkey` ON `Installment`(`recorded_by_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Installment_status_idx` ON `installment`(`status` ASC);
+CREATE INDEX `Installment_status_idx` ON `Installment`(`status` ASC);
 
 -- CreateIndex
-CREATE INDEX `Lead_company_id_created_at_idx` ON `lead`(`company_id` ASC, `created_at` ASC);
+CREATE INDEX `Lead_company_id_created_at_idx` ON `Lead`(`company_id` ASC, `created_at` ASC);
 
 -- CreateIndex
-CREATE INDEX `Lead_created_by_id_fkey` ON `lead`(`created_by_id` ASC);
+CREATE INDEX `Lead_created_by_id_fkey` ON `Lead`(`created_by_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Lead_email_idx` ON `lead`(`email` ASC);
+CREATE INDEX `Lead_email_idx` ON `Lead`(`email` ASC);
 
 -- CreateIndex
-CREATE INDEX `Lead_introduced_by_id_fkey` ON `lead`(`introduced_by_id` ASC);
+CREATE INDEX `Lead_introduced_by_id_fkey` ON `Lead`(`introduced_by_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Lead_phone_idx` ON `lead`(`phone` ASC);
+CREATE INDEX `Lead_phone_idx` ON `Lead`(`phone` ASC);
 
 -- CreateIndex
-CREATE INDEX `Lead_previous_lead_id_fkey` ON `lead`(`previous_lead_id` ASC);
+CREATE INDEX `Lead_previous_lead_id_fkey` ON `Lead`(`previous_lead_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Lead_project_id_fkey` ON `lead`(`project_id` ASC);
+CREATE INDEX `Lead_project_id_fkey` ON `Lead`(`project_id` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `LeadMatchingRequirement_lead_id_key` ON `leadmatchingrequirement`(`lead_id` ASC);
+CREATE UNIQUE INDEX `LeadMatchingRequirement_lead_id_key` ON `LeadMatchingRequirement`(`lead_id` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `LeadPropertyInterest_lead_id_project_unit_id_key` ON `leadpropertyinterest`(`lead_id` ASC, `project_unit_id` ASC);
+CREATE UNIQUE INDEX `LeadPropertyInterest_lead_id_project_unit_id_key` ON `LeadPropertyInterest`(`lead_id` ASC, `project_unit_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `LeadPropertyInterest_project_unit_id_idx` ON `leadpropertyinterest`(`project_unit_id` ASC);
+CREATE INDEX `LeadPropertyInterest_project_unit_id_idx` ON `LeadPropertyInterest`(`project_unit_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `MessageTemplate_is_active_idx` ON `messagetemplate`(`is_active` ASC);
+CREATE INDEX `MessageTemplate_is_active_idx` ON `MessageTemplate`(`is_active` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `Opportunity_booking_id_key` ON `opportunity`(`booking_id` ASC);
+CREATE UNIQUE INDEX `Opportunity_booking_id_key` ON `Opportunity`(`booking_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Opportunity_branch_id_idx` ON `opportunity`(`branch_id` ASC);
+CREATE INDEX `Opportunity_branch_id_idx` ON `Opportunity`(`branch_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Opportunity_created_at_idx` ON `opportunity`(`created_at` ASC);
+CREATE INDEX `Opportunity_created_at_idx` ON `Opportunity`(`created_at` ASC);
 
 -- CreateIndex
-CREATE INDEX `Opportunity_owner_id_idx` ON `opportunity`(`owner_id` ASC);
+CREATE INDEX `Opportunity_owner_id_idx` ON `Opportunity`(`owner_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Opportunity_project_id_idx` ON `opportunity`(`project_id` ASC);
+CREATE INDEX `Opportunity_project_id_idx` ON `Opportunity`(`project_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Opportunity_project_unit_id_fkey` ON `opportunity`(`project_unit_id` ASC);
+CREATE INDEX `Opportunity_project_unit_id_fkey` ON `Opportunity`(`project_unit_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Opportunity_property_id_idx` ON `opportunity`(`property_id` ASC);
+CREATE INDEX `Opportunity_property_id_idx` ON `Opportunity`(`property_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Payment_portal_payment_id_idx` ON `payment`(`portal_payment_id` ASC);
+CREATE INDEX `Payment_portal_payment_id_idx` ON `Payment`(`portal_payment_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Payment_recorded_by_id_fkey` ON `payment`(`recorded_by_id` ASC);
+CREATE INDEX `Payment_recorded_by_id_fkey` ON `Payment`(`recorded_by_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Payment_status_idx` ON `payment`(`status` ASC);
+CREATE INDEX `Payment_status_idx` ON `Payment`(`status` ASC);
 
 -- CreateIndex
-CREATE INDEX `Project_city_idx` ON `project`(`city` ASC);
+CREATE INDEX `Project_city_idx` ON `Project`(`city` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `Project_company_id_slug_key` ON `project`(`company_id` ASC, `slug` ASC);
+CREATE UNIQUE INDEX `Project_company_id_slug_key` ON `Project`(`company_id` ASC, `slug` ASC);
 
 -- CreateIndex
-CREATE INDEX `Project_project_type_idx` ON `project`(`project_type` ASC);
+CREATE INDEX `Project_project_type_idx` ON `Project`(`project_type` ASC);
 
 -- CreateIndex
-CREATE INDEX `Project_verified_by_id_fkey` ON `project`(`verified_by_id` ASC);
+CREATE INDEX `Project_verified_by_id_fkey` ON `Project`(`verified_by_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Property_brand_type_idx` ON `property`(`brand_type` ASC);
+CREATE INDEX `Property_brand_type_idx` ON `Property`(`brand_type` ASC);
 
 -- CreateIndex
-CREATE INDEX `Property_category_idx` ON `property`(`category` ASC);
+CREATE INDEX `Property_category_idx` ON `Property`(`category` ASC);
 
 -- CreateIndex
-CREATE INDEX `Property_city_idx` ON `property`(`city` ASC);
+CREATE INDEX `Property_city_idx` ON `Property`(`city` ASC);
 
 -- CreateIndex
-CREATE INDEX `Property_company_id_created_at_idx` ON `property`(`company_id` ASC, `created_at` ASC);
+CREATE INDEX `Property_company_id_created_at_idx` ON `Property`(`company_id` ASC, `created_at` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `Property_company_id_slug_key` ON `property`(`company_id` ASC, `slug` ASC);
+CREATE UNIQUE INDEX `Property_company_id_slug_key` ON `Property`(`company_id` ASC, `slug` ASC);
 
 -- CreateIndex
-CREATE INDEX `Property_digital_marketing_executive_id_idx` ON `property`(`digital_marketing_executive_id` ASC);
+CREATE INDEX `Property_digital_marketing_executive_id_idx` ON `Property`(`digital_marketing_executive_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Property_final_price_idx` ON `property`(`final_price` ASC);
+CREATE INDEX `Property_final_price_idx` ON `Property`(`final_price` ASC);
 
 -- CreateIndex
-CREATE INDEX `Property_listing_type_idx` ON `property`(`listing_type` ASC);
+CREATE INDEX `Property_listing_type_idx` ON `Property`(`listing_type` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `Property_locked_by_booking_id_key` ON `property`(`locked_by_booking_id` ASC);
+CREATE UNIQUE INDEX `Property_locked_by_booking_id_key` ON `Property`(`locked_by_booking_id` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `PropertyLayoutRegion_layout_image_id_project_unit_id_key` ON `propertylayoutregion`(`layout_image_id` ASC, `project_unit_id` ASC);
+CREATE UNIQUE INDEX `PropertyLayoutRegion_layout_image_id_project_unit_id_key` ON `PropertyLayoutRegion`(`layout_image_id` ASC, `project_unit_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `PropertyLayoutRegion_project_unit_id_idx` ON `propertylayoutregion`(`project_unit_id` ASC);
+CREATE INDEX `PropertyLayoutRegion_project_unit_id_idx` ON `PropertyLayoutRegion`(`project_unit_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `SiteVisitBooking_assigned_agent_id_idx` ON `sitevisitbooking`(`assigned_agent_id` ASC);
+CREATE INDEX `SiteVisitBooking_assigned_agent_id_idx` ON `SiteVisitBooking`(`assigned_agent_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `SiteVisitBooking_cancellation_confirmed_by_pm_id_fkey` ON `sitevisitbooking`(`cancellation_confirmed_by_pm_id` ASC);
+CREATE INDEX `SiteVisitBooking_cancellation_confirmed_by_pm_id_fkey` ON `SiteVisitBooking`(`cancellation_confirmed_by_pm_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `SiteVisitBooking_opportunity_id_idx` ON `sitevisitbooking`(`opportunity_id` ASC);
+CREATE INDEX `SiteVisitBooking_opportunity_id_idx` ON `SiteVisitBooking`(`opportunity_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `SiteVisitBooking_project_manager_id_idx` ON `sitevisitbooking`(`project_manager_id` ASC);
+CREATE INDEX `SiteVisitBooking_project_manager_id_idx` ON `SiteVisitBooking`(`project_manager_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `SiteVisitBooking_project_unit_id_fkey` ON `sitevisitbooking`(`project_unit_id` ASC);
+CREATE INDEX `SiteVisitBooking_project_unit_id_fkey` ON `SiteVisitBooking`(`project_unit_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `SiteVisitBooking_telecaller_id_idx` ON `sitevisitbooking`(`telecaller_id` ASC);
+CREATE INDEX `SiteVisitBooking_telecaller_id_idx` ON `SiteVisitBooking`(`telecaller_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `SiteVisitProperty_project_unit_id_idx` ON `sitevisitproperty`(`project_unit_id` ASC);
+CREATE INDEX `SiteVisitProperty_project_unit_id_idx` ON `SiteVisitProperty`(`project_unit_id` ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX `SiteVisitProperty_visit_id_project_unit_id_key` ON `sitevisitproperty`(`visit_id` ASC, `project_unit_id` ASC);
+CREATE UNIQUE INDEX `SiteVisitProperty_visit_id_project_unit_id_key` ON `SiteVisitProperty`(`visit_id` ASC, `project_unit_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Task_assignee_id_idx` ON `task`(`assignee_id` ASC);
+CREATE INDEX `Task_assignee_id_idx` ON `Task`(`assignee_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Task_lead_id_idx` ON `task`(`lead_id` ASC);
+CREATE INDEX `Task_lead_id_idx` ON `Task`(`lead_id` ASC);
 
 -- CreateIndex
-CREATE INDEX `Task_opportunity_id_idx` ON `task`(`opportunity_id` ASC);
+CREATE INDEX `Task_opportunity_id_idx` ON `Task`(`opportunity_id` ASC);
 
 -- AddForeignKey
-ALTER TABLE `amenity` ADD CONSTRAINT `Amenity_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Amenity` ADD CONSTRAINT `Amenity_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `attendancelog` ADD CONSTRAINT `AttendanceLog_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `AttendanceLog` ADD CONSTRAINT `AttendanceLog_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `authsession` ADD CONSTRAINT `AuthSession_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `AuthSession` ADD CONSTRAINT `AuthSession_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `booking` ADD CONSTRAINT `Booking_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `booking` ADD CONSTRAINT `Booking_customer_id_fkey` FOREIGN KEY (`customer_id`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_customer_id_fkey` FOREIGN KEY (`customer_id`) REFERENCES `Customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `booking` ADD CONSTRAINT `Booking_form_submitted_by_id_fkey` FOREIGN KEY (`form_submitted_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_form_submitted_by_id_fkey` FOREIGN KEY (`form_submitted_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `booking` ADD CONSTRAINT `Booking_md_approved_by_id_fkey` FOREIGN KEY (`md_approved_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_md_approved_by_id_fkey` FOREIGN KEY (`md_approved_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `booking` ADD CONSTRAINT `Booking_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `booking` ADD CONSTRAINT `Booking_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Booking` ADD CONSTRAINT `Booking_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `bookingportalmapping` ADD CONSTRAINT `BookingPortalMapping_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `BookingPortalMapping` ADD CONSTRAINT `BookingPortalMapping_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `branch` ADD CONSTRAINT `Branch_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Branch` ADD CONSTRAINT `Branch_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `companyholiday` ADD CONSTRAINT `CompanyHoliday_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CompanyHoliday` ADD CONSTRAINT `CompanyHoliday_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `complaint` ADD CONSTRAINT `Complaint_assigned_employee_id_fkey` FOREIGN KEY (`assigned_employee_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Complaint` ADD CONSTRAINT `Complaint_assigned_employee_id_fkey` FOREIGN KEY (`assigned_employee_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `complaint` ADD CONSTRAINT `Complaint_booking_id_fkey` FOREIGN KEY (`booking_id`) REFERENCES `booking`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Complaint` ADD CONSTRAINT `Complaint_booking_id_fkey` FOREIGN KEY (`booking_id`) REFERENCES `Booking`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `complaint` ADD CONSTRAINT `Complaint_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Complaint` ADD CONSTRAINT `Complaint_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `complaint` ADD CONSTRAINT `Complaint_customer_id_fkey` FOREIGN KEY (`customer_id`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Complaint` ADD CONSTRAINT `Complaint_customer_id_fkey` FOREIGN KEY (`customer_id`) REFERENCES `Customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `complaint` ADD CONSTRAINT `Complaint_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Complaint` ADD CONSTRAINT `Complaint_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `complaint` ADD CONSTRAINT `Complaint_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Complaint` ADD CONSTRAINT `Complaint_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customer` ADD CONSTRAINT `Customer_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Customer` ADD CONSTRAINT `Customer_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customernotification` ADD CONSTRAINT `CustomerNotification_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CustomerNotification` ADD CONSTRAINT `CustomerNotification_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customernotification` ADD CONSTRAINT `CustomerNotification_customer_id_fkey` FOREIGN KEY (`customer_id`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CustomerNotification` ADD CONSTRAINT `CustomerNotification_customer_id_fkey` FOREIGN KEY (`customer_id`) REFERENCES `Customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `dailyreport` ADD CONSTRAINT `DailyReport_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `DailyReport` ADD CONSTRAINT `DailyReport_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `dailytarget` ADD CONSTRAINT `DailyTarget_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `DailyTarget` ADD CONSTRAINT `DailyTarget_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `dailytarget` ADD CONSTRAINT `DailyTarget_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `DailyTarget` ADD CONSTRAINT `DailyTarget_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `demo` ADD CONSTRAINT `Demo_handler_id_fkey` FOREIGN KEY (`handler_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Demo` ADD CONSTRAINT `Demo_handler_id_fkey` FOREIGN KEY (`handler_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `demo` ADD CONSTRAINT `Demo_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Demo` ADD CONSTRAINT `Demo_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `Lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `demointerestedproperty` ADD CONSTRAINT `DemoInterestedProperty_demo_id_fkey` FOREIGN KEY (`demo_id`) REFERENCES `demo`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `DemoInterestedProperty` ADD CONSTRAINT `DemoInterestedProperty_demo_id_fkey` FOREIGN KEY (`demo_id`) REFERENCES `Demo`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `demointerestedproperty` ADD CONSTRAINT `DemoInterestedProperty_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `DemoInterestedProperty` ADD CONSTRAINT `DemoInterestedProperty_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `demointerestedproperty` ADD CONSTRAINT `DemoInterestedProperty_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `DemoInterestedProperty` ADD CONSTRAINT `DemoInterestedProperty_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `employee` ADD CONSTRAINT `Employee_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Employee` ADD CONSTRAINT `Employee_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `employeebranch` ADD CONSTRAINT `EmployeeBranch_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `branch`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `EmployeeBranch` ADD CONSTRAINT `EmployeeBranch_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `Branch`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `employeebranch` ADD CONSTRAINT `EmployeeBranch_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `EmployeeBranch` ADD CONSTRAINT `EmployeeBranch_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `employeepermissionoverride` ADD CONSTRAINT `EmployeePermissionOverride_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `EmployeePermissionOverride` ADD CONSTRAINT `EmployeePermissionOverride_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `employeepermissionoverride` ADD CONSTRAINT `EmployeePermissionOverride_permission_id_fkey` FOREIGN KEY (`permission_id`) REFERENCES `permission`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `EmployeePermissionOverride` ADD CONSTRAINT `EmployeePermissionOverride_permission_id_fkey` FOREIGN KEY (`permission_id`) REFERENCES `Permission`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `employeeqrcode` ADD CONSTRAINT `EmployeeQrCode_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `EmployeeQrCode` ADD CONSTRAINT `EmployeeQrCode_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `employeerole` ADD CONSTRAINT `EmployeeRole_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `EmployeeRole` ADD CONSTRAINT `EmployeeRole_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `employeerole` ADD CONSTRAINT `EmployeeRole_role_id_fkey` FOREIGN KEY (`role_id`) REFERENCES `role`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `EmployeeRole` ADD CONSTRAINT `EmployeeRole_role_id_fkey` FOREIGN KEY (`role_id`) REFERENCES `Role`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `expenserefund` ADD CONSTRAINT `ExpenseRefund_accountant_id_fkey` FOREIGN KEY (`accountant_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ExpenseRefund` ADD CONSTRAINT `ExpenseRefund_accountant_id_fkey` FOREIGN KEY (`accountant_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `expenserefund` ADD CONSTRAINT `ExpenseRefund_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ExpenseRefund` ADD CONSTRAINT `ExpenseRefund_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `expenserefund` ADD CONSTRAINT `ExpenseRefund_md_id_fkey` FOREIGN KEY (`md_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ExpenseRefund` ADD CONSTRAINT `ExpenseRefund_md_id_fkey` FOREIGN KEY (`md_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `expenserefund` ADD CONSTRAINT `ExpenseRefund_refunded_by_fkey` FOREIGN KEY (`refunded_by`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ExpenseRefund` ADD CONSTRAINT `ExpenseRefund_refunded_by_fkey` FOREIGN KEY (`refunded_by`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `installment` ADD CONSTRAINT `Installment_recorded_by_id_fkey` FOREIGN KEY (`recorded_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Installment` ADD CONSTRAINT `Installment_recorded_by_id_fkey` FOREIGN KEY (`recorded_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `integrationevent` ADD CONSTRAINT `IntegrationEvent_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `IntegrationEvent` ADD CONSTRAINT `IntegrationEvent_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `inventoryfeature` ADD CONSTRAINT `InventoryFeature_amenity_id_fkey` FOREIGN KEY (`amenity_id`) REFERENCES `amenity`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `InventoryFeature` ADD CONSTRAINT `InventoryFeature_amenity_id_fkey` FOREIGN KEY (`amenity_id`) REFERENCES `Amenity`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `inventoryfeature` ADD CONSTRAINT `InventoryFeature_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `InventoryFeature` ADD CONSTRAINT `InventoryFeature_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `inventoryfeature` ADD CONSTRAINT `InventoryFeature_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `InventoryFeature` ADD CONSTRAINT `InventoryFeature_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `kioskcredential` ADD CONSTRAINT `KioskCredential_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `branch`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `KioskCredential` ADD CONSTRAINT `KioskCredential_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `Branch`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `kioskcredential` ADD CONSTRAINT `KioskCredential_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `KioskCredential` ADD CONSTRAINT `KioskCredential_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `kioskcredential` ADD CONSTRAINT `KioskCredential_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `KioskCredential` ADD CONSTRAINT `KioskCredential_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_assigned_to_id_fkey` FOREIGN KEY (`assigned_to_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Lead` ADD CONSTRAINT `Lead_assigned_to_id_fkey` FOREIGN KEY (`assigned_to_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `branch`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Lead` ADD CONSTRAINT `Lead_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `Branch`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Lead` ADD CONSTRAINT `Lead_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Lead` ADD CONSTRAINT `Lead_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_introduced_by_id_fkey` FOREIGN KEY (`introduced_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Lead` ADD CONSTRAINT `Lead_introduced_by_id_fkey` FOREIGN KEY (`introduced_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_previous_lead_id_fkey` FOREIGN KEY (`previous_lead_id`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Lead` ADD CONSTRAINT `Lead_previous_lead_id_fkey` FOREIGN KEY (`previous_lead_id`) REFERENCES `Lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Lead` ADD CONSTRAINT `Lead_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `Project`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadactivity` ADD CONSTRAINT `LeadActivity_actor_id_fkey` FOREIGN KEY (`actor_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `LeadActivity` ADD CONSTRAINT `LeadActivity_actor_id_fkey` FOREIGN KEY (`actor_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadactivity` ADD CONSTRAINT `LeadActivity_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `LeadActivity` ADD CONSTRAINT `LeadActivity_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `Lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadmatchingrequirement` ADD CONSTRAINT `LeadMatchingRequirement_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `LeadMatchingRequirement` ADD CONSTRAINT `LeadMatchingRequirement_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `Lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadpreferredlocation` ADD CONSTRAINT `LeadPreferredLocation_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `LeadPreferredLocation` ADD CONSTRAINT `LeadPreferredLocation_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `Lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadpropertyinterest` ADD CONSTRAINT `LeadPropertyInterest_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `LeadPropertyInterest` ADD CONSTRAINT `LeadPropertyInterest_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadpropertyinterest` ADD CONSTRAINT `LeadPropertyInterest_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `LeadPropertyInterest` ADD CONSTRAINT `LeadPropertyInterest_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `notification` ADD CONSTRAINT `Notification_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Notification` ADD CONSTRAINT `Notification_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `opportunity` ADD CONSTRAINT `Opportunity_booking_id_fkey` FOREIGN KEY (`booking_id`) REFERENCES `booking`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Opportunity` ADD CONSTRAINT `Opportunity_booking_id_fkey` FOREIGN KEY (`booking_id`) REFERENCES `Booking`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `opportunity` ADD CONSTRAINT `Opportunity_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `branch`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Opportunity` ADD CONSTRAINT `Opportunity_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `Branch`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `opportunity` ADD CONSTRAINT `Opportunity_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Opportunity` ADD CONSTRAINT `Opportunity_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `opportunity` ADD CONSTRAINT `Opportunity_owner_id_fkey` FOREIGN KEY (`owner_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Opportunity` ADD CONSTRAINT `Opportunity_owner_id_fkey` FOREIGN KEY (`owner_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `opportunity` ADD CONSTRAINT `Opportunity_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Opportunity` ADD CONSTRAINT `Opportunity_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `Project`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `opportunity` ADD CONSTRAINT `Opportunity_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Opportunity` ADD CONSTRAINT `Opportunity_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `opportunity` ADD CONSTRAINT `Opportunity_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Opportunity` ADD CONSTRAINT `Opportunity_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `payment` ADD CONSTRAINT `Payment_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Payment` ADD CONSTRAINT `Payment_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `payment` ADD CONSTRAINT `Payment_recorded_by_id_fkey` FOREIGN KEY (`recorded_by_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Payment` ADD CONSTRAINT `Payment_recorded_by_id_fkey` FOREIGN KEY (`recorded_by_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `performancesnapshot` ADD CONSTRAINT `PerformanceSnapshot_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PerformanceSnapshot` ADD CONSTRAINT `PerformanceSnapshot_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `pmlocationassignment` ADD CONSTRAINT `PMLocationAssignment_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `PMLocationAssignment` ADD CONSTRAINT `PMLocationAssignment_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `pmlocationassignment` ADD CONSTRAINT `PMLocationAssignment_pm_id_fkey` FOREIGN KEY (`pm_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `PMLocationAssignment` ADD CONSTRAINT `PMLocationAssignment_pm_id_fkey` FOREIGN KEY (`pm_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `pmreassignmenthistory` ADD CONSTRAINT `PMReassignmentHistory_reassigned_by_pm_id_fkey` FOREIGN KEY (`reassigned_by_pm_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `PMReassignmentHistory` ADD CONSTRAINT `PMReassignmentHistory_reassigned_by_pm_id_fkey` FOREIGN KEY (`reassigned_by_pm_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `pmreassignmenthistory` ADD CONSTRAINT `PMReassignmentHistory_reassigned_to_pm_id_fkey` FOREIGN KEY (`reassigned_to_pm_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `PMReassignmentHistory` ADD CONSTRAINT `PMReassignmentHistory_reassigned_to_pm_id_fkey` FOREIGN KEY (`reassigned_to_pm_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `pmreassignmenthistory` ADD CONSTRAINT `PMReassignmentHistory_site_visit_booking_id_fkey` FOREIGN KEY (`site_visit_booking_id`) REFERENCES `sitevisitbooking`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PMReassignmentHistory` ADD CONSTRAINT `PMReassignmentHistory_site_visit_booking_id_fkey` FOREIGN KEY (`site_visit_booking_id`) REFERENCES `SiteVisitBooking`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `priceline` ADD CONSTRAINT `PriceLine_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PriceLine` ADD CONSTRAINT `PriceLine_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `priceline` ADD CONSTRAINT `PriceLine_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PriceLine` ADD CONSTRAINT `PriceLine_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `priceline` ADD CONSTRAINT `PriceLine_property_rule_id_fkey` FOREIGN KEY (`property_rule_id`) REFERENCES `propertypricingrule`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `PriceLine` ADD CONSTRAINT `PriceLine_property_rule_id_fkey` FOREIGN KEY (`property_rule_id`) REFERENCES `PropertyPricingRule`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `priceline` ADD CONSTRAINT `PriceLine_rule_id_fkey` FOREIGN KEY (`rule_id`) REFERENCES `projectpricingrule`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `PriceLine` ADD CONSTRAINT `PriceLine_rule_id_fkey` FOREIGN KEY (`rule_id`) REFERENCES `ProjectPricingRule`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `project` ADD CONSTRAINT `Project_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Project` ADD CONSTRAINT `Project_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `project` ADD CONSTRAINT `Project_verified_by_id_fkey` FOREIGN KEY (`verified_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Project` ADD CONSTRAINT `Project_verified_by_id_fkey` FOREIGN KEY (`verified_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectamenity` ADD CONSTRAINT `ProjectAmenity_amenity_id_fkey` FOREIGN KEY (`amenity_id`) REFERENCES `amenity`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ProjectAmenity` ADD CONSTRAINT `ProjectAmenity_amenity_id_fkey` FOREIGN KEY (`amenity_id`) REFERENCES `Amenity`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectamenity` ADD CONSTRAINT `ProjectAmenity_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ProjectAmenity` ADD CONSTRAINT `ProjectAmenity_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `Project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectdocument` ADD CONSTRAINT `ProjectDocument_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ProjectDocument` ADD CONSTRAINT `ProjectDocument_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `Project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectdocument` ADD CONSTRAINT `ProjectDocument_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ProjectDocument` ADD CONSTRAINT `ProjectDocument_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectmedia` ADD CONSTRAINT `ProjectMedia_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ProjectMedia` ADD CONSTRAINT `ProjectMedia_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `Project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectmedia` ADD CONSTRAINT `ProjectMedia_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ProjectMedia` ADD CONSTRAINT `ProjectMedia_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectpricingrule` ADD CONSTRAINT `ProjectPricingRule_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ProjectPricingRule` ADD CONSTRAINT `ProjectPricingRule_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `Project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunit` ADD CONSTRAINT `ProjectUnit_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `branch`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnit` ADD CONSTRAINT `ProjectUnit_branch_id_fkey` FOREIGN KEY (`branch_id`) REFERENCES `Branch`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunit` ADD CONSTRAINT `ProjectUnit_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnit` ADD CONSTRAINT `ProjectUnit_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunit` ADD CONSTRAINT `ProjectUnit_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnit` ADD CONSTRAINT `ProjectUnit_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunit` ADD CONSTRAINT `ProjectUnit_locked_by_booking_id_fkey` FOREIGN KEY (`locked_by_booking_id`) REFERENCES `booking`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnit` ADD CONSTRAINT `ProjectUnit_locked_by_booking_id_fkey` FOREIGN KEY (`locked_by_booking_id`) REFERENCES `Booking`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunit` ADD CONSTRAINT `ProjectUnit_overridden_by_id_fkey` FOREIGN KEY (`overridden_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnit` ADD CONSTRAINT `ProjectUnit_overridden_by_id_fkey` FOREIGN KEY (`overridden_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunit` ADD CONSTRAINT `ProjectUnit_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnit` ADD CONSTRAINT `ProjectUnit_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `Project`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunitdocument` ADD CONSTRAINT `ProjectUnitDocument_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnitDocument` ADD CONSTRAINT `ProjectUnitDocument_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunitdocument` ADD CONSTRAINT `ProjectUnitDocument_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnitDocument` ADD CONSTRAINT `ProjectUnitDocument_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunitimage` ADD CONSTRAINT `ProjectUnitImage_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnitImage` ADD CONSTRAINT `ProjectUnitImage_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `projectunitimage` ADD CONSTRAINT `ProjectUnitImage_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `ProjectUnitImage` ADD CONSTRAINT `ProjectUnitImage_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `property` ADD CONSTRAINT `Property_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Property` ADD CONSTRAINT `Property_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `property` ADD CONSTRAINT `Property_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Property` ADD CONSTRAINT `Property_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `property` ADD CONSTRAINT `Property_digital_marketing_executive_id_fkey` FOREIGN KEY (`digital_marketing_executive_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Property` ADD CONSTRAINT `Property_digital_marketing_executive_id_fkey` FOREIGN KEY (`digital_marketing_executive_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertyapartmentdetails` ADD CONSTRAINT `PropertyApartmentDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyApartmentDetails` ADD CONSTRAINT `PropertyApartmentDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertycommercialofficedetails` ADD CONSTRAINT `PropertyCommercialOfficeDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyCommercialOfficeDetails` ADD CONSTRAINT `PropertyCommercialOfficeDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertycommercialshopdetails` ADD CONSTRAINT `PropertyCommercialShopDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyCommercialShopDetails` ADD CONSTRAINT `PropertyCommercialShopDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertyfarmlanddetails` ADD CONSTRAINT `PropertyFarmLandDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyFarmLandDetails` ADD CONSTRAINT `PropertyFarmLandDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertyhousedetails` ADD CONSTRAINT `PropertyHouseDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyHouseDetails` ADD CONSTRAINT `PropertyHouseDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertyimage` ADD CONSTRAINT `PropertyImage_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `PropertyImage` ADD CONSTRAINT `PropertyImage_uploaded_by_id_fkey` FOREIGN KEY (`uploaded_by_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertylayoutregion` ADD CONSTRAINT `PropertyLayoutRegion_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyLayoutRegion` ADD CONSTRAINT `PropertyLayoutRegion_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertyplotdetails` ADD CONSTRAINT `PropertyPlotDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyPlotDetails` ADD CONSTRAINT `PropertyPlotDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertypricing` ADD CONSTRAINT `PropertyPricing_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyPricing` ADD CONSTRAINT `PropertyPricing_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertypricingrule` ADD CONSTRAINT `PropertyPricingRule_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyPricingRule` ADD CONSTRAINT `PropertyPricingRule_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertyverificationlog` ADD CONSTRAINT `PropertyVerificationLog_actor_id_fkey` FOREIGN KEY (`actor_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `PropertyVerificationLog` ADD CONSTRAINT `PropertyVerificationLog_actor_id_fkey` FOREIGN KEY (`actor_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `propertyvilladetails` ADD CONSTRAINT `PropertyVillaDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PropertyVillaDetails` ADD CONSTRAINT `PropertyVillaDetails_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `publicapikey` ADD CONSTRAINT `PublicApiKey_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PublicApiKey` ADD CONSTRAINT `PublicApiKey_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `pushsubscription` ADD CONSTRAINT `PushSubscription_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `PushSubscription` ADD CONSTRAINT `PushSubscription_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `rolepermission` ADD CONSTRAINT `RolePermission_permission_id_fkey` FOREIGN KEY (`permission_id`) REFERENCES `permission`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `RolePermission` ADD CONSTRAINT `RolePermission_permission_id_fkey` FOREIGN KEY (`permission_id`) REFERENCES `Permission`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `rolepermission` ADD CONSTRAINT `RolePermission_role_id_fkey` FOREIGN KEY (`role_id`) REFERENCES `role`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `RolePermission` ADD CONSTRAINT `RolePermission_role_id_fkey` FOREIGN KEY (`role_id`) REFERENCES `Role`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitbooking` ADD CONSTRAINT `SiteVisitBooking_assigned_agent_id_fkey` FOREIGN KEY (`assigned_agent_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitBooking` ADD CONSTRAINT `SiteVisitBooking_assigned_agent_id_fkey` FOREIGN KEY (`assigned_agent_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitbooking` ADD CONSTRAINT `SiteVisitBooking_cancellation_confirmed_by_pm_id_fkey` FOREIGN KEY (`cancellation_confirmed_by_pm_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitBooking` ADD CONSTRAINT `SiteVisitBooking_cancellation_confirmed_by_pm_id_fkey` FOREIGN KEY (`cancellation_confirmed_by_pm_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitbooking` ADD CONSTRAINT `SiteVisitBooking_opportunity_id_fkey` FOREIGN KEY (`opportunity_id`) REFERENCES `opportunity`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitBooking` ADD CONSTRAINT `SiteVisitBooking_opportunity_id_fkey` FOREIGN KEY (`opportunity_id`) REFERENCES `Opportunity`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitbooking` ADD CONSTRAINT `SiteVisitBooking_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `project`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitBooking` ADD CONSTRAINT `SiteVisitBooking_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `Project`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitbooking` ADD CONSTRAINT `SiteVisitBooking_project_manager_id_fkey` FOREIGN KEY (`project_manager_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitBooking` ADD CONSTRAINT `SiteVisitBooking_project_manager_id_fkey` FOREIGN KEY (`project_manager_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitbooking` ADD CONSTRAINT `SiteVisitBooking_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitBooking` ADD CONSTRAINT `SiteVisitBooking_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitbooking` ADD CONSTRAINT `SiteVisitBooking_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitBooking` ADD CONSTRAINT `SiteVisitBooking_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitbooking` ADD CONSTRAINT `SiteVisitBooking_telecaller_id_fkey` FOREIGN KEY (`telecaller_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitBooking` ADD CONSTRAINT `SiteVisitBooking_telecaller_id_fkey` FOREIGN KEY (`telecaller_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitescalation` ADD CONSTRAINT `SiteVisitEscalation_site_visit_booking_id_fkey` FOREIGN KEY (`site_visit_booking_id`) REFERENCES `sitevisitbooking`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitEscalation` ADD CONSTRAINT `SiteVisitEscalation_site_visit_booking_id_fkey` FOREIGN KEY (`site_visit_booking_id`) REFERENCES `SiteVisitBooking`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitfeedback` ADD CONSTRAINT `SiteVisitFeedback_rated_employee_id_fkey` FOREIGN KEY (`rated_employee_id`) REFERENCES `employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitFeedback` ADD CONSTRAINT `SiteVisitFeedback_rated_employee_id_fkey` FOREIGN KEY (`rated_employee_id`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitfeedback` ADD CONSTRAINT `SiteVisitFeedback_site_visit_id_fkey` FOREIGN KEY (`site_visit_id`) REFERENCES `sitevisitbooking`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitFeedback` ADD CONSTRAINT `SiteVisitFeedback_site_visit_id_fkey` FOREIGN KEY (`site_visit_id`) REFERENCES `SiteVisitBooking`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitproperty` ADD CONSTRAINT `SiteVisitProperty_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitProperty` ADD CONSTRAINT `SiteVisitProperty_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `sitevisitreassignment` ADD CONSTRAINT `SiteVisitReassignment_to_employee_id_fkey` FOREIGN KEY (`to_employee_id`) REFERENCES `employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `SiteVisitReassignment` ADD CONSTRAINT `SiteVisitReassignment_to_employee_id_fkey` FOREIGN KEY (`to_employee_id`) REFERENCES `Employee`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `task` ADD CONSTRAINT `Task_assignee_id_fkey` FOREIGN KEY (`assignee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Task` ADD CONSTRAINT `Task_assignee_id_fkey` FOREIGN KEY (`assignee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `task` ADD CONSTRAINT `Task_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `Task` ADD CONSTRAINT `Task_lead_id_fkey` FOREIGN KEY (`lead_id`) REFERENCES `Lead`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `task` ADD CONSTRAINT `Task_opportunity_id_fkey` FOREIGN KEY (`opportunity_id`) REFERENCES `opportunity`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `Task` ADD CONSTRAINT `Task_opportunity_id_fkey` FOREIGN KEY (`opportunity_id`) REFERENCES `Opportunity`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `webauthncredential` ADD CONSTRAINT `WebAuthnCredential_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `WebAuthnCredential` ADD CONSTRAINT `WebAuthnCredential_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `Employee`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `websiteaccount` ADD CONSTRAINT `WebsiteAccount_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `WebsiteAccount` ADD CONSTRAINT `WebsiteAccount_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `websiteactivityevent` ADD CONSTRAINT `WebsiteActivityEvent_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `websiteaccount`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `WebsiteActivityEvent` ADD CONSTRAINT `WebsiteActivityEvent_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `WebsiteAccount`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `websiteactivityevent` ADD CONSTRAINT `WebsiteActivityEvent_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `WebsiteActivityEvent` ADD CONSTRAINT `WebsiteActivityEvent_company_id_fkey` FOREIGN KEY (`company_id`) REFERENCES `Company`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `websitecompareitem` ADD CONSTRAINT `WebsiteCompareItem_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `websiteaccount`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `WebsiteCompareItem` ADD CONSTRAINT `WebsiteCompareItem_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `WebsiteAccount`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `websitecompareitem` ADD CONSTRAINT `WebsiteCompareItem_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `WebsiteCompareItem` ADD CONSTRAINT `WebsiteCompareItem_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `websitecompareitem` ADD CONSTRAINT `WebsiteCompareItem_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `WebsiteCompareItem` ADD CONSTRAINT `WebsiteCompareItem_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `websiteshortlistitem` ADD CONSTRAINT `WebsiteShortlistItem_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `websiteaccount`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `WebsiteShortlistItem` ADD CONSTRAINT `WebsiteShortlistItem_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `WebsiteAccount`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `websiteshortlistitem` ADD CONSTRAINT `WebsiteShortlistItem_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `projectunit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `WebsiteShortlistItem` ADD CONSTRAINT `WebsiteShortlistItem_project_unit_id_fkey` FOREIGN KEY (`project_unit_id`) REFERENCES `ProjectUnit`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `websiteshortlistitem` ADD CONSTRAINT `WebsiteShortlistItem_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `WebsiteShortlistItem` ADD CONSTRAINT `WebsiteShortlistItem_property_id_fkey` FOREIGN KEY (`property_id`) REFERENCES `Property`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- RedefineIndex
-CREATE INDEX `Booking_branch_id_fkey` ON `booking`(`branch_id` ASC);
-DROP INDEX `Booking_branch_id_idx` ON `booking`;
+CREATE INDEX `Booking_branch_id_fkey` ON `Booking`(`branch_id` ASC);
+DROP INDEX `Booking_branch_id_idx` ON `Booking`;
 
 -- RedefineIndex
-CREATE UNIQUE INDEX `Booking_booking_code_key` ON `booking`(`booking_code` ASC);
-DROP INDEX `booking_code` ON `booking`;
+CREATE UNIQUE INDEX `Booking_booking_code_key` ON `Booking`(`booking_code` ASC);
+DROP INDEX `booking_code` ON `Booking`;
 
 -- RedefineIndex
-CREATE INDEX `Employee_reporting_manager_id_fkey` ON `employee`(`reporting_manager_id` ASC);
-DROP INDEX `Employee_reporting_manager_id_idx` ON `employee`;
+CREATE INDEX `Employee_reporting_manager_id_fkey` ON `Employee`(`reporting_manager_id` ASC);
+DROP INDEX `Employee_reporting_manager_id_idx` ON `Employee`;
 
 -- RedefineIndex
-CREATE INDEX `EmployeeBranch_branch_id_fkey` ON `employeebranch`(`branch_id` ASC);
-DROP INDEX `EmployeeBranch_branch_id_idx` ON `employeebranch`;
+CREATE INDEX `EmployeeBranch_branch_id_fkey` ON `EmployeeBranch`(`branch_id` ASC);
+DROP INDEX `EmployeeBranch_branch_id_idx` ON `EmployeeBranch`;
 
 -- RedefineIndex
-CREATE INDEX `Payment_installment_id_fkey` ON `payment`(`installment_id` ASC);
-DROP INDEX `Payment_installment_id_idx` ON `payment`;
+CREATE INDEX `Payment_installment_id_fkey` ON `Payment`(`installment_id` ASC);
+DROP INDEX `Payment_installment_id_idx` ON `Payment`;
 
 -- RedefineIndex
-CREATE INDEX `Property_branch_id_fkey` ON `property`(`branch_id` ASC);
-DROP INDEX `Property_branch_id_idx` ON `property`;
+CREATE INDEX `Property_branch_id_fkey` ON `Property`(`branch_id` ASC);
+DROP INDEX `Property_branch_id_idx` ON `Property`;
 
 -- RedefineIndex
-CREATE INDEX `SiteVisitBooking_property_id_fkey` ON `sitevisitbooking`(`property_id` ASC);
-DROP INDEX `SiteVisitBooking_property_id_idx` ON `sitevisitbooking`;
+CREATE INDEX `SiteVisitBooking_property_id_fkey` ON `SiteVisitBooking`(`property_id` ASC);
+DROP INDEX `SiteVisitBooking_property_id_idx` ON `SiteVisitBooking`;
 
 -- RedefineIndex
 -- No DROP INDEX here: MySQL's case-insensitive identifier matching on this
@@ -2244,5 +2244,5 @@ DROP INDEX `SiteVisitBooking_property_id_idx` ON `sitevisitbooking`;
 -- `SiteVisitBooking_project_id_fkey` foreign key, so dropping it fails with
 -- "needed in a foreign key constraint". Only the CREATE is needed to bring a
 -- fresh database up to the same state the live databases already have.
-CREATE INDEX `SiteVisitBooking_project_id_fkey` ON `sitevisitbooking`(`project_id` ASC);
+CREATE INDEX `SiteVisitBooking_project_id_fkey` ON `SiteVisitBooking`(`project_id` ASC);
 
