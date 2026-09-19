@@ -252,12 +252,18 @@ router.get(
         orderBy: { created_at: 'desc' },
       });
 
-      // Monthly stats: every proposal (any status) targeting the current IST
-      // calendar month, so HR/MD can see the employee's pattern alongside
-      // each pending item — how often they've been late, taken half days, or
-      // requested leave this month, and how much of that was approved. The
-      // item being reviewed is subtracted back out of its own category below
-      // so it doesn't count itself while still pending a decision.
+      // Monthly stats: every proposal targeting the current IST calendar
+      // month, so HR/MD can see the employee's pattern alongside each
+      // pending item. Lateness is a fact independent of approval (approval
+      // only decides whether it's excused/penalized), so `lates` counts every
+      // LATE_CHECKIN request submitted this month regardless of outcome.
+      // Leave is different: a REJECTED leave request means the employee
+      // attended instead, so it must NOT count as leave taken — `leaves` and
+      // `halfDays` here count only APPROVED requests (days actually taken),
+      // with rejected counts surfaced separately for context. A PENDING item
+      // is by definition neither approved nor rejected, so it never
+      // contributes to leaves/halfDays; only `lates` needs the pending item
+      // being reviewed subtracted back out of its own count below.
       const { dateString: todayStr } = getISTComponents(new Date());
       const [year, month] = todayStr.split('-');
       const monthStart = new Date(`${year}-${month}-01T00:00:00+05:30`);
@@ -272,18 +278,18 @@ router.get(
       type MonthlyStats = {
         lates: number;
         approvedLates: number;
-        halfDays: number;
-        approvedHalfDays: number;
-        leaves: number;
-        approvedLeaves: number;
+        halfDaysTaken: number;
+        halfDaysRejected: number;
+        leavesTaken: number;
+        leavesRejected: number;
       };
       const emptyStats = (): MonthlyStats => ({
         lates: 0,
         approvedLates: 0,
-        halfDays: 0,
-        approvedHalfDays: 0,
-        leaves: 0,
-        approvedLeaves: 0,
+        halfDaysTaken: 0,
+        halfDaysRejected: 0,
+        leavesTaken: 0,
+        leavesRejected: 0,
       });
 
       const statsByEmployee: Record<number, MonthlyStats> = {};
@@ -295,11 +301,11 @@ router.get(
         } else if (mp.type === 'LEAVE') {
           const isHalf = mp.leave_type === 'FIRST_HALF' || mp.leave_type === 'SECOND_HALF';
           if (isHalf) {
-            s.halfDays++;
-            if (mp.status === 'APPROVED') s.approvedHalfDays++;
+            if (mp.status === 'APPROVED') s.halfDaysTaken++;
+            else if (mp.status === 'REJECTED') s.halfDaysRejected++;
           } else {
-            s.leaves++;
-            if (mp.status === 'APPROVED') s.approvedLeaves++;
+            if (mp.status === 'APPROVED') s.leavesTaken++;
+            else if (mp.status === 'REJECTED') s.leavesRejected++;
           }
         }
       }
@@ -308,15 +314,10 @@ router.get(
         const emp = companyEmployees.find((e: any) => e.id === proposal.employee_id);
         const monthlyStats = { ...(statsByEmployee[proposal.employee_id] || emptyStats()) };
 
-        // Exclude this pending item from its own displayed stats.
+        // Exclude this pending item from its own displayed "lates" count —
+        // leaves/halfDays never include pending items in the first place.
         if (proposal.type === 'LATE_CHECKIN') {
           monthlyStats.lates = Math.max(0, monthlyStats.lates - 1);
-        } else if (proposal.type === 'LEAVE') {
-          if (proposal.leave_type === 'FIRST_HALF' || proposal.leave_type === 'SECOND_HALF') {
-            monthlyStats.halfDays = Math.max(0, monthlyStats.halfDays - 1);
-          } else {
-            monthlyStats.leaves = Math.max(0, monthlyStats.leaves - 1);
-          }
         }
 
         return {

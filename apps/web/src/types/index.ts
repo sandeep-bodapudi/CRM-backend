@@ -903,10 +903,10 @@ export interface ProposalItem {
   monthlyStats?: {
     lates: number;
     approvedLates: number;
-    halfDays: number;
-    approvedHalfDays: number;
-    leaves: number;
-    approvedLeaves: number;
+    halfDaysTaken: number;
+    halfDaysRejected: number;
+    leavesTaken: number;
+    leavesRejected: number;
   };
 }
 

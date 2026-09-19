@@ -124,14 +124,16 @@ export const ApprovalsDashboard: React.FC = () => {
                         {item.monthlyStats.approvedLates} approved)
                       </span>
                       <span>
-                        Half Days:{' '}
-                        <strong className="text-slate-700">{item.monthlyStats.halfDays}</strong> (
-                        {item.monthlyStats.approvedHalfDays} approved)
+                        Half Days Taken:{' '}
+                        <strong className="text-slate-700">
+                          {item.monthlyStats.halfDaysTaken}
+                        </strong>{' '}
+                        ({item.monthlyStats.halfDaysRejected} rejected)
                       </span>
                       <span>
-                        Leaves:{' '}
-                        <strong className="text-slate-700">{item.monthlyStats.leaves}</strong> (
-                        {item.monthlyStats.approvedLeaves} approved)
+                        Leaves Taken:{' '}
+                        <strong className="text-slate-700">{item.monthlyStats.leavesTaken}</strong>{' '}
+                        ({item.monthlyStats.leavesRejected} rejected)
                       </span>
                     </div>
                   )}
