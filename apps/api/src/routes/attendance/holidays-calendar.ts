@@ -189,8 +189,6 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
       const { dateString } = getISTComponents(ld);
       if (calendarMap[dateString]) {
         // If it was already marked as LEAVE from a proposal, we might still want to attach the log
-        calendarMap[dateString].log = l;
-
         let adjustedStatus = l.status;
         if (calendarMap[dateString].hasApprovedLateProposal) {
           adjustedStatus = 'PRESENT';
@@ -202,6 +200,20 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
           adjustedStatus = 'LEAVE';
         }
 
+        // Prevent later SYSTEM_AUTO logs from overwriting earlier MANUAL or QR_SCAN logs
+        if (calendarMap[dateString].log) {
+          const prevLog = calendarMap[dateString].log;
+          const prevSourcePriority =
+            prevLog.source === 'MANUAL' ? 3 : prevLog.source === 'QR_SCAN' ? 2 : 1;
+          const currentSourcePriority = l.source === 'MANUAL' ? 3 : l.source === 'QR_SCAN' ? 2 : 1;
+
+          if (currentSourcePriority < prevSourcePriority) {
+            // Keep the previous status and log, don't overwrite
+            continue;
+          }
+        }
+
+        calendarMap[dateString].log = l;
         calendarMap[dateString].status = adjustedStatus;
 
         if (adjustedStatus === 'LATE') totalLates++;
