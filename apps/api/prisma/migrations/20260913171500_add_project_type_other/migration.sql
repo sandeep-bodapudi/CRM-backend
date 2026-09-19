@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE `Project` MODIFY `project_type` ENUM('PLOTTED', 'APARTMENT', 'VILLA', 'MIXED', 'COMMERCIAL', 'OTHER') NULL;
