@@ -242,19 +242,87 @@ router.get(
         select: { id: true, full_name: true, employee_code: true },
       });
 
+      const employeeIds = companyEmployees.map((e: any) => e.id);
+
       const proposals = await p.attendanceProposal.findMany({
         where: {
-          employee_id: { in: companyEmployees.map((e: any) => e.id) },
+          employee_id: { in: employeeIds },
           status: 'PENDING',
         },
         orderBy: { created_at: 'desc' },
       });
 
+      // Monthly stats: every proposal (any status) targeting the current IST
+      // calendar month, so HR/MD can see the employee's pattern alongside
+      // each pending item — how often they've been late, taken half days, or
+      // requested leave this month, and how much of that was approved. The
+      // item being reviewed is subtracted back out of its own category below
+      // so it doesn't count itself while still pending a decision.
+      const { dateString: todayStr } = getISTComponents(new Date());
+      const [year, month] = todayStr.split('-');
+      const monthStart = new Date(`${year}-${month}-01T00:00:00+05:30`);
+      const monthEnd = new Date(monthStart);
+      monthEnd.setMonth(monthEnd.getMonth() + 1);
+
+      const monthProposals = await p.attendanceProposal.findMany({
+        where: { employee_id: { in: employeeIds }, target_date: { gte: monthStart, lt: monthEnd } },
+        select: { employee_id: true, type: true, leave_type: true, status: true },
+      });
+
+      type MonthlyStats = {
+        lates: number;
+        approvedLates: number;
+        halfDays: number;
+        approvedHalfDays: number;
+        leaves: number;
+        approvedLeaves: number;
+      };
+      const emptyStats = (): MonthlyStats => ({
+        lates: 0,
+        approvedLates: 0,
+        halfDays: 0,
+        approvedHalfDays: 0,
+        leaves: 0,
+        approvedLeaves: 0,
+      });
+
+      const statsByEmployee: Record<number, MonthlyStats> = {};
+      for (const mp of monthProposals) {
+        const s = (statsByEmployee[mp.employee_id] ||= emptyStats());
+        if (mp.type === 'LATE_CHECKIN') {
+          s.lates++;
+          if (mp.status === 'APPROVED') s.approvedLates++;
+        } else if (mp.type === 'LEAVE') {
+          const isHalf = mp.leave_type === 'FIRST_HALF' || mp.leave_type === 'SECOND_HALF';
+          if (isHalf) {
+            s.halfDays++;
+            if (mp.status === 'APPROVED') s.approvedHalfDays++;
+          } else {
+            s.leaves++;
+            if (mp.status === 'APPROVED') s.approvedLeaves++;
+          }
+        }
+      }
+
       const mappedProposals = proposals.map((proposal: any) => {
         const emp = companyEmployees.find((e: any) => e.id === proposal.employee_id);
+        const monthlyStats = { ...(statsByEmployee[proposal.employee_id] || emptyStats()) };
+
+        // Exclude this pending item from its own displayed stats.
+        if (proposal.type === 'LATE_CHECKIN') {
+          monthlyStats.lates = Math.max(0, monthlyStats.lates - 1);
+        } else if (proposal.type === 'LEAVE') {
+          if (proposal.leave_type === 'FIRST_HALF' || proposal.leave_type === 'SECOND_HALF') {
+            monthlyStats.halfDays = Math.max(0, monthlyStats.halfDays - 1);
+          } else {
+            monthlyStats.leaves = Math.max(0, monthlyStats.leaves - 1);
+          }
+        }
+
         return {
           ...proposal,
           employee: emp,
+          monthlyStats,
         };
       });
 

@@ -475,6 +475,15 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
                       {item.target_date ? new Date(item.target_date).toLocaleDateString() : ''}
                     </span>
                     <p className="text-slate-600 mt-0.5 font-medium">{item.reason}</p>
+                    {item.monthlyStats && (
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        This month — Lates: {item.monthlyStats.lates} (
+                        {item.monthlyStats.approvedLates} appr.) · Half Days:{' '}
+                        {item.monthlyStats.halfDays} ({item.monthlyStats.approvedHalfDays} appr.) ·
+                        Leaves: {item.monthlyStats.leaves} ({item.monthlyStats.approvedLeaves}{' '}
+                        appr.)
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button

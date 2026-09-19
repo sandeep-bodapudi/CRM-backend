@@ -900,6 +900,14 @@ export interface ProposalItem {
   reviewed_at?: ISODateTime | null;
   created_at: ISODateTime;
   updated_at: ISODateTime;
+  monthlyStats?: {
+    lates: number;
+    approvedLates: number;
+    halfDays: number;
+    approvedHalfDays: number;
+    leaves: number;
+    approvedLeaves: number;
+  };
 }
 
 /** Browser beforeinstallprompt event payload. */

@@ -89,6 +89,25 @@ export const ApprovalsDashboard: React.FC = () => {
                     )}
                   </div>
                   <p className="text-slate-600 mt-2 text-sm font-medium">"{item.reason}"</p>
+                  {item.monthlyStats && (
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                      <span>
+                        This month — Lates:{' '}
+                        <strong className="text-slate-700">{item.monthlyStats.lates}</strong> (
+                        {item.monthlyStats.approvedLates} approved)
+                      </span>
+                      <span>
+                        Half Days:{' '}
+                        <strong className="text-slate-700">{item.monthlyStats.halfDays}</strong> (
+                        {item.monthlyStats.approvedHalfDays} approved)
+                      </span>
+                      <span>
+                        Leaves:{' '}
+                        <strong className="text-slate-700">{item.monthlyStats.leaves}</strong> (
+                        {item.monthlyStats.approvedLeaves} approved)
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
