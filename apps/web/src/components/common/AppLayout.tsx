@@ -32,8 +32,10 @@ import {
 } from 'lucide-react';
 import { Roles, Permissions } from '../../shared';
 import { useAuth } from '../../context/AuthContext';
+import { useLogoutGate } from '../../hooks/useLogoutGate';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
 import { ProductTour } from '../onboarding/ProductTour';
+import { EmergencyLogoutModal } from '../profile/EmergencyLogoutModal';
 
 export const AppLayout: React.FC<{
   children: React.ReactNode;
@@ -41,8 +43,19 @@ export const AppLayout: React.FC<{
   title?: string;
 }> = ({ children, showRightRail = false, title }) => {
   const { user, logout, activeRole, setActiveRole } = useAuth();
+  const { canLogoutNow } = useLogoutGate();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [showEmergencyLogout, setShowEmergencyLogout] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleLogoutClick = async () => {
+    setIsProfileMenuOpen(false);
+    if (await canLogoutNow()) {
+      logout();
+    } else {
+      setShowEmergencyLogout(true);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -152,10 +165,7 @@ export const AppLayout: React.FC<{
                     Take Product Tour
                   </button>
                   <button
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      logout();
-                    }}
+                    onClick={handleLogoutClick}
                     className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-red-50 dark:hover:bg-red-900/20"
                   >
                     Logout
@@ -164,6 +174,9 @@ export const AppLayout: React.FC<{
               </div>
             )}
           </div>
+          {showEmergencyLogout && (
+            <EmergencyLogoutModal onClose={() => setShowEmergencyLogout(false)} />
+          )}
           <div className="md:hidden w-8" />{' '}
           {/* Placeholder to balance the layout since the menu button moved to bottom nav */}
         </div>
