@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { Search, Plus, Minus, Save, AlertCircle, CheckCircle } from 'lucide-react';
 import { EmployeeListItem } from '../../types';
+import { Roles } from '../../shared';
 
 export default function PerformanceAdjustmentPage() {
   const { accessToken, activeRole, user } = useAuth();
@@ -88,7 +89,7 @@ export default function PerformanceAdjustmentPage() {
     }
   };
 
-  if (!['HR_MANAGER', 'MD', 'ADMIN'].includes(activeRole)) {
+  if (![Roles.HR_MANAGER, Roles.MD, Roles.ADMIN].includes(activeRole as any)) {
     return (
       <div className="p-6">
         <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center">
