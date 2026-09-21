@@ -50,10 +50,16 @@ export const UserSettings: React.FC = () => {
   // Nuclear fallback for anyone stuck on a stale cached build: doesn't
   // depend on registration.waiting or any service-worker state being
   // coherent (unlike UpdateAvailableBanner/useSwUpdate), so it works even
-  // when the automatic update flow itself is stuck.
+  // when the automatic update flow itself is stuck. Also logs out (rather
+  // than just reloading the current authenticated view) so the reload
+  // lands on a genuinely clean boot: a stale build can carry stale
+  // in-memory auth/app state alongside stale assets, and re-authenticating
+  // from the login screen is the only way to guarantee the whole app --
+  // not just its cache -- comes back fresh.
   const handleForceRefresh = async () => {
     setIsForceRefreshing(true);
     try {
+      await logout();
       if ('caches' in window) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
@@ -411,7 +417,8 @@ export const UserSettings: React.FC = () => {
                 Force refresh app
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Clears cached app data and reloads the latest version
+                Clears cached app data, signs you out, and reloads the latest version — sign in
+                again once it's done
               </p>
             </div>
           </div>
