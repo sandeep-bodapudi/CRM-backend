@@ -28,7 +28,13 @@ export const DigitalLeadOperatorDashboard: React.FC = () => {
     queryKey: ['dloDashboardData'],
     queryFn: async () => {
       const [leadsRes, monitorRes] = await Promise.all([
-        fetchWithAuth(`${API_BASE_URL}/leads`),
+        // Explicit high limit: totalLeads/unassigned/newToday below are all
+        // computed by filtering this array, so the backend's own default
+        // (2000) would silently undercount these stats once the company's
+        // scoped lead total passes that — same class of bug fixed in
+        // TelecallerDashboard/LeadManagement. No render-side pagination
+        // needed here since individual leads are never rendered as cards.
+        fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
         fetchWithAuth(`${API_BASE_URL}/leads/distribution-monitor`),
       ]);
       if (!leadsRes.ok) throw new Error('Failed to load leads');

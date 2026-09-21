@@ -28,7 +28,13 @@ export const AgentDashboard: React.FC = () => {
     queryFn: async () => {
       const [visitsRes, leadsRes] = await Promise.all([
         fetchWithAuth(`${API_BASE_URL}/site-visits`),
-        fetchWithAuth(`${API_BASE_URL}/leads`),
+        // Explicit high limit: this only computes a count (myLeadsCount)
+        // from the result, but without it the backend's own default (2000)
+        // silently undercounts once this agent's scoped lead total passes
+        // that — same class of bug fixed in TelecallerDashboard/
+        // LeadManagement. No render-side pagination needed here since
+        // individual leads are never rendered as cards, just counted.
+        fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
       ]);
       if (!visitsRes.ok) throw new Error('Failed to load site visits');
 

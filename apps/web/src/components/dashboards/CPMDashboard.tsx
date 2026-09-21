@@ -104,7 +104,16 @@ export const CPMDashboard: React.FC = () => {
     setIsLoading(true);
     try {
       const [leadsRes, tgtRes, visitsRes, tasksRes] = await Promise.all([
-        fetchWithAuth(`${API_BASE_URL}/leads`),
+        // Explicit high limit: leadsAssigned/contactedToday/uncontactedLeads
+        // stats below are all computed from this array, so the backend's
+        // own default (2000) would silently undercount them once this CPM's
+        // scoped lead total passes that — same class of bug fixed in
+        // TelecallerDashboard/LeadManagement. The rendered "Today's
+        // High-Priority Leads" list itself stays additionally filtered to
+        // activeStatuses and sits in its own scrollable, max-height
+        // container, so it doesn't need the same render-side "Load More"
+        // pagination those did.
+        fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
         fetchWithAuth(`${API_BASE_URL}/targets/my-target`),
         fetchWithAuth(`${API_BASE_URL}/site-visits`),
         fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`),

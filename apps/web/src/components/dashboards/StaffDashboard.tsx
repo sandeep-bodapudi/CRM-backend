@@ -16,18 +16,24 @@ export const StaffDashboard: React.FC = () => {
     const fetchMetrics = async () => {
       try {
         const [leadsRes, visitsRes, tasksRes] = await Promise.all([
-          fetchWithAuth(`${API_BASE_URL}/leads`),
+          // Explicit high limit: leadsCount below is computed by filtering
+          // this array, so the backend's own default (2000) would silently
+          // undercount it once this staff member's scoped lead total passes
+          // that — same class of bug fixed in TelecallerDashboard/
+          // LeadManagement. No render-side pagination needed here since
+          // individual leads are never rendered as cards, just counted.
+          fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
           fetchWithAuth(`${API_BASE_URL}/site-visits`),
-          fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`)
+          fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`),
         ]);
 
         let leadsCount = 0;
         if (leadsRes.ok) {
           const leadsData = await leadsRes.json();
           // Filter leads assigned to this user and not yet BOOKED or DEAD
-          leadsCount = (leadsData.leads || []).filter((l: any) => 
-            l.assigned_to_id === user?.id && 
-            !['BOOKED', 'DEAD', 'LOST'].includes(l.status)
+          leadsCount = (leadsData.leads || []).filter(
+            (l: any) =>
+              l.assigned_to_id === user?.id && !['BOOKED', 'DEAD', 'LOST'].includes(l.status),
           ).length;
         }
 
@@ -35,9 +41,10 @@ export const StaffDashboard: React.FC = () => {
         if (visitsRes.ok) {
           const visitsData = await visitsRes.json();
           // Filter active site visits assigned to user (as PM or agent)
-          visitsCount = (visitsData.visits || []).filter((v: any) => 
-            (v.project_manager_id === user?.id || v.assigned_agent_id === user?.id) &&
-            !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(v.status)
+          visitsCount = (visitsData.visits || []).filter(
+            (v: any) =>
+              (v.project_manager_id === user?.id || v.assigned_agent_id === user?.id) &&
+              !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(v.status),
           ).length;
         }
 
@@ -45,8 +52,8 @@ export const StaffDashboard: React.FC = () => {
         if (tasksRes.ok) {
           const tasksData = await tasksRes.json();
           // Filter open tasks
-          tasksCount = (tasksData.tasks || []).filter((t: any) => 
-            t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+          tasksCount = (tasksData.tasks || []).filter(
+            (t: any) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED',
           ).length;
         }
 
@@ -67,28 +74,30 @@ export const StaffDashboard: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-navy-900 tracking-tight">My Workspace</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Welcome back, <strong className="text-navy-700">{user?.fullName || user?.employeeCode}</strong>. Manage your pipeline and tasks.
+            Welcome back,{' '}
+            <strong className="text-navy-700">{user?.fullName || user?.employeeCode}</strong>.
+            Manage your pipeline and tasks.
           </p>
         </div>
       </div>
-      
+
       {/* Primary KPI Row - CRM Focused */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="My Active Leads"
-          value={isLoading ? "..." : metrics.leads.toString()}
+          value={isLoading ? '...' : metrics.leads.toString()}
           icon={Users}
           link="/leads"
         />
         <StatCard
           label="Upcoming Visits"
-          value={isLoading ? "..." : metrics.visits.toString()}
+          value={isLoading ? '...' : metrics.visits.toString()}
           icon={Calendar}
           link="/site-visits"
         />
         <StatCard
           label="My Tasks"
-          value={isLoading ? "..." : metrics.tasks.toString()}
+          value={isLoading ? '...' : metrics.tasks.toString()}
           icon={Briefcase}
           link="/tasks"
         />
@@ -101,11 +110,11 @@ export const StaffDashboard: React.FC = () => {
             <TaskManager />
           </div>
         </div>
-        
+
         <div className="space-y-6">
           {/* Operational Widgets moved to a collapsible section or secondary view */}
           <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden">
-            <button 
+            <button
               onClick={() => setShowOps(!showOps)}
               className="w-full flex items-center justify-between p-4 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
             >
