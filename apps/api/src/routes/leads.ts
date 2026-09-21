@@ -43,7 +43,17 @@ router.get(
       // just echoed the truncated count back, looking complete. Same class
       // of bug as employees/list.ts's identical default — raised the same
       // way, for the same reason.
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 500, 1), 1000);
+      //
+      // Raised again (500 -> 2000 default, 1000 -> 5000 max): every
+      // personal dashboard (Telecaller/Agent/CPM/Digital Lead Operator/
+      // Staff) fetches this same endpoint with no limit at all, and for
+      // those non-management roles buildLeadScope already restricts the
+      // query to just that employee's own assigned+created leads — so this
+      // is never an unbounded company-wide dump, only a personal list that
+      // can legitimately run into the thousands after a large bulk import
+      // gets auto-distributed. assigned_to_id is indexed, so the larger
+      // scan is cheap.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 5000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       const leads = await LeadService.getLeads(req.user!, limit, offset);
