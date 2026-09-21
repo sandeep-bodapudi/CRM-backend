@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronUp, ChevronDown, Search } from 'lucide-react';
 
 export interface ColumnDef<T> {
@@ -26,6 +26,19 @@ export function DataTable<T extends Record<string, any>>({
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDesc, setSortDesc] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // Render-side cap, independent of how much data the caller passed in:
+  // several callers (bookings, tasks, ...) fetch every matching row with no
+  // backend limit at all, so rendering `data` in full would freeze the
+  // browser once a company's row count runs into the thousands. "Load More"
+  // reveals more of the already-sorted/filtered rows; reset whenever the
+  // input data or the in-table search changes so it never shows "page 4" of
+  // a different result set.
+  const PAGE_SIZE = 50;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [data, searchQuery]);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -61,6 +74,8 @@ export function DataTable<T extends Record<string, any>>({
     return sortDesc ? -comparison : comparison;
   });
 
+  const visibleData = sortedData.slice(0, visibleCount);
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-card flex flex-col h-full overflow-hidden">
       {searchable && (
@@ -87,7 +102,7 @@ export function DataTable<T extends Record<string, any>>({
           <>
             {/* Mobile View: Cards */}
             <div className="md:hidden space-y-4">
-              {sortedData.map((row, i) => (
+              {visibleData.map((row, i) => (
                 <div
                   key={i}
                   className={`bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-card transition-shadow ${
@@ -146,7 +161,7 @@ export function DataTable<T extends Record<string, any>>({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {sortedData.map((row, i) => (
+                  {visibleData.map((row, i) => (
                     <tr
                       key={i}
                       className={`group ${onRowClick ? 'cursor-pointer hover:bg-surface/50 transition-colors' : ''}`}
@@ -165,6 +180,15 @@ export function DataTable<T extends Record<string, any>>({
                 </tbody>
               </table>
             </div>
+
+            {sortedData.length > visibleCount && (
+              <button
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                className="w-full mt-4 py-3 rounded-2xl border border-slate-200 bg-white text-navy-700 font-bold text-sm hover:bg-slate-50 transition-colors"
+              >
+                Load More ({sortedData.length - visibleCount} remaining)
+              </button>
+            )}
           </>
         )}
       </div>

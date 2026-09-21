@@ -167,6 +167,14 @@ export const SiteVisitManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'COMPLETED'>('ACTIVE');
+  // Render-side cap, independent of the fetch: this page fetches every
+  // matching site visit with no backend limit at all, so rendering all of
+  // them as DOM cards would freeze the browser once a company's visit
+  // volume runs into the thousands. "Load More" reveals more of the
+  // already-fetched, tab-filtered list; reset on tab change below so it
+  // never shows "page 4" of a different result set.
+  const VISITS_PAGE_SIZE = 30;
+  const [visibleVisitCount, setVisibleVisitCount] = useState(VISITS_PAGE_SIZE);
 
   // Modals
   const [selectedVisit, setSelectedVisit] = useState<SiteVisit | null>(null);
@@ -232,6 +240,10 @@ export const SiteVisitManagement: React.FC = () => {
   useEffect(() => {
     fetchVisitsData();
   }, []);
+
+  useEffect(() => {
+    setVisibleVisitCount(VISITS_PAGE_SIZE);
+  }, [activeTab]);
 
   const handleReconfirmCustomer = async (visitId: number) => {
     setIsSubmitting(true);
@@ -685,7 +697,7 @@ export const SiteVisitManagement: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredVisits.map((visit) => (
+          {filteredVisits.slice(0, visibleVisitCount).map((visit) => (
             <div
               key={visit.id}
               className="bg-white rounded-2xl border border-slate-200 shadow-card hover:shadow-card-hover transition-shadow p-5 space-y-4 flex flex-col justify-between"
@@ -1153,6 +1165,14 @@ export const SiteVisitManagement: React.FC = () => {
             </div>
           ))}
         </div>
+      )}
+      {!isLoading && filteredVisits.length > visibleVisitCount && (
+        <button
+          onClick={() => setVisibleVisitCount((c) => c + VISITS_PAGE_SIZE)}
+          className="w-full py-3 rounded-2xl border border-slate-200 bg-white text-navy-700 font-bold text-sm hover:bg-slate-50 transition-colors"
+        >
+          Load More ({filteredVisits.length - visibleVisitCount} remaining)
+        </button>
       )}
 
       {/* Modal 2: PM Assign Field Agent */}
