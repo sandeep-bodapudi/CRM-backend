@@ -540,7 +540,15 @@ const SidebarNav: React.FC = () => {
       const saved = localStorage.getItem(storageKey);
       if (saved) return JSON.parse(saved);
     } catch (e) {}
-    return {};
+    // Default to every group expanded (not `{}`, all collapsed) so
+    // frequently-needed items under WORK/FINANCE/OPERATIONS/ADMINISTRATION/
+    // ACCOUNT (Settings, Profile, My Attendance, Tasks, ...) are visible on
+    // first load instead of buried behind a manual expand click.
+    const allExpanded: Record<string, boolean> = {};
+    for (const node of nodes) {
+      if (node.isGroup && node.groupItem) allExpanded[node.groupItem.id] = true;
+    }
+    return allExpanded;
   });
 
   useEffect(() => {
