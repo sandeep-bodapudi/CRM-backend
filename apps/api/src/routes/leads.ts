@@ -36,7 +36,14 @@ router.get(
   requireAuthz(Permissions.LEADS_READ),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 100);
+      // Default was 20 with a 100 max and no `total` in the response — the
+      // frontend's own list fetch (LeadManagement.tsx) never passes a limit
+      // at all, so any telecaller/company with more than 20 leads had the
+      // rest silently invisible, while the page's own "Showing N of N" text
+      // just echoed the truncated count back, looking complete. Same class
+      // of bug as employees/list.ts's identical default — raised the same
+      // way, for the same reason.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 500, 1), 1000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       const leads = await LeadService.getLeads(req.user!, limit, offset);
