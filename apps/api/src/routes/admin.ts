@@ -65,10 +65,22 @@ router.get(
   requireRole([Roles.ADMIN]),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const events = await p.auditEvent.findMany({
-        orderBy: { created_at: 'desc' },
-        take: 150, // Limit for performance
-      });
+      // Previously a fixed take:150 with no `total` and no way to page
+      // further — audit events accumulate per action indefinitely, so
+      // admins could silently see nothing past the most recent 150 with no
+      // indication anything was cut off. Same bug class as leads/
+      // properties/customers, fixed the same way.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 150, 1), 5000);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+      const [events, total] = await Promise.all([
+        p.auditEvent.findMany({
+          orderBy: { created_at: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+        p.auditEvent.count(),
+      ]);
 
       // Hydrate actor details in-memory since Prisma schema lacks strict relation
       const actorIds = [...new Set(events.map((e: any) => e.actor_id))];
@@ -94,7 +106,9 @@ router.get(
         actor_role: actorMap.get(event.actor_id)?.role || 'N/A',
       }));
 
-      return res.status(200).json({ logs: hydratedEvents });
+      return res
+        .status(200)
+        .json({ logs: hydratedEvents, total, pagination: { limit, offset, total } });
     } catch (error) {
       logger.error('[Admin] Audit logs fetch failed:', error);
       return res.status(500).json({ error: 'Failed to retrieve forensic audit trail' });
@@ -122,15 +136,24 @@ router.get(
         actorIdsFilter = { in: companyEmployees.map((e: any) => e.id) };
       }
 
-      const alerts = await p.auditEvent.findMany({
-        where: {
-          action: 'SECURITY_ALERT',
-          ...(actorIdsFilter ? { actor_id: actorIdsFilter } : {}),
-        },
-        orderBy: { created_at: 'desc' },
-        take: 50,
-      });
-      return res.status(200).json({ alerts });
+      // Same fix as /audit-logs above: fixed take:50 with no `total`.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 5000);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const where = {
+        action: 'SECURITY_ALERT',
+        ...(actorIdsFilter ? { actor_id: actorIdsFilter } : {}),
+      };
+
+      const [alerts, total] = await Promise.all([
+        p.auditEvent.findMany({
+          where,
+          orderBy: { created_at: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+        p.auditEvent.count({ where }),
+      ]);
+      return res.status(200).json({ alerts, total, pagination: { limit, offset, total } });
     } catch (error) {
       logger.error('[Admin] Security alerts fetch failed:', error);
       return res.status(500).json({ error: 'Failed to retrieve security alerts' });

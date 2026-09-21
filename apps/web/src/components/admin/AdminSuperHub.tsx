@@ -130,9 +130,13 @@ export const AdminSuperHub: React.FC = () => {
   const fetchLogs = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Explicit high limit: the backend previously had a fixed take of
+      // 150/50 with no total and no way to page further — audit events
+      // accumulate per action indefinitely. ListWidget (below) has its own
+      // render-side "Load More" cap, so raising this is safe.
       const [logsRes, alertsRes] = await Promise.all([
-        fetchWithAuth(`${API_BASE_URL}/admin/audit-logs`),
-        fetchWithAuth(`${API_BASE_URL}/admin/security-alerts`),
+        fetchWithAuth(`${API_BASE_URL}/admin/audit-logs?limit=5000`),
+        fetchWithAuth(`${API_BASE_URL}/admin/security-alerts?limit=5000`),
       ]);
 
       if (logsRes.ok) {

@@ -15,9 +15,18 @@ import {
   TrendingUp,
   Share2,
   Network,
+  Briefcase,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { Roles } from '../../shared';
 
 interface RoleEntry {
+  // Matches a value in shared/index.ts's Roles constant exactly, so this
+  // page can filter to the signed-in employee's own role(s) rather than
+  // fuzzy-matching display-name strings (which differ in casing/wording
+  // from the raw role names, e.g. Roles.FINANCE === 'accountant' vs. this
+  // entry's display "Finance / Accountant").
+  key: string;
   role: string;
   tagline: string;
   icon: React.ElementType;
@@ -32,6 +41,7 @@ interface RoleEntry {
 // changes, so it never drifts from what the CRM actually does.
 const ROLES: RoleEntry[] = [
   {
+    key: Roles.MD,
     role: 'Managing Director',
     tagline: 'Full company visibility and final sign-off authority.',
     icon: Crown,
@@ -44,6 +54,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.ADMIN,
     role: 'Admin (Technical)',
     tagline: 'A second fully-privileged account for system administration.',
     icon: ShieldCheck,
@@ -54,6 +65,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.PROJECT_MANAGER,
     role: 'Project Manager',
     tagline: 'Owns projects and properties end-to-end — creation through verification.',
     icon: Building2,
@@ -66,6 +78,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.SALES_MANAGER,
     role: 'Sales Manager',
     tagline: 'Runs the sales team — lead distribution and site-visit assignment.',
     icon: TrendingUp,
@@ -77,6 +90,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.TELECALLER,
     role: 'Telecaller',
     tagline: 'First point of contact — qualifies leads and books site visits.',
     icon: PhoneCall,
@@ -89,6 +103,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.AGENT,
     role: 'Agent',
     tagline: 'Executes site visits and demos in the field.',
     icon: Handshake,
@@ -100,6 +115,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.MARKETING_DIRECTOR,
     role: 'Marketing Director',
     tagline: 'Owns lead generation strategy and property content quality.',
     icon: Megaphone,
@@ -111,6 +127,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.DIGITAL_LEAD_OPERATOR,
     role: 'Digital Lead Operator',
     tagline: 'Manages inbound digital leads and the booking form pipeline.',
     icon: Radio,
@@ -121,6 +138,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.DIGITAL_MARKETING_HEAD,
     role: 'Digital Marketing Head',
     tagline: 'Leads the digital marketing team and content polish process.',
     icon: MegaphoneHead,
@@ -130,6 +148,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.DIGITAL_MARKETING_EXECUTIVE,
     role: 'Digital Marketing Executive',
     tagline: 'Executes day-to-day property content and lead follow-up.',
     icon: Share2,
@@ -139,6 +158,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.HR_MANAGER,
     role: 'HR Manager',
     tagline: 'Manages the workforce — hiring, attendance approvals, and records.',
     icon: Users2,
@@ -150,6 +170,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.FINANCE,
     role: 'Finance / Accountant',
     tagline: 'Owns payments, expense approvals, and booking financials.',
     icon: Wallet,
@@ -161,6 +182,7 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.CHANNEL_PARTNER_MANAGER,
     role: 'Channel Partner Manager',
     tagline: 'Manages relationships with external referral/channel partners.',
     icon: Network,
@@ -168,6 +190,17 @@ const ROLES: RoleEntry[] = [
       'Creates and updates leads sourced through channel partners.',
       'Creates and completes site visits for channel-partner-referred customers.',
       'Reports on your own activity and submits your own daily report.',
+    ],
+  },
+  {
+    key: Roles.STAFF,
+    role: 'Staff',
+    tagline: 'General operational role for day-to-day workspace tasks.',
+    icon: Briefcase,
+    responsibilities: [
+      'Manages your own Tasks and tracks upcoming Site Visits from your workspace dashboard.',
+      'Same daily-report and midnight-logout rules as other field roles apply — see Performance & Attendance.',
+      'Scans in for attendance and can raise a late-arrival or leave proposal if something comes up.',
     ],
   },
 ];
@@ -251,18 +284,29 @@ const RoleCard: React.FC<{ entry: RoleEntry }> = ({ entry }) => {
 };
 
 export const RolesResponsibilitiesPage: React.FC = () => {
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
+
+  // Previously showed every role's full description to every employee.
+  // Scoped to the signed-in employee's own role(s) instead -- an employee
+  // can hold more than one role, so this is `some role I hold`, not just
+  // the currently active one. Search stays scoped to this set too, since
+  // the point is "what am I responsible for", not a company-wide directory.
+  const myRoles = useMemo(() => {
+    const roleKeys = new Set(user?.roles || []);
+    return ROLES.filter((r) => roleKeys.has(r.key));
+  }, [user?.roles]);
 
   const filteredRoles = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return ROLES;
-    return ROLES.filter(
+    if (!q) return myRoles;
+    return myRoles.filter(
       (r) =>
         r.role.toLowerCase().includes(q) ||
         r.tagline.toLowerCase().includes(q) ||
         r.responsibilities.some((resp) => resp.toLowerCase().includes(q)),
     );
-  }, [query]);
+  }, [query, myRoles]);
 
   const filteredRules = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -289,7 +333,7 @@ export const RolesResponsibilitiesPage: React.FC = () => {
           Roles &amp; Responsibilities
         </h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1">
-          What every role is actually responsible for, and the operating rules that apply to
+          What your role is actually responsible for, and the operating rules that apply to
           everyone.
         </p>
       </div>
@@ -307,9 +351,14 @@ export const RolesResponsibilitiesPage: React.FC = () => {
 
       <section className="space-y-3">
         <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 px-1">
-          Every Role
+          {myRoles.length > 1 ? 'Your Roles' : 'Your Role'}
         </h2>
-        {filteredRoles.length === 0 ? (
+        {myRoles.length === 0 ? (
+          <p className="text-sm text-slate-400 px-1 py-8 text-center">
+            We don't have a responsibilities entry for your role yet — ask your manager if you think
+            this is wrong.
+          </p>
+        ) : filteredRoles.length === 0 ? (
           <p className="text-sm text-slate-400 px-1 py-8 text-center">
             No roles match your search.
           </p>

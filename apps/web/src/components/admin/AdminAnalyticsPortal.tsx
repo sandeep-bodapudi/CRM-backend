@@ -32,18 +32,26 @@ export const AdminAnalyticsPortal: React.FC = () => {
 
   const [metrics, setMetrics] = useState<AdminAnalyticsData | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [auditLogsTotal, setAuditLogsTotal] = useState(0);
   const [securityAlerts, setSecurityAlerts] = useState<SecurityAlertItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLockingDown, setIsLockingDown] = useState(false);
   const [showLockdownConfirm, setShowLockdownConfirm] = useState(false);
+  // Render-side cap, independent of the fetch: rendering thousands of DOM
+  // rows at once freezes the browser regardless of how much data the API
+  // returned. "Load More" reveals more of the already-fetched log.
+  const AUDIT_PAGE_SIZE = 50;
+  const [visibleAuditCount, setVisibleAuditCount] = useState(AUDIT_PAGE_SIZE);
 
   const fetchAdminData = async () => {
     setIsLoading(true);
     try {
+      // Explicit high limit: the backend previously had a fixed take of
+      // 150/50 with no total and no way to page further.
       const [metricsRes, logsRes, alertsRes] = await Promise.all([
         fetchWithAuth(`${API_BASE_URL}/admin/system-metrics`),
-        fetchWithAuth(`${API_BASE_URL}/admin/audit-logs`),
-        fetchWithAuth(`${API_BASE_URL}/admin/security-alerts`),
+        fetchWithAuth(`${API_BASE_URL}/admin/audit-logs?limit=5000`),
+        fetchWithAuth(`${API_BASE_URL}/admin/security-alerts?limit=5000`),
       ]);
 
       if (metricsRes.ok) {
@@ -55,6 +63,8 @@ export const AdminAnalyticsPortal: React.FC = () => {
       if (logsRes.ok) {
         const logData = await logsRes.json();
         setAuditLogs(logData.logs || []);
+        setAuditLogsTotal(logData.total ?? (logData.logs || []).length);
+        setVisibleAuditCount(AUDIT_PAGE_SIZE);
       } else {
         console.error('Logs error:', await logsRes.text());
       }
@@ -285,7 +295,7 @@ export const AdminAnalyticsPortal: React.FC = () => {
                 </p>
               </div>
               <div className="px-3 py-1 bg-slate-100 rounded-lg border border-slate-200 text-[10px] font-mono font-bold text-slate-600">
-                {auditLogs.length} Events Captured
+                {auditLogsTotal} Events Captured
               </div>
             </div>
 
@@ -325,7 +335,7 @@ export const AdminAnalyticsPortal: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {auditLogs.map((log) => (
+                    {auditLogs.slice(0, visibleAuditCount).map((log) => (
                       <div
                         key={log.id}
                         className="flex gap-4 p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors group"
@@ -380,6 +390,14 @@ export const AdminAnalyticsPortal: React.FC = () => {
                         </div>
                       </div>
                     ))}
+                    {auditLogs.length > visibleAuditCount && (
+                      <button
+                        onClick={() => setVisibleAuditCount((c) => c + AUDIT_PAGE_SIZE)}
+                        className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-navy-700 font-bold text-xs hover:bg-slate-50 transition-colors"
+                      >
+                        Load More ({auditLogs.length - visibleAuditCount} remaining)
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
