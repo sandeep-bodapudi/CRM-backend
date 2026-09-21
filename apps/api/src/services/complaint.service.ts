@@ -167,6 +167,8 @@ export class ComplaintService {
   static async list(
     user: TokenPayload,
     options?: { status?: string; priority?: string; category?: string; customer_id?: number },
+    take: number = 2000,
+    skip: number = 0,
   ) {
     // Hard company scope on every list query
     const where: any = { company_id: user.companyId };
@@ -182,11 +184,23 @@ export class ComplaintService {
       }
       where.customer_id = options.customer_id;
     }
-    return prisma.complaint.findMany({
-      where,
-      include: { customer: true, booking: true, property: true, assigned_employee: true },
-      orderBy: { created_at: 'desc' },
-    });
+    // `total` (of the full scoped/filtered set, not just this page) lets the
+    // frontend know whether it got everything — see routes/leads.ts's GET /
+    // for the same lesson learned there. Previously had no take/limit at
+    // all, so every complaint ever filed for this company was fetched every
+    // page load — ComplaintManagement.tsx renders via the shared DataTable,
+    // which is already render-capped, but the fetch itself grew unbounded.
+    const [complaints, total] = await Promise.all([
+      prisma.complaint.findMany({
+        where,
+        take,
+        skip,
+        include: { customer: true, booking: true, property: true, assigned_employee: true },
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.complaint.count({ where }),
+    ]);
+    return { complaints, total };
   }
 
   // ---------------------------------------------------------------- getById

@@ -35,8 +35,14 @@ router.get(
   requirePermission([Permissions.EXPENSES_READ_OWN]),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
-      const refunds = await ExpenseRefundService.listMyRefunds(req.user!);
-      return res.status(200).json({ refunds });
+      // Previously had no limit at all — every refund request this employee
+      // ever created was fetched every load. Same bug class as leads/
+      // properties/customers/projects, fixed the same way.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+      const { refunds, total } = await ExpenseRefundService.listMyRefunds(req.user!, limit, offset);
+      return res.status(200).json({ refunds, total, pagination: { limit, offset, total } });
     } catch (error: any) {
       next(error);
     }
@@ -49,8 +55,16 @@ router.get(
   requirePermission([Permissions.EXPENSES_REVIEW, Permissions.EXPENSES_MD_APPROVE]),
   async (req: AuthenticatedRequest, res: Response, next) => {
     try {
-      const refunds = await ExpenseRefundService.listQueue(req.user!);
-      return res.status(200).json({ refunds });
+      // Previously had no limit at all, and AccountantRefundQueue.tsx
+      // renders every row as an unvirtualized card — the exact unbounded-
+      // fetch + unvirtualized-render freeze risk already fixed for
+      // bookings/tasks/site-visits, missed here since this page doesn't use
+      // the shared DataTable component.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+      const { refunds, total } = await ExpenseRefundService.listQueue(req.user!, limit, offset);
+      return res.status(200).json({ refunds, total, pagination: { limit, offset, total } });
     } catch (error: any) {
       next(error);
     }

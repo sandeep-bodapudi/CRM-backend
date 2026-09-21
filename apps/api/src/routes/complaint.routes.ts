@@ -50,12 +50,24 @@ router.use(authenticateToken);
 // GET /api/v1/complaints
 router.get('/', requireAuthz(Permissions.COMPLAINTS_READ as any), async (req: any, res, next) => {
   try {
-    const complaints = await ComplaintService.list(req.user, {
-      status: req.query.status as string | undefined,
-      priority: req.query.priority as string | undefined,
-      category: req.query.category as string | undefined,
-      customer_id: req.query.customer_id ? parseInt(req.query.customer_id, 10) : undefined,
-    });
+    // Previously had no limit at all, so every complaint ever filed for this
+    // company was fetched every page load. ComplaintManagement.tsx already
+    // handles both a bare array and `{complaints, total}` (`Array.isArray(data)
+    // ? data : data.complaints`), so this response shape change is backward
+    // compatible with no frontend edit needed.
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+    const complaints = await ComplaintService.list(
+      req.user,
+      {
+        status: req.query.status as string | undefined,
+        priority: req.query.priority as string | undefined,
+        category: req.query.category as string | undefined,
+        customer_id: req.query.customer_id ? parseInt(req.query.customer_id, 10) : undefined,
+      },
+      limit,
+      offset,
+    );
     res.json(complaints);
   } catch (error) {
     next(error);

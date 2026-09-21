@@ -6,30 +6,54 @@ import { ExpenseRefundWorkflow, ExpenseRefundAction } from '../workflows/expense
 import { notifyEmployee } from '../utils/notifyEmployee';
 import { can } from '../authz/authorization';
 
-
 const p = prisma;
 
 export class ExpenseRefundService {
-  static async listMyRefunds(user: TokenPayload) {
+  // `total` (of the full scoped set, not just this page) lets the frontend
+  // know whether it got everything, instead of a truncated fetch's own
+  // array length silently looking complete — see routes/leads.ts's GET /
+  // for the same lesson learned there. Previously had no take/limit at all,
+  // so every refund request ever created for this employee/company was
+  // fetched (and, on the queue side, rendered as an unvirtualized card)
+  // every load.
+  static async listMyRefunds(user: TokenPayload, take: number = 2000, skip: number = 0) {
     const whereCondition = ExpenseRefundPolicy.canListOwn(user);
-    return await p.expenseRefund.findMany({
-      where: whereCondition,
-      orderBy: { created_at: 'desc' },
-    });
+    const [refunds, total] = await Promise.all([
+      p.expenseRefund.findMany({
+        where: whereCondition,
+        take,
+        skip,
+        orderBy: { created_at: 'desc' },
+      }),
+      p.expenseRefund.count({ where: whereCondition }),
+    ]);
+    return { refunds, total };
   }
 
-  static async listQueue(user: TokenPayload) {
+  static async listQueue(user: TokenPayload, take: number = 2000, skip: number = 0) {
     const whereCondition = ExpenseRefundPolicy.canListQueue(user);
-    return await p.expenseRefund.findMany({
-      where: whereCondition,
-      orderBy: { created_at: 'asc' },
-      include: {
-        employee: { select: { id: true, full_name: true, employee_code: true, department: true } },
-      },
-    });
+    const [refunds, total] = await Promise.all([
+      p.expenseRefund.findMany({
+        where: whereCondition,
+        take,
+        skip,
+        orderBy: { created_at: 'asc' },
+        include: {
+          employee: {
+            select: { id: true, full_name: true, employee_code: true, department: true },
+          },
+        },
+      }),
+      p.expenseRefund.count({ where: whereCondition }),
+    ]);
+    return { refunds, total };
   }
 
-  static async createRefund(user: TokenPayload, data: { purpose: string; amount: number }, proofImageUrl: string | null) {
+  static async createRefund(
+    user: TokenPayload,
+    data: { purpose: string; amount: number },
+    proofImageUrl: string | null,
+  ) {
     if (!ExpenseRefundPolicy.canCreate(user)) {
       throw { status: 403, message: 'Forbidden: Missing expenses.create permission' };
     }
@@ -62,25 +86,39 @@ export class ExpenseRefundService {
       });
 
       const accountants = await tx.employee.findMany({
-        where: { roles: { some: { role: { name: Roles.FINANCE } } }, status: 'ACTIVE', company_id: user.companyId },
+        where: {
+          roles: { some: { role: { name: Roles.FINANCE } } },
+          status: 'ACTIVE',
+          company_id: user.companyId,
+        },
         select: { id: true },
       });
 
       if (accountants.length > 0) {
-        await notifyEmployee(accountants.map((a: any) => a.id), {
-          type: 'EXPENSE_REFUND_SUBMITTED',
-          title: '\uD83D\uDCB0 New Expense Refund Request',
-          message: `A new refund of \u20B9${data.amount.toLocaleString('en-IN')} has been submitted for review. Purpose: ${data.purpose}`,
-          link: '/finance',
-        });
+        await notifyEmployee(
+          accountants.map((a: any) => a.id),
+          {
+            type: 'EXPENSE_REFUND_SUBMITTED',
+            title: '\uD83D\uDCB0 New Expense Refund Request',
+            message: `A new refund of \u20B9${data.amount.toLocaleString('en-IN')} has been submitted for review. Purpose: ${data.purpose}`,
+            link: '/finance',
+          },
+        );
       }
 
       return refund;
     });
   }
 
-  static async accountantReview(user: TokenPayload, refundId: number, decision: 'APPROVE' | 'REJECT', note?: string) {
-    const refund = await p.expenseRefund.findFirst({ where: { id: refundId, company_id: user.companyId } });
+  static async accountantReview(
+    user: TokenPayload,
+    refundId: number,
+    decision: 'APPROVE' | 'REJECT',
+    note?: string,
+  ) {
+    const refund = await p.expenseRefund.findFirst({
+      where: { id: refundId, company_id: user.companyId },
+    });
     if (!refund) throw { status: 404, message: 'Refund request not found' };
 
     if (!can(user, Permissions.EXPENSES_REVIEW, refund)) {
@@ -88,7 +126,10 @@ export class ExpenseRefundService {
     }
 
     const action = decision === 'APPROVE' ? 'ACCOUNTANT_APPROVE' : 'ACCOUNTANT_REJECT';
-    const newStatus = decision === 'APPROVE' ? ExpenseRefundStatus.ACCOUNTANT_APPROVED : ExpenseRefundStatus.REJECTED_BY_ACCOUNTANT;
+    const newStatus =
+      decision === 'APPROVE'
+        ? ExpenseRefundStatus.ACCOUNTANT_APPROVED
+        : ExpenseRefundStatus.REJECTED_BY_ACCOUNTANT;
 
     ExpenseRefundWorkflow.validateTransition(refund.status, action);
 
@@ -103,7 +144,10 @@ export class ExpenseRefundService {
         },
       });
 
-      const auditAction = decision === 'APPROVE' ? 'EXPENSE_REFUND_ACCOUNTANT_APPROVED' : 'EXPENSE_REFUND_ACCOUNTANT_REJECTED';
+      const auditAction =
+        decision === 'APPROVE'
+          ? 'EXPENSE_REFUND_ACCOUNTANT_APPROVED'
+          : 'EXPENSE_REFUND_ACCOUNTANT_REJECTED';
       await tx.auditEvent.create({
         data: {
           actor_id: user.employeeId,
@@ -117,16 +161,23 @@ export class ExpenseRefundService {
 
       if (decision === 'APPROVE') {
         const mds = await tx.employee.findMany({
-          where: { roles: { some: { role: { name: Roles.MD } } }, status: 'ACTIVE', company_id: user.companyId },
+          where: {
+            roles: { some: { role: { name: Roles.MD } } },
+            status: 'ACTIVE',
+            company_id: user.companyId,
+          },
           select: { id: true },
         });
         if (mds.length > 0) {
-          await notifyEmployee(mds.map((m: any) => m.id), {
-            type: 'EXPENSE_REFUND_AWAITING_MD',
-            title: '\uD83D\uDCCB Expense Refund Awaits Your Approval',
-            message: `A refund of \u20B9${refund.amount.toLocaleString('en-IN')} has been verified by the accountant and needs your approval.`,
-            link: '/finance',
-          });
+          await notifyEmployee(
+            mds.map((m: any) => m.id),
+            {
+              type: 'EXPENSE_REFUND_AWAITING_MD',
+              title: '\uD83D\uDCCB Expense Refund Awaits Your Approval',
+              message: `A refund of \u20B9${refund.amount.toLocaleString('en-IN')} has been verified by the accountant and needs your approval.`,
+              link: '/finance',
+            },
+          );
         }
       } else {
         await notifyEmployee(refund.employee_id, {
@@ -141,8 +192,15 @@ export class ExpenseRefundService {
     });
   }
 
-  static async mdReview(user: TokenPayload, refundId: number, decision: 'APPROVE' | 'REJECT', note?: string) {
-    const refund = await p.expenseRefund.findFirst({ where: { id: refundId, company_id: user.companyId } });
+  static async mdReview(
+    user: TokenPayload,
+    refundId: number,
+    decision: 'APPROVE' | 'REJECT',
+    note?: string,
+  ) {
+    const refund = await p.expenseRefund.findFirst({
+      where: { id: refundId, company_id: user.companyId },
+    });
     if (!refund) throw { status: 404, message: 'Refund request not found' };
 
     if (!can(user, Permissions.EXPENSES_MD_APPROVE, refund)) {
@@ -150,7 +208,8 @@ export class ExpenseRefundService {
     }
 
     const action = decision === 'APPROVE' ? 'MD_APPROVE' : 'MD_REJECT';
-    const newStatus = decision === 'APPROVE' ? ExpenseRefundStatus.MD_APPROVED : ExpenseRefundStatus.REJECTED_BY_MD;
+    const newStatus =
+      decision === 'APPROVE' ? ExpenseRefundStatus.MD_APPROVED : ExpenseRefundStatus.REJECTED_BY_MD;
 
     ExpenseRefundWorkflow.validateTransition(refund.status, action);
 
@@ -165,7 +224,8 @@ export class ExpenseRefundService {
         },
       });
 
-      const auditAction = decision === 'APPROVE' ? 'EXPENSE_REFUND_MD_APPROVED' : 'EXPENSE_REFUND_MD_REJECTED';
+      const auditAction =
+        decision === 'APPROVE' ? 'EXPENSE_REFUND_MD_APPROVED' : 'EXPENSE_REFUND_MD_REJECTED';
       await tx.auditEvent.create({
         data: {
           actor_id: user.employeeId,
@@ -210,7 +270,9 @@ export class ExpenseRefundService {
   }
 
   static async markRefunded(user: TokenPayload, refundId: number) {
-    const refund = await p.expenseRefund.findFirst({ where: { id: refundId, company_id: user.companyId } });
+    const refund = await p.expenseRefund.findFirst({
+      where: { id: refundId, company_id: user.companyId },
+    });
     if (!refund) throw { status: 404, message: 'Refund request not found' };
 
     if (!can(user, Permissions.EXPENSES_MARK_REFUNDED, refund)) {
@@ -236,7 +298,10 @@ export class ExpenseRefundService {
           entity_type: 'EXPENSE_REFUND',
           entity_id: refundId,
           old_value: JSON.stringify({ status: refund.status }),
-          new_value: JSON.stringify({ status: ExpenseRefundStatus.REFUNDED, refunded_by: user.employeeId }),
+          new_value: JSON.stringify({
+            status: ExpenseRefundStatus.REFUNDED,
+            refunded_by: user.employeeId,
+          }),
         },
       });
 
@@ -252,7 +317,9 @@ export class ExpenseRefundService {
   }
 
   static async getProof(user: TokenPayload, refundId: number) {
-    const refund = await p.expenseRefund.findFirst({ where: { id: refundId, company_id: user.companyId } });
+    const refund = await p.expenseRefund.findFirst({
+      where: { id: refundId, company_id: user.companyId },
+    });
     if (!refund) throw { status: 404, message: 'Refund not found' };
 
     // Use can() fallback for EXPENSES_READ_OWN or just rely on Policy?

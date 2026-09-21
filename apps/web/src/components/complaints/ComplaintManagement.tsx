@@ -131,6 +131,10 @@ export const ComplaintManagement: React.FC = () => {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       if (priorityFilter) params.set('priority', priorityFilter);
+      // Explicit high limit: the backend previously had no limit at all
+      // (now defaults to 2000). Rendered via the shared DataTable, which is
+      // already render-capped, so this only needed the fetch-side fix.
+      params.set('limit', '100000');
       const res = await fetchWithAuth(`${API_BASE_URL}/complaints?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load complaints');
       const data = await res.json();
