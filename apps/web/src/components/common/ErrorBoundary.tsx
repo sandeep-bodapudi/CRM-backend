@@ -25,6 +25,19 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public handleReset = () => {
+    // A stale-chunk failure ("Failed to fetch dynamically imported module")
+    // can't be recovered by just clearing this boundary's error state --
+    // the underlying lazy import() still points at a filename the last
+    // deploy deleted, so re-rendering retries the exact same fetch and
+    // fails again immediately. Only a real page reload re-fetches the
+    // current index.html and its current chunk hashes.
+    const message = this.state.error?.message || '';
+    if (
+      /dynamically imported module|Loading chunk|Importing a module script failed/i.test(message)
+    ) {
+      window.location.reload();
+      return;
+    }
     this.setState({ hasError: false, error: undefined });
   };
 
@@ -41,7 +54,8 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
           <h3 className="text-lg font-bold text-slate-800">Something went wrong in this module</h3>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-            {this.state.error?.message || 'An unexpected rendering error occurred while loading this view.'}
+            {this.state.error?.message ||
+              'An unexpected rendering error occurred while loading this view.'}
           </p>
           <div className="mt-6 flex justify-center">
             <button
