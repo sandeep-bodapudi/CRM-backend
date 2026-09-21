@@ -20,6 +20,7 @@ import {
   Fingerprint,
   Trash2,
   ShieldAlert,
+  RefreshCw,
 } from 'lucide-react';
 import {
   playNotificationSound,
@@ -44,6 +45,27 @@ export const UserSettings: React.FC = () => {
   const { canInstall, install } = usePWAInstall();
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isForceRefreshing, setIsForceRefreshing] = useState(false);
+
+  // Nuclear fallback for anyone stuck on a stale cached build: doesn't
+  // depend on registration.waiting or any service-worker state being
+  // coherent (unlike UpdateAvailableBanner/useSwUpdate), so it works even
+  // when the automatic update flow itself is stuck.
+  const handleForceRefresh = async () => {
+    setIsForceRefreshing(true);
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } finally {
+      window.location.reload();
+    }
+  };
 
   // App Lock (WebAuthn) — hidden entirely on devices with no platform
   // authenticator, since offering it there would just fail on registration.
@@ -366,6 +388,41 @@ export const UserSettings: React.FC = () => {
           >
             <Download className="w-4 h-4" />
             {canInstall ? 'Install Now' : 'Installed'}
+          </button>
+        </div>
+      </section>
+
+      {/* APP UPDATES */}
+      <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 space-y-4">
+        <div className="border-b border-slate-100 dark:border-slate-700 pb-4">
+          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">App Updates</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            If the app feels stuck on an old version, force a fresh reload.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-navy-50 dark:bg-navy-900/40 text-navy-700 dark:text-navy-300">
+              <RefreshCw className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+                Force refresh app
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Clears cached app data and reloads the latest version
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleForceRefresh}
+            disabled={isForceRefreshing}
+            className="flex items-center gap-2 px-4 py-2 bg-navy-600 hover:bg-navy-700 text-white font-semibold text-sm rounded-xl transition-colors disabled:opacity-50 shadow-sm"
+          >
+            <RefreshCw className="w-4 h-4" />
+            {isForceRefreshing ? 'Refreshing…' : 'Force Refresh'}
           </button>
         </div>
       </section>

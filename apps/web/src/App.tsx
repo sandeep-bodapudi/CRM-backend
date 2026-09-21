@@ -54,6 +54,8 @@ const FinanceDashboard = lazy(() =>
 
 import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { PWAInstallPrompt } from './components/common/PWAInstallPrompt';
+import { UpdateAvailableBanner } from './components/common/UpdateAvailableBanner';
+import { useSwUpdate } from './hooks/useSwUpdate';
 import { Bell, Users, CalendarCheck, ShieldCheck } from 'lucide-react';
 
 import { API_BASE_URL } from './config';
@@ -237,7 +239,7 @@ const DefaultRedirect: React.FC<{ user: unknown }> = () => <Navigate to="/dashbo
 // AppShell provides the global layout shell: compact left sidebar, top utility bar,
 // responsive 12-column content grid, and optional right rail. The Routes and
 // internal modal logic are rendered as children inside the AppLayout content canvas.
-const AppShell: React.FC = () => {
+const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUpdate }) => {
   const {
     user,
     activeRole,
@@ -791,6 +793,7 @@ const AppShell: React.FC = () => {
       {/* Mobile Bottom Navigation Bar & PWA Prompt */}
       <MobileBottomNav />
       <PWAInstallPrompt />
+      <UpdateAvailableBanner {...swUpdate} />
 
       {/* Daily Report Modal (Logout Gate) */}
       <DailyReportModal
@@ -849,11 +852,22 @@ const AppShell: React.FC = () => {
 };
 
 function App() {
+  // Called exactly once here (not inside AppShell, and not again inside
+  // UpdateAvailableBanner) -- useRegisterSW is NOT a shared singleton, each
+  // call spins up its own independent Workbox registration, periodic
+  // update-check interval, and needRefresh state, so calling it twice would
+  // register the service worker twice over and run two redundant update
+  // flows in parallel. Called here rather than inside AppShell so the
+  // service worker registers and starts checking for updates even before
+  // login -- AppShell early-returns <LoginForm /> for unauthenticated
+  // users, which would otherwise delay registration until after sign-in.
+  const swUpdate = useSwUpdate();
+
   return (
     <ThemeProvider>
       <AuthProvider>
         <ToastProvider>
-          <AppShell />
+          <AppShell swUpdate={swUpdate} />
         </ToastProvider>
       </AuthProvider>
     </ThemeProvider>

@@ -120,7 +120,17 @@ export default defineConfig({
     react(),
     pwaIconsPlugin(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' (not 'autoUpdate'): we drive the update ourselves via
+      // useSwUpdate/UpdateAvailableBanner (virtual:pwa-register/react) so a
+      // new SW sits in `waiting` and only activates on an explicit user
+      // click or the hook's own grace-period fallback -- 'autoUpdate' would
+      // force-reload every open tab the instant a new SW is found, with no
+      // button and no grace period.
+      registerType: 'prompt',
+      // We register manually via useRegisterSW in code (see useSwUpdate.ts)
+      // instead of letting the plugin inject its own self-registering
+      // <script> into index.html, which would race our own registration.
+      injectRegister: false,
       includeAssets: [
         'favicon.ico',
         'apple-touch-icon.png',

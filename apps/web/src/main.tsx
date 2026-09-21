@@ -15,13 +15,11 @@ const queryClient = new QueryClient({
   },
 });
 
-if ('serviceWorker' in navigator && (import.meta as ImportMeta).env?.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.log('SW registration skipped/failed:', err);
-    });
-  });
-}
+// Service worker registration (and update detection) now happens via
+// useSwUpdate/useRegisterSW (virtual:pwa-register/react), called from
+// App.tsx, instead of a bare navigator.serviceWorker.register() here --
+// that gives us registration.waiting/controllerchange events to drive
+// UpdateAvailableBanner, which a plain register() call can't.
 
 // Every deploy renames JS chunk files (content hash) and deletes the old
 // ones. A tab that's been open since before the deploy -- or one serving a
