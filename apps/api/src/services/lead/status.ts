@@ -622,7 +622,7 @@ function sanitiseBulkLeadRow(raw: any): { row: any; error?: string } {
   };
 }
 
-export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[]) {
+export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[], assignToSelf = false) {
   // Phase 2.13: previously unbounded — a CSV/Excel import of any size ran
   // fully inline within one HTTP request (chunked only for the DB writes,
   // not for the request's own duration/memory footprint). Capped at 1000
@@ -705,7 +705,17 @@ export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[]) {
 
         await p.$transaction(async (tx: import('@prisma/client').Prisma.TransactionClient) => {
           const leadCode = await generateNextLeadCode(); // Inside transaction to ensure unique code sequentially
-          const bestAssignee = await findBestAssigneeForLead(user.companyId);
+
+          // DIRECT: skip the distribution engine entirely and keep the lead
+          // with the person who uploaded it (mirrors createLead's DIRECT
+          // path) — POOL (default): existing performance-weighted behavior.
+          const bestAssignee = assignToSelf ? null : await findBestAssigneeForLead(user.companyId);
+          const assignedToId = assignToSelf ? user.employeeId : bestAssignee?.employeeId || null;
+          const assignmentType = assignToSelf
+            ? 'MANUAL_OVERRIDE'
+            : bestAssignee
+              ? 'PERFORMANCE_WEIGHTED'
+              : null;
 
           const newLead = await tx.lead.create({
             data: {
@@ -716,10 +726,10 @@ export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[]) {
               phone: item.phone,
               email: item.email || null,
               source: item.source || 'BULK_UPLOAD',
-              status: bestAssignee ? 'ASSIGNED' : 'NEW',
-              assigned_to_id: bestAssignee ? bestAssignee.employeeId : null,
-              assigned_at: bestAssignee ? new Date() : null,
-              assignment_type: bestAssignee ? 'PERFORMANCE_WEIGHTED' : null,
+              status: assignedToId ? 'ASSIGNED' : 'NEW',
+              assigned_to_id: assignedToId,
+              assigned_at: assignedToId ? new Date() : null,
+              assignment_type: assignmentType,
               property_type_preference: item.property_type || null,
               preferred_location: item.location || null,
               notes: item.notes || 'Imported via Bulk Upload',
@@ -739,7 +749,16 @@ export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[]) {
             },
           });
 
-          if (bestAssignee) {
+          if (assignToSelf) {
+            await tx.leadActivity.create({
+              data: {
+                lead_id: newLead.id,
+                actor_id: user.employeeId,
+                activity_type: 'ASSIGNED_TO_AGENT',
+                notes: `Kept with uploader (${user.employeeId}) — Assign to Me selected for this import.`,
+              },
+            });
+          } else if (bestAssignee) {
             await tx.leadActivity.create({
               data: {
                 lead_id: newLead.id,

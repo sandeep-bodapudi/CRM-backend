@@ -256,6 +256,7 @@ export const LeadManagement: React.FC = () => {
   const [bulkSkippedRows, setBulkSkippedRows] = useState<SkippedRow[]>([]);
   const [bulkHeaderMatched, setBulkHeaderMatched] = useState(true);
   const [isBulkUploading, setIsBulkUploading] = useState(false);
+  const [bulkOwnershipType, setBulkOwnershipType] = useState<'POOL' | 'DIRECT'>('POOL');
 
   const canBulkUpload = !!user?.permissions?.includes(Permissions.LEADS_BULK_UPLOAD);
   const canCreateLead =
@@ -312,6 +313,7 @@ export const LeadManagement: React.FC = () => {
     setShowBulkModal(false);
     setParsedBulkLeads([]);
     setBulkSkippedRows([]);
+    setBulkOwnershipType('POOL');
   };
 
   const handleConfirmBulkUpload = async () => {
@@ -321,7 +323,7 @@ export const LeadManagement: React.FC = () => {
       const res = await fetchWithAuth(`${API_BASE_URL}/leads/bulk-upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leads: parsedBulkLeads }),
+        body: JSON.stringify({ leads: parsedBulkLeads, ownership_type: bulkOwnershipType }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -965,6 +967,40 @@ export const LeadManagement: React.FC = () => {
                 </span>
               )}
             </p>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Assign these leads to</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBulkOwnershipType('DIRECT')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    bulkOwnershipType === 'DIRECT'
+                      ? 'border-navy-600 bg-navy-50/50 text-navy-900 font-bold'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  <div className="text-sm">Assign to Me</div>
+                  <p className="text-[11px] text-slate-500 font-normal mt-1">
+                    Keep every lead in this import — none go to auto-distribution.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkOwnershipType('POOL')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    bulkOwnershipType === 'POOL'
+                      ? 'border-navy-600 bg-navy-50/50 text-navy-900 font-bold'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  <div className="text-sm">Add to Pool</div>
+                  <p className="text-[11px] text-slate-500 font-normal mt-1">
+                    Auto-distribute across telecallers by performance & load.
+                  </p>
+                </button>
+              </div>
+            </div>
 
             <div className="h-60">
               <DataTable

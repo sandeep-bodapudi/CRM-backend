@@ -62,8 +62,10 @@ export const AddLeadWizard: React.FC<AddLeadWizardProps> = ({ onClose, onSuccess
 
   // Step 4: Final Notes
   const [notes, setNotes] = useState('');
-  // NOTE: assigneeId was removed — assignment is handled automatically
-  // by the performance-weighted distribution engine on the backend.
+  // Assignment defaults to the performance-weighted distribution engine
+  // (POOL); "Assign to Me" (DIRECT) keeps the lead with whoever's adding
+  // it, so a self-sourced contact doesn't get handed to a teammate.
+  const [ownershipType, setOwnershipType] = useState<'POOL' | 'DIRECT'>('POOL');
 
   const handleNext = () => setStep((s) => Math.min(s + 1, 4));
   const handleBack = () => setStep((s) => Math.max(s - 1, 1));
@@ -105,6 +107,7 @@ export const AddLeadWizard: React.FC<AddLeadWizardProps> = ({ onClose, onSuccess
           referral_employee_id:
             source === 'REFERRAL' && referralEmployeeId ? parseInt(referralEmployeeId, 10) : null,
           // budget_max could be parsed from budgetRange if needed, skipping for now as it's in notes
+          ownership_type: ownershipType,
         }),
       });
 
@@ -529,6 +532,42 @@ export const AddLeadWizard: React.FC<AddLeadWizardProps> = ({ onClose, onSuccess
                 placeholder="Any specific requests, objections, or general summary of the call..."
                 className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500 text-sm"
               ></textarea>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">
+                Assign this lead to
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOwnershipType('DIRECT')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    ownershipType === 'DIRECT'
+                      ? 'border-navy-600 bg-navy-50/50 text-navy-900 font-bold'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  <div className="text-sm">Assign to Me</div>
+                  <p className="text-[11px] text-slate-500 font-normal mt-1">
+                    Keep this lead — skip auto-distribution.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOwnershipType('POOL')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    ownershipType === 'POOL'
+                      ? 'border-navy-600 bg-navy-50/50 text-navy-900 font-bold'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  <div className="text-sm">Add to Pool</div>
+                  <p className="text-[11px] text-slate-500 font-normal mt-1">
+                    Auto-distribute by performance & load.
+                  </p>
+                </button>
+              </div>
             </div>
           </div>
         );

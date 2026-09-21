@@ -122,12 +122,19 @@ router.post(
   requireAuthz(Permissions.LEADS_BULK_UPLOAD),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { leads: rawLeads } = req.body;
+      const { leads: rawLeads, ownership_type } = req.body;
       if (!Array.isArray(rawLeads) || rawLeads.length === 0) {
         return res.status(400).json({ error: 'Array of lead rows required in body under "leads"' });
       }
 
-      const result = await LeadService.bulkUploadLeads(req.user!, rawLeads);
+      // DIRECT: every uploaded lead is assigned to the uploader themselves,
+      // same as the single-lead "Assign to me" option — so someone bulk
+      // importing their own sourced contacts never has one handed off to a
+      // teammate by the distribution engine. POOL (default, unchanged):
+      // performance-weighted auto-distribution across telecallers.
+      const isDirect = ownership_type === 'DIRECT';
+
+      const result = await LeadService.bulkUploadLeads(req.user!, rawLeads, isDirect);
       return res.status(200).json({
         message: `Successfully processed and auto-distributed ${result.successful_imports} leads`,
         count: result.successful_imports,
