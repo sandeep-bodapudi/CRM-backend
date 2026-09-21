@@ -324,7 +324,11 @@ router.post(
         return res.status(400).json({ error: 'Today is a holiday.' });
       }
 
-      if (timeString < '18:00:00') {
+      // getISTComponents().timeString is "HH:MM" (no seconds) — comparing
+      // against "18:00:00" made "18:00" (a valid prefix, but shorter) always
+      // sort as less-than, so a checkout landing anywhere in the 18:00
+      // minute was wrongly treated as "before 18:00" and blocked.
+      if (timeString < '18:00') {
         // Check for approved early logout proposal
         const earlyProposal = await p.attendanceProposal.findFirst({
           where: {

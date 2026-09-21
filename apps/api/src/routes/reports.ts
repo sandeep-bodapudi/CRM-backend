@@ -20,7 +20,6 @@ router.post(
       const employeeId = req.user!.employeeId;
       const { role_name, metrics, summary_notes, below_target_reason } = req.body;
       const now = new Date();
-      const { dateString } = getISTComponents(now);
 
       const calls = parseInt(metrics?.callsMade || metrics?.call_count || '0', 10);
       const visits = parseInt(metrics?.siteVisits || metrics?.site_visit_count || '0', 10);
@@ -127,27 +126,14 @@ router.post(
         });
       }
 
-      // Auto-checkout for field workers / anyone who missed kiosk checkout
-      // exact EOD submit timestamp (IST)
-      const todayRecord = await p.attendanceLog.findFirst({
-        where: {
-          employee_id: employeeId,
-          check_in_at: {
-            gte: new Date(`${dateString}T00:00:00.000+05:30`),
-            lte: new Date(`${dateString}T23:59:59.999+05:30`),
-          },
-        },
-      });
-
-      if (todayRecord && !todayRecord.check_out_at) {
-        await p.attendanceLog.update({
-          where: { id: todayRecord.id },
-          data: { check_out_at: report.submitted_at },
-        });
-        logger.info(
-          `Auto-checked out employee ${employeeId} at ${report.submitted_at} via EOD report`,
-        );
-      }
+      // Submitting a report never performs the checkout itself — it only
+      // satisfies routes/attendance/qr.ts's report_required prerequisite,
+      // which still gates the actual checkout on scanning the kiosk QR.
+      // Previously this route also force-closed the attendance log
+      // (check_out_at = submission time) with no time-of-day gate at all, so
+      // submitting a report at any hour immediately logged the employee out
+      // — bypassing the 18:00 / approved-EARLY_CHECKOUT-proposal rule kiosk
+      // checkout enforces. Logout/checkout now happens only via QR kiosk scan.
 
       return res.status(201).json({
         message: 'Daily report submitted successfully. Logout gate unlocked.',
