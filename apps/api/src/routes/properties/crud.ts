@@ -55,11 +55,23 @@ router.get(
         filters.dm_executive_id = req.user!.employeeId;
       }
 
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 100);
+      // Default was 20 with a 100 max and no `total` in the response — the
+      // frontend's own list fetch (PropertyManagement.tsx) never passes a
+      // limit override, and its "All Inventory (N)" header just used the
+      // fetched array's own length, so a company with more than 20-100
+      // properties (individual plots/units routinely exceed that) had the
+      // rest silently invisible while the header looked complete instead of
+      // flagging a cutoff. Same bug class as leads, fixed the same way.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
-      const properties = await PropertyService.listProperties(req.user!, filters, limit, offset);
-      return res.status(200).json({ properties, pagination: { limit, offset } });
+      const { properties, total } = await PropertyService.listProperties(
+        req.user!,
+        filters,
+        limit,
+        offset,
+      );
+      return res.status(200).json({ properties, total, pagination: { limit, offset, total } });
     } catch (error: any) {
       logger.error('Fetch properties error:', error);
       if (error.status) {

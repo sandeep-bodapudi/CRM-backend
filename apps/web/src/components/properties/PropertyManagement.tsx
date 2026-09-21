@@ -309,6 +309,17 @@ export const PropertyManagement: React.FC = () => {
   const { user, fetchWithAuth, activeRole } = useAuth();
   const { showToast, showError } = useToast();
   const [properties, setProperties] = useState<Property[]>([]);
+  // Backend total for the current scope/filter, not just this fetch's array
+  // length — a fetch capped by the backend's own max (100000) would
+  // otherwise silently look complete in the "All Inventory (N)" header.
+  const [propertiesTotal, setPropertiesTotal] = useState(0);
+  // Render-side cap, independent of the fetch: rendering thousands of DOM
+  // cards at once freezes the browser regardless of how much data the API
+  // returned, now that the fetch itself can return up to 100000. "Load More"
+  // reveals more of the already-fetched, filtered list; reset on filter
+  // change below so it never shows "page 4" of a different result set.
+  const PROPERTIES_PAGE_SIZE = 30;
+  const [visiblePropertyCount, setVisiblePropertyCount] = useState(PROPERTIES_PAGE_SIZE);
   const [brandTab, setBrandTab] = useState<'ALL' | 'SONTHILLU' | 'RADHA_REAL_HOMES'>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -366,10 +377,15 @@ export const PropertyManagement: React.FC = () => {
   const fetchProperties = async () => {
     setIsLoading(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/properties`);
+      // Explicit high limit: the backend default (previously 20, now 2000)
+      // silently truncated inventory for any company with more properties
+      // than that — individual plots/units routinely exceed it. See the
+      // "All Inventory (N)" header below, now sourced from backend `total`.
+      const res = await fetchWithAuth(`${API_BASE_URL}/properties?limit=100000`);
       const data = await res.json();
       if (res.ok) {
         setProperties(data.properties || []);
+        setPropertiesTotal(data.total ?? (data.properties || []).length);
       }
     } catch (e) {
       console.error('Fetch properties error:', e);
@@ -404,6 +420,10 @@ export const PropertyManagement: React.FC = () => {
     fetchProperties();
     if (isMD || isPM || isDM) fetchPMs();
   }, []);
+
+  useEffect(() => {
+    setVisiblePropertyCount(PROPERTIES_PAGE_SIZE);
+  }, [brandTab, statusFilter, searchQuery, viewMode]);
 
   const handleCreateProperty = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -692,7 +712,7 @@ export const PropertyManagement: React.FC = () => {
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            All Inventory ({properties.length})
+            All Inventory ({propertiesTotal})
           </button>
 
           <button
@@ -759,7 +779,7 @@ export const PropertyManagement: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProperties.map((prop) => {
+          {filteredProperties.slice(0, visiblePropertyCount).map((prop) => {
             const displayImage =
               (prop.images && prop.images.length > 0
                 ? resolveImageUrl(
@@ -808,6 +828,14 @@ export const PropertyManagement: React.FC = () => {
             );
           })}
         </div>
+      )}
+      {!isLoading && filteredProperties.length > visiblePropertyCount && (
+        <button
+          onClick={() => setVisiblePropertyCount((c) => c + PROPERTIES_PAGE_SIZE)}
+          className="w-full py-3 rounded-2xl border border-slate-200 bg-white text-navy-700 font-bold text-sm hover:bg-slate-50 transition-colors"
+        >
+          Load More ({filteredProperties.length - visiblePropertyCount} remaining)
+        </button>
       )}
 
       {/* Add Property Wizard */}

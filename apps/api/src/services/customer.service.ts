@@ -30,15 +30,24 @@ export class CustomerService {
   static async getCustomers(user: TokenPayload, take: number = 50, skip: number = 0) {
     const whereCondition = await buildCustomerScope(user);
 
-    return await p.customer.findMany({
-      where: whereCondition,
-      take,
-      skip,
-      include: {
-        assigned_to: { select: { id: true, employee_code: true, full_name: true } },
-      },
-      orderBy: { created_at: 'desc' },
-    });
+    // `total` (of the full scoped set, not just this page) lets the frontend
+    // know whether it got everything, instead of a truncated fetch's own
+    // array length silently looking complete — see routes/leads.ts's GET /
+    // for the same lesson learned there.
+    const [customers, total] = await Promise.all([
+      p.customer.findMany({
+        where: whereCondition,
+        take,
+        skip,
+        include: {
+          assigned_to: { select: { id: true, employee_code: true, full_name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+      }),
+      p.customer.count({ where: whereCondition }),
+    ]);
+
+    return { customers, total };
   }
 
   static async getCustomerById(user: TokenPayload, id: number) {

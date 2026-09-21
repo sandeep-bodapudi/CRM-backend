@@ -43,6 +43,13 @@ export const CustomerManagement: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  // Render-side cap, independent of the fetch: rendering thousands of table
+  // rows at once freezes the browser regardless of how much data the API
+  // returned, now that the fetch itself can return up to 100000. "Load More"
+  // reveals more of the already-fetched, filtered list; reset on search
+  // change below so it never shows "page 4" of a different result set.
+  const CUSTOMERS_PAGE_SIZE = 50;
+  const [visibleCustomerCount, setVisibleCustomerCount] = useState(CUSTOMERS_PAGE_SIZE);
 
   // Dossier state
   const [dossierCustomer, setDossierCustomer] = useState<Customer | null>(null);
@@ -69,7 +76,10 @@ export const CustomerManagement: React.FC = () => {
   const fetchCustomers = async () => {
     setIsLoading(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/customers`);
+      // Explicit high limit: the backend default (previously 50, now 2000)
+      // silently truncated the list for any company with more customers than
+      // that — every booking creates one, so this accumulates over time.
+      const res = await fetchWithAuth(`${API_BASE_URL}/customers?limit=100000`);
       const data = await res.json();
       if (res.ok) {
         setCustomers(data.customers || []);
@@ -130,6 +140,10 @@ export const CustomerManagement: React.FC = () => {
       fetchCustomers();
     }
   }, [user]);
+
+  useEffect(() => {
+    setVisibleCustomerCount(CUSTOMERS_PAGE_SIZE);
+  }, [searchQuery]);
 
   if (!user?.permissions?.includes(Permissions.CUSTOMERS_READ)) {
     return (
@@ -222,7 +236,7 @@ export const CustomerManagement: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredCustomers.map((cust) => (
+                filteredCustomers.slice(0, visibleCustomerCount).map((cust) => (
                   <tr
                     key={cust.id}
                     onClick={() => openDossier(cust)}
@@ -280,6 +294,14 @@ export const CustomerManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
+        {!isLoading && filteredCustomers.length > visibleCustomerCount && (
+          <button
+            onClick={() => setVisibleCustomerCount((c) => c + CUSTOMERS_PAGE_SIZE)}
+            className="w-full py-3 border-t border-slate-100 text-navy-700 font-bold text-sm hover:bg-slate-50 transition-colors"
+          >
+            Load More ({filteredCustomers.length - visibleCustomerCount} remaining)
+          </button>
+        )}
       </div>
 
       {/* FULL CUSTOMER DOSSIER MODAL */}

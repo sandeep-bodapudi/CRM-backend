@@ -200,34 +200,45 @@ export class PropertyService {
       whereCondition.digital_marketing_executive_id = filters.dm_executive_id;
     }
 
-    return await p.property.findMany({
-      where: whereCondition,
-      take,
-      skip,
-      include: {
-        assigned_pm: { select: { id: true, employee_code: true, full_name: true, phone: true } },
-        created_by: { select: { id: true, employee_code: true, full_name: true } },
-        images: true,
-        pricing: true,
-        plot_details: true,
-        apartment_details: true,
-        villa_details: true,
-        house_details: true,
-        commercial_shop_details: true,
-        commercial_office_details: true,
-        farm_land_details: true,
-        price_lines: { orderBy: { sort_order: 'asc' } },
-        verification_logs: {
-          orderBy: { created_at: 'desc' },
-          include: { actor: { select: { id: true, employee_code: true, full_name: true } } },
+    // `total` (of the full scoped/filtered set, not just this page) lets the
+    // frontend show a real "All Inventory (N)" count and know whether it got
+    // everything — see routes/leads.ts's GET / for the same lesson learned
+    // there: without this, a truncated fetch's own array length gets
+    // rendered as if it were the complete count, looking complete instead of
+    // flagging a cutoff.
+    const [properties, total] = await Promise.all([
+      p.property.findMany({
+        where: whereCondition,
+        take,
+        skip,
+        include: {
+          assigned_pm: { select: { id: true, employee_code: true, full_name: true, phone: true } },
+          created_by: { select: { id: true, employee_code: true, full_name: true } },
+          images: true,
+          pricing: true,
+          plot_details: true,
+          apartment_details: true,
+          villa_details: true,
+          house_details: true,
+          commercial_shop_details: true,
+          commercial_office_details: true,
+          farm_land_details: true,
+          price_lines: { orderBy: { sort_order: 'asc' } },
+          verification_logs: {
+            orderBy: { created_at: 'desc' },
+            include: { actor: { select: { id: true, employee_code: true, full_name: true } } },
+          },
+          publications: true,
+          _count: {
+            select: { interested_leads: true },
+          },
         },
-        publications: true,
-        _count: {
-          select: { interested_leads: true },
-        },
-      },
-      orderBy: { created_at: 'desc' },
-    });
+        orderBy: { created_at: 'desc' },
+      }),
+      p.property.count({ where: whereCondition }),
+    ]);
+
+    return { properties, total };
   }
 
   /** Single-property fetch, scoped like listProperties. Was missing entirely —
