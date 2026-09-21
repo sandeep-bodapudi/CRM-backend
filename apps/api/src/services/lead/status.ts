@@ -587,13 +587,16 @@ const BULK_GARBAGE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFD]/;
 
 function sanitiseBulkLeadRow(raw: any): { row: any; error?: string } {
   if (!raw || typeof raw !== 'object') return { row: raw, error: 'Row is not an object' };
-  const customer_name = BULK_TEXT(raw.customer_name, 120);
+  // A blank name is never worth losing a lead over — default to "Unknown"
+  // rather than rejecting the row, same as the frontend's own file parser.
+  // Phone stays mandatory: a name with no contactable number isn't usable.
+  const customer_name = BULK_TEXT(raw.customer_name, 120) || 'Unknown';
   let phone = BULK_TEXT(raw.phone, 20).replace(/\.0+$/, '').replace(/\D/g, '');
   if (phone.length === 12 && phone.startsWith('91')) phone = phone.slice(2);
   if (phone.length === 11 && phone.startsWith('0')) phone = phone.slice(1);
 
-  if (!customer_name || !phone) {
-    return { row: raw, error: 'Missing required fields: customer_name or phone' };
+  if (!phone) {
+    return { row: raw, error: 'Missing required field: phone' };
   }
   if (BULK_GARBAGE.test(customer_name)) {
     return {

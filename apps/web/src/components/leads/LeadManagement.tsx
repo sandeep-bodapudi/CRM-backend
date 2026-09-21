@@ -257,6 +257,10 @@ export const LeadManagement: React.FC = () => {
   const [bulkHeaderMatched, setBulkHeaderMatched] = useState(true);
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const [bulkOwnershipType, setBulkOwnershipType] = useState<'POOL' | 'DIRECT'>('POOL');
+  const [bulkUploadProgress, setBulkUploadProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
   const canBulkUpload = !!user?.permissions?.includes(Permissions.LEADS_BULK_UPLOAD);
   const canCreateLead =
@@ -316,37 +320,62 @@ export const LeadManagement: React.FC = () => {
     setBulkOwnershipType('POOL');
   };
 
+  // Backend caps each bulk-upload request at 1000 rows by design (keeps one
+  // request's DB work bounded) — a file with more rows than that (a real
+  // marketing list can easily be 10,000+) used to just fail outright with a
+  // 400, or before the body-size fix, a generic 413 from Express itself.
+  // Chunk client-side into <=1000-row batches, send sequentially, and
+  // aggregate the results so the whole file actually gets imported.
+  const BULK_CHUNK_SIZE = 1000;
+
   const handleConfirmBulkUpload = async () => {
     if (parsedBulkLeads.length === 0) return;
     setIsBulkUploading(true);
+
+    const chunks: ParsedBulkLeadRow[][] = [];
+    for (let i = 0; i < parsedBulkLeads.length; i += BULK_CHUNK_SIZE) {
+      chunks.push(parsedBulkLeads.slice(i, i + BULK_CHUNK_SIZE));
+    }
+    setBulkUploadProgress({ done: 0, total: chunks.length });
+
+    const totals = { count: 0, total_rows: 0, duplicates: 0, failed_rows: 0 };
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/leads/bulk-upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leads: parsedBulkLeads, ownership_type: bulkOwnershipType }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        const problems: string[] = [];
-        if (data.duplicates) problems.push(`${data.duplicates} already existed`);
-        if (data.failed_rows) problems.push(`${data.failed_rows} failed`);
-        showToast(
-          `Imported ${data.count} of ${data.total_rows ?? parsedBulkLeads.length} leads` +
-            (problems.length ? ` (${problems.join(', ')})` : '') +
-            '.',
-          problems.length ? 'info' : 'success',
-        );
-        closeBulkModal();
-        fetchLeads();
-      } else {
-        await handleApiError(res, showError, data);
+      for (let i = 0; i < chunks.length; i++) {
+        const res = await fetchWithAuth(`${API_BASE_URL}/leads/bulk-upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leads: chunks[i], ownership_type: bulkOwnershipType }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          await handleApiError(res, showError, data);
+          break;
+        }
+        totals.count += data.count || 0;
+        totals.total_rows += data.total_rows ?? chunks[i].length;
+        totals.duplicates += data.duplicates || 0;
+        totals.failed_rows += data.failed_rows || 0;
+        setBulkUploadProgress({ done: i + 1, total: chunks.length });
       }
+
+      const problems: string[] = [];
+      if (totals.duplicates) problems.push(`${totals.duplicates} already existed`);
+      if (totals.failed_rows) problems.push(`${totals.failed_rows} failed`);
+      showToast(
+        `Imported ${totals.count} of ${totals.total_rows} leads` +
+          (problems.length ? ` (${problems.join(', ')})` : '') +
+          '.',
+        problems.length ? 'info' : 'success',
+      );
+      closeBulkModal();
+      fetchLeads();
     } catch (err) {
       showError(
         toUserFacingError({ message: err instanceof Error ? err.message : String(err), body: err }),
       );
     } finally {
       setIsBulkUploading(false);
+      setBulkUploadProgress(null);
     }
   };
 
@@ -1044,7 +1073,11 @@ export const LeadManagement: React.FC = () => {
                 onClick={handleConfirmBulkUpload}
                 className="px-5 py-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm rounded-lg shadow transition-colors"
               >
-                {isBulkUploading ? 'Importing...' : 'Confirm & Import'}
+                {isBulkUploading
+                  ? bulkUploadProgress && bulkUploadProgress.total > 1
+                    ? `Importing batch ${bulkUploadProgress.done}/${bulkUploadProgress.total}...`
+                    : 'Importing...'
+                  : 'Confirm & Import'}
               </button>
             </div>
           </div>

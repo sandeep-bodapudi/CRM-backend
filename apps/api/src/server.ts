@@ -137,7 +137,13 @@ app.use(cookieParser());
 app.use(compression({ threshold: 0 }) as any);
 
 // Body Parser
-app.use(express.json());
+// Express's default json limit is 100kb — a bulk lead/employee import with
+// a few hundred rows of name/phone/notes already exceeds that, failing the
+// whole request with a generic 413 "request entity too large" before it
+// ever reaches route code (bulk-upload's own MAX_BATCH_SIZE check never
+// gets a chance to run). 10mb comfortably covers a 1000-row import batch
+// (the cap bulk-upload enforces per request) with headroom.
+app.use(express.json({ limit: '10mb' }));
 
 // Enforce max pagination cap of 100 globally
 import { enforceMaxPagination } from './middleware/pagination';

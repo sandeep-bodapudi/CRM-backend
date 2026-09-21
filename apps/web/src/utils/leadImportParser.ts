@@ -157,14 +157,14 @@ export const parseLeadWorkbook = (workbook: XLSX.WorkBook): LeadImportResult => 
       return idx === undefined ? '' : cellText(line[idx]);
     };
 
-    const customer_name = get('customer_name');
+    const rawName = get('customer_name');
     const rawPhone = get('phone');
-    if (!customer_name && !rawPhone) continue; // stray formatting-only row
+    if (!rawName && !rawPhone) continue; // stray formatting-only row
 
-    if (!customer_name) {
-      skipped.push({ row: excelRow, reason: 'Name is missing' });
-      continue;
-    }
+    // A lead with a real phone number is never worth losing over a blank
+    // name column — default to "Unknown" and keep it. Phone stays mandatory
+    // below: a name with no contactable number isn't a usable lead at all.
+    const customer_name = rawName || 'Unknown';
     const phone = rawPhone ? normalisePhone(rawPhone) : null;
     if (!phone) {
       skipped.push({
