@@ -274,8 +274,14 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     requiredPermission: Permissions.DEMOS_READ,
   },
   {
+    // Was just "Approvals" — identical to 'hr-approvals' below (a
+    // different page, /approvals) despite having a different destination.
+    // MD/Admin hold both sets of permissions, so they'd see two identically
+    // labeled sidebar items leading to different pages. Renamed to match
+    // this route's own page-title convention already used elsewhere
+    // (App.tsx's title map: '/pm/approvals' -> 'PM Approvals').
     id: 'pm-approvals',
-    label: 'Approvals',
+    label: 'PM Approvals',
     icon: ClipboardCheck,
     path: '/pm/approvals',
     requiredPermission: `${Permissions.SITE_VISITS_ACCEPT}|${Permissions.DEMOS_ACCEPT}`,
@@ -366,8 +372,11 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     requiredAnyRole: [Roles.MD, Roles.HR_MANAGER, Roles.ADMIN],
   },
   {
+    // Matches this feature's own naming elsewhere (the dashboard StatCard
+    // for this same page is labeled "HR Approvals") — see 'pm-approvals'
+    // above for why the generic "Approvals" label was ambiguous.
     id: 'hr-approvals',
-    label: 'Approvals',
+    label: 'HR Approvals',
     icon: Calendar,
     path: '/approvals',
     requiredAnyRole: [Roles.MD, Roles.HR_MANAGER, Roles.ADMIN],
