@@ -53,11 +53,20 @@ router.get(
       // can legitimately run into the thousands after a large bulk import
       // gets auto-distributed. assigned_to_id is indexed, so the larger
       // scan is cheap.
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 5000);
+      //
+      // Max raised again to 100,000: a single bulk import can now be that
+      // large (see bulk-upload's chunking), and after weighted
+      // auto-distribution one telecaller's own scoped query could
+      // legitimately need to return most of it. The default stays at 2000
+      // — callers that actually need more (e.g. a "load more" UI) ask for
+      // it explicitly via ?limit=, rather than every dashboard paying for
+      // a 100k-row fetch by default. `total` (below) tells any caller
+      // whether they got everything or should ask for more.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
-      const leads = await LeadService.getLeads(req.user!, limit, offset);
-      return res.status(200).json({ leads, pagination: { limit, offset } });
+      const { leads, total } = await LeadService.getLeads(req.user!, limit, offset);
+      return res.status(200).json({ leads, total, pagination: { limit, offset, total } });
     } catch (error: any) {
       return handleServiceError(error, res);
     }

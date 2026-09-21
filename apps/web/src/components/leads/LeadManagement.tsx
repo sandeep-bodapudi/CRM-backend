@@ -204,6 +204,13 @@ export const LeadManagement: React.FC = () => {
     searchParams.get('status') || 'ALL',
   );
   const [leadSearchQuery, setLeadSearchQuery] = useState<string>('');
+  // Render-side cap, independent of the fetch: rendering thousands of DOM
+  // cards at once freezes the browser regardless of how much data the API
+  // returned. "Load More" reveals more of the already-fetched, filtered
+  // list; resets to the first page whenever the filter/search/tab changes
+  // so it never shows "page 4" of a completely different result set.
+  const LEADS_PAGE_SIZE = 50;
+  const [visibleLeadCount, setVisibleLeadCount] = useState(LEADS_PAGE_SIZE);
   const [leadViewTab, setLeadViewTabState] = useState<'pipeline' | 'added_by_me'>(
     (searchParams.get('tab') as 'pipeline' | 'added_by_me') || 'pipeline',
   );
@@ -383,7 +390,11 @@ export const LeadManagement: React.FC = () => {
     setIsLoading(true);
     setHasError(false);
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/leads`);
+      // Explicit high limit: an admin/ops company-wide view can legitimately
+      // run into tens of thousands of leads after a large bulk import.
+      // Render-side pagination (visibleLeadCount, below) keeps the DOM
+      // manageable regardless of how many actually come back.
+      const res = await fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`);
       const data = await res.json();
       if (res.ok) {
         setLeads(data.leads || []);
@@ -415,6 +426,10 @@ export const LeadManagement: React.FC = () => {
       fetchEmployees();
     }
   }, [user]);
+
+  useEffect(() => {
+    setVisibleLeadCount(LEADS_PAGE_SIZE);
+  }, [statusFilter, leadSearchQuery, leadViewTab]);
 
   const handleUpdateLeadAssignment = async (leadId: number, assigneeIdStr: string) => {
     const assigneeId = parseInt(assigneeIdStr, 10);
@@ -572,9 +587,19 @@ export const LeadManagement: React.FC = () => {
 
   const addedByMe = leads.filter((l) => l.created_by?.id === user?.id);
   const baseLeads = leadViewTab === 'added_by_me' ? addedByMe : leads;
-  const filteredLeads = baseLeads.filter(
-    (l) => statusFilter === 'ALL' || l.status === statusFilter,
-  );
+  const searchLower = leadSearchQuery.trim().toLowerCase();
+  const filteredLeads = baseLeads.filter((l) => {
+    if (statusFilter !== 'ALL' && l.status !== statusFilter) return false;
+    if (!searchLower) return true;
+    // Was bound to state but never actually applied — at up to 100k leads,
+    // "Load More" pagination alone can't get anyone to a specific lead;
+    // search is what makes that scale usable.
+    return (
+      l.customer_name?.toLowerCase().includes(searchLower) ||
+      l.phone?.toLowerCase().includes(searchLower) ||
+      l.lead_code?.toLowerCase().includes(searchLower)
+    );
+  });
 
   const columns: ColumnDef<Lead>[] = [
     {
@@ -867,7 +892,8 @@ export const LeadManagement: React.FC = () => {
 
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs text-slate-400">
-            Showing {filteredLeads.length} of {baseLeads.length} leads
+            Showing {Math.min(visibleLeadCount, filteredLeads.length)} of {filteredLeads.length}{' '}
+            leads{filteredLeads.length !== baseLeads.length ? ` (${baseLeads.length} total)` : ''}
           </p>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -914,7 +940,7 @@ export const LeadManagement: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredLeads.map((lead: Lead) => (
+            {filteredLeads.slice(0, visibleLeadCount).map((lead: Lead) => (
               <LeadCard
                 key={lead.id}
                 lead={lead}
@@ -930,6 +956,14 @@ export const LeadManagement: React.FC = () => {
               />
             ))}
           </div>
+        )}
+        {!isLoading && filteredLeads.length > visibleLeadCount && (
+          <button
+            onClick={() => setVisibleLeadCount((c) => c + LEADS_PAGE_SIZE)}
+            className="w-full py-3 rounded-2xl border border-slate-200 bg-white text-navy-700 font-bold text-sm hover:bg-slate-50 transition-colors"
+          >
+            Load More ({filteredLeads.length - visibleLeadCount} remaining)
+          </button>
         )}
       </div>
 

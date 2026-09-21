@@ -59,12 +59,24 @@ export const TelecallerDashboard: React.FC = () => {
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [qualifyingLead, setQualifyingLead] = useState<LeadListItem | null>(null);
   const [activeSection, setActiveSection] = useState<'leads' | 'tasks'>('leads');
+  // Render-side cap, independent of the fetch: a telecaller can have
+  // thousands of active leads after a big bulk import, and rendering that
+  // many DOM cards at once freezes the browser regardless of how much data
+  // the API returned. "Load More" reveals more of the already-fetched list.
+  const LEADS_PAGE_SIZE = 50;
+  const [visibleLeadCount, setVisibleLeadCount] = useState(LEADS_PAGE_SIZE);
 
   const { data, isLoading } = useQuery({
     queryKey: ['telecallerDashboardData'],
     queryFn: async () => {
       const [leadsRes, visitsRes, tasksRes] = await Promise.all([
-        fetchWithAuth(`${API_BASE_URL}/leads`),
+        // Explicit high limit: this is a personal, already-scoped list (see
+        // GET /leads's own comment) that can legitimately run into the tens
+        // of thousands after a large bulk import gets auto-distributed —
+        // the backend default alone (2000) isn't enough to guarantee "all
+        // of mine". Rendering is separately capped below (visibleLeadCount)
+        // so the DOM never has to hold that many cards at once.
+        fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
         fetchWithAuth(`${API_BASE_URL}/site-visits`),
         fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`),
       ]);
@@ -360,7 +372,7 @@ export const TelecallerDashboard: React.FC = () => {
               </p>
             </div>
           ) : (
-            myAssignedLeads.map((lead: LeadListItem) => (
+            myAssignedLeads.slice(0, visibleLeadCount).map((lead: LeadListItem) => (
               <div
                 key={lead.id}
                 onClick={() => setSelectedLead(lead)}
@@ -523,6 +535,14 @@ export const TelecallerDashboard: React.FC = () => {
                 </div>
               </div>
             ))
+          )}
+          {myAssignedLeads.length > visibleLeadCount && (
+            <button
+              onClick={() => setVisibleLeadCount((c) => c + LEADS_PAGE_SIZE)}
+              className="w-full py-3 rounded-2xl border border-slate-200 bg-white text-navy-700 font-bold text-sm hover:bg-slate-50 transition-colors"
+            >
+              Load More ({myAssignedLeads.length - visibleLeadCount} remaining)
+            </button>
           )}
         </div>
       )}

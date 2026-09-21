@@ -35,33 +35,44 @@ export async function getUnclaimedLeads(user: TokenPayload) {
 export async function getLeads(user: TokenPayload, take: number = 20, skip: number = 0) {
   const whereCondition = await buildLeadScope(user);
 
-  const leads = await p.lead.findMany({
-    where: whereCondition,
-    take,
-    skip,
-    include: {
-      assigned_to: { select: { id: true, employee_code: true, full_name: true, phone: true } },
-      created_by: { select: { id: true, employee_code: true, full_name: true } },
-      introduced_by: { select: { id: true, employee_code: true, full_name: true } },
-      activities: {
-        orderBy: { created_at: 'desc' },
-        take: 5,
-        include: { actor: { select: { id: true, employee_code: true, full_name: true } } },
+  // `total` (of the full scoped set, not just this page) lets a caller with
+  // more leads than fit in one response show real "Showing X of Y" text and
+  // decide whether to page/load-more, instead of a truncated fetch quietly
+  // looking complete — see leads.ts's GET / for the same lesson learned
+  // twice already at lower limits (20, then 500).
+  const [leads, total] = await Promise.all([
+    p.lead.findMany({
+      where: whereCondition,
+      take,
+      skip,
+      include: {
+        assigned_to: { select: { id: true, employee_code: true, full_name: true, phone: true } },
+        created_by: { select: { id: true, employee_code: true, full_name: true } },
+        introduced_by: { select: { id: true, employee_code: true, full_name: true } },
+        activities: {
+          orderBy: { created_at: 'desc' },
+          take: 5,
+          include: { actor: { select: { id: true, employee_code: true, full_name: true } } },
+        },
+        preferred_locations: { orderBy: { sort_order: 'asc' } },
+        converted_customer: { select: { customer_code: true } },
       },
-      preferred_locations: { orderBy: { sort_order: 'asc' } },
-      converted_customer: { select: { customer_code: true } },
-    },
-    orderBy: { created_at: 'desc' },
-  });
+      orderBy: { created_at: 'desc' },
+    }),
+    p.lead.count({ where: whereCondition }),
+  ]);
 
-  return leads.map((lead) => {
-    const canView = LeadPolicy.canView(user, lead);
-    return {
-      ...lead,
-      introduced_by: canView ? lead.introduced_by : null, // RBAC enforcement for introduced_by
-      can_edit: LeadPolicy.canMutate(user, lead),
-    };
-  });
+  return {
+    leads: leads.map((lead) => {
+      const canView = LeadPolicy.canView(user, lead);
+      return {
+        ...lead,
+        introduced_by: canView ? lead.introduced_by : null, // RBAC enforcement for introduced_by
+        can_edit: LeadPolicy.canMutate(user, lead),
+      };
+    }),
+    total,
+  };
 }
 
 /**
