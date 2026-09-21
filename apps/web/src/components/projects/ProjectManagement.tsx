@@ -112,8 +112,11 @@ export const ProjectManagement: React.FC = () => {
   const { data: projectsData, isLoading } = useQuery({
     queryKey: ['projects', statusFilter],
     queryFn: async () => {
-      const qs = statusFilter !== 'ALL' ? `?status=${statusFilter}` : '';
-      const res = await fetchWithAuth(`${API_BASE_URL}/projects${qs}`);
+      // Explicit high limit: the backend default (previously 50, now 2000)
+      // silently truncated the list for any company with more projects than
+      // that — same bug class as leads/properties/customers.
+      const qs = statusFilter !== 'ALL' ? `&status=${statusFilter}` : '';
+      const res = await fetchWithAuth(`${API_BASE_URL}/projects?limit=100000${qs}`);
       if (!res.ok) throw new Error('Failed to load projects');
       return res.json();
     },

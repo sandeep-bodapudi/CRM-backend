@@ -101,7 +101,9 @@ export function BulkUnitWizard({ onSuccess, onClose, preselectedProjectId }: Bul
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchWithAuth(`${API_BASE_URL}/projects`)
+    // Explicit high limit: the backend default (previously 50, now 2000)
+    // silently truncated this project picker once the company passed that.
+    fetchWithAuth(`${API_BASE_URL}/projects?limit=100000`)
       .then((r) => r.json())
       .then((d) => setProjects(d.data || d.projects || []))
       .catch(() => {});

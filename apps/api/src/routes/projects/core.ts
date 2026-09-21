@@ -67,11 +67,19 @@ router.get(
         filters.dm_executive_id = req.user!.employeeId;
       }
 
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 100);
+      // Default was 50 with a 100 max and no `total` in the response, and
+      // the frontend's own list fetches never pass a limit override — same
+      // bug class as leads/properties/customers, fixed the same way.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
-      const projects = await ProjectService.listProjects(req.user!, filters, limit, offset);
-      return res.status(200).json({ projects, pagination: { limit, offset } });
+      const { projects, total } = await ProjectService.listProjects(
+        req.user!,
+        filters,
+        limit,
+        offset,
+      );
+      return res.status(200).json({ projects, total, pagination: { limit, offset, total } });
     } catch (error: any) {
       logger.error('Fetch projects error:', error);
       if (error.status) {

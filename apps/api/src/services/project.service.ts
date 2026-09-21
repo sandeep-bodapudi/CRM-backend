@@ -99,17 +99,27 @@ export class ProjectService {
       whereCondition.digital_marketing_executive_id = filters.dm_executive_id;
     }
 
+    // `total` (of the full scoped/filtered set, not just this page) lets the
+    // frontend know whether it got everything, instead of a truncated
+    // fetch's own array length silently looking complete — see
+    // routes/leads.ts's GET / for the same lesson learned there.
     const cacheKey = `projects_${user.employeeId}_${JSON.stringify(filters)}_${take}_${skip}`;
     return await fetchWithCache(cacheKey, async () => {
-      return await p.project.findMany({
-        where: whereCondition,
-        take,
-        skip,
-        include: {
-          assigned_pm: { select: { id: true, employee_code: true, full_name: true, phone: true } },
-        },
-        orderBy: { created_at: 'desc' },
-      });
+      const [projects, total] = await Promise.all([
+        p.project.findMany({
+          where: whereCondition,
+          take,
+          skip,
+          include: {
+            assigned_pm: {
+              select: { id: true, employee_code: true, full_name: true, phone: true },
+            },
+          },
+          orderBy: { created_at: 'desc' },
+        }),
+        p.project.count({ where: whereCondition }),
+      ]);
+      return { projects, total };
     });
   }
 
