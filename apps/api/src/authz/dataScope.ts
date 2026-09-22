@@ -144,10 +144,17 @@ export async function buildPropertyScope(user: TokenPayload): Promise<Prisma.Pro
   }
 
   // 4. TELECALLER and everyone else
-  // Default to LIVE properties only within their company.
+  // Default to LIVE properties within their company, PLUS anything they
+  // personally created — without this OR, a role granted PROPERTIES_CREATE
+  // (e.g. a telecaller, via the Permissions Manager) can successfully POST
+  // a new property, but every request right after (image upload, re-fetch,
+  // the detail view) 404s: a fresh property starts at PENDING_VERIFICATION,
+  // not LIVE, so this scope excluded their own just-created submission
+  // until someone else approved it. Mirrors the Project Manager branch
+  // above, which already includes `created_by_id`.
   return {
     ...propertyBaseScope,
-    status: 'LIVE',
+    OR: [{ status: 'LIVE' }, { created_by_id: user.employeeId }],
   };
 }
 
