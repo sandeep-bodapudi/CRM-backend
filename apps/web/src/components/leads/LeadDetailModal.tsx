@@ -1274,6 +1274,19 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 </p>
                 <button
                   onClick={() => {
+                    const [kind, idStr] = scheduleInventoryKey.split('-');
+                    const id = Number(idStr);
+                    const attached = savedInterests.find((i) =>
+                      kind === 'UNIT' ? i.project_unit_id === id : i.property_id === id,
+                    );
+                    const propertyName = attached?.project_unit
+                      ? `${attached.project_unit.project.name} — Unit ${
+                          attached.project_unit.flat_number ||
+                          attached.project_unit.villa_number ||
+                          attached.project_unit.plot_number ||
+                          attached.project_unit.unit_number
+                        }`
+                      : attached?.property?.title || 'the property';
                     sendWhatsAppMessage('SITE_VISIT_SCHEDULED', lead.phone, {
                       customer_name: lead.customer_name,
                       visit_date: new Date(scheduleDate).toLocaleDateString('en-IN'),
@@ -1282,6 +1295,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                         minute: '2-digit',
                       }),
                       lead_code: lead.lead_code,
+                      property_name: propertyName,
                     });
                   }}
                   className="mt-4 px-6 py-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2"

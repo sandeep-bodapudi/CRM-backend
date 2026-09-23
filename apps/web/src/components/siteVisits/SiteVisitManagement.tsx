@@ -798,8 +798,7 @@ export const SiteVisitManagement: React.FC = () => {
                           minute: '2-digit',
                         }),
                         pm_name: visit.project_manager?.full_name ?? 'Your Project Manager',
-                        // pm_phone passed so the WA template can include it
-                        agent_name: visit.project_manager?.phone ?? '',
+                        pm_phone: visit.project_manager?.phone ?? '',
                         property_name:
                           visit.property?.title ||
                           visit.project_unit?.project?.name ||
@@ -837,7 +836,11 @@ export const SiteVisitManagement: React.FC = () => {
                           minute: '2-digit',
                         }),
                         pm_name: visit.project_manager?.full_name || 'Your Project Manager',
-                        agent_name: visit.project_manager?.phone || '',
+                        pm_phone: visit.project_manager?.phone || '',
+                        property_name:
+                          visit.property?.title ||
+                          visit.project_unit?.project?.name ||
+                          'the property',
                       })
                     }
                     className="w-full py-2 bg-white border border-[#25D366] text-[#25D366] hover:bg-[#25D366] hover:text-white font-bold text-[10px] uppercase tracking-wide rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5"
@@ -1084,7 +1087,11 @@ export const SiteVisitManagement: React.FC = () => {
                           minute: '2-digit',
                         }),
                         pm_name: visit.project_manager?.full_name || 'Your Project Manager',
-                        agent_name: visit.project_manager?.phone || '',
+                        pm_phone: visit.project_manager?.phone || '',
+                        property_name:
+                          visit.property?.title ||
+                          visit.project_unit?.project?.name ||
+                          'the property',
                       })
                     }
                     className="w-full py-2 bg-white border border-[#25D366] text-[#25D366] hover:bg-[#25D366] hover:text-white font-bold text-[10px] uppercase tracking-wide rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5"

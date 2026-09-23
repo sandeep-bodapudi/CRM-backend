@@ -14,7 +14,9 @@ export type MessageTemplateInput = z.infer<typeof MessageTemplateSchema>;
 // §5 — stable template_key values for the WhatsApp deep-link touchpoints.
 // These are the canonical lookup keys used by resolveTemplate() and by the
 // admin template editor. The body_text of each supports the placeholders
-// {customer_name}, {property_name}, {pm_name}, {visit_date}.
+// listed in messageTemplate.service.ts's TEMPLATE_PLACEHOLDERS (customer
+// name/phone, property name/location/price/code/url, pm name/phone,
+// agent_name, visit date/time, lead/booking code, company_name).
 export const MessageTemplateKey = {
   LEAD_QUALIFIED_PROPERTIES: 'LEAD_QUALIFIED_PROPERTIES', // legacy/alias
   LEAD_PROPERTY_PROPOSAL: 'LEAD_PROPERTY_PROPOSAL', // matched property list + invite to discuss

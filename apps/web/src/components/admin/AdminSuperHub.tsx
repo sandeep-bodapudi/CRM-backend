@@ -22,6 +22,7 @@ import { CompanyBranchManagement } from './CompanyBranchManagement';
 import { AdminAnalyticsPortal } from './AdminAnalyticsPortal';
 import { MDControlDashboard } from '../md/MDControlDashboard';
 import { BannerControlWidget } from '../dashboards/BannerControlWidget';
+import { MessageTemplatesManager } from './MessageTemplatesManager';
 import { toUserFacingError } from '../../utils/userFacingError';
 
 interface AuditLog {
@@ -404,6 +405,7 @@ export const AdminSuperHub: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <BannerControlWidget />
               </div>
+              <MessageTemplatesManager />
             </div>
           )}
 
