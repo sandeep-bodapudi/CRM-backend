@@ -3,6 +3,14 @@ import { MessageTemplateService } from '../services/messageTemplate.service';
 
 const p = prisma;
 
+// Public marketing site a WhatsApp property-share link should point to.
+// Two apex domains resolve to the same site in production (see server.ts's
+// allowedPublicApexDomains comment) — radharealhomeproperties.com is the
+// confirmed one to use for outbound links (2026-09-23 product decision).
+const PUBLIC_SITE_BASE_URL = process.env.PUBLIC_SITE_URL || 'https://radharealhomeproperties.com';
+const buildPropertyUrl = (propertyId: number) => `${PUBLIC_SITE_BASE_URL}/properties/${propertyId}`;
+const buildProjectUrl = (projectId: number) => `${PUBLIC_SITE_BASE_URL}/projects/${projectId}`;
+
 /**
  * A lead may now have multiple preferred locations (§ Phase 2). Prefers the
  * full list when present; falls back to the legacy single scalar for leads
@@ -177,6 +185,7 @@ export const findMatchingPropertiesForLead = async (
       price: prop.final_price,
       description: prop.description,
       brandType: prop.brand_type,
+      url: buildPropertyUrl(prop.id),
     });
     const whatsAppUrl = buildWhatsAppUrl(lead.phone, whatsAppText);
 
@@ -219,6 +228,8 @@ export const findMatchingPropertiesForLead = async (
       price: unit.final_price,
       description: unit.notes,
       brandType: undefined,
+      // Units don't have their own public page — link to the parent project's.
+      url: buildProjectUrl(unit.project_id),
     });
     const whatsAppUrl = buildWhatsAppUrl(lead.phone, whatsAppText);
 
@@ -279,17 +290,20 @@ async function resolveWhatsAppTextForItem(
     price: number;
     description: string | null;
     brandType: string | undefined;
+    url: string;
   },
 ): Promise<string> {
   const templateKey = 'LEAD_QUALIFIED_PROPERTIES';
+  const pm = lead.assigned_to;
 
   const resolved = await MessageTemplateService.resolve(templateKey, {
     customer_name: lead.customer_name ?? '',
     property_name: item.title ?? '',
-    pm_name:
-      lead.assigned_to?.full_name ??
-      lead.assigned_to?.employee_code ??
-      'Radha Real Homes Advisory Desk',
+    property_location: item.location ?? '',
+    property_price: `₹${(item.price / 100000).toFixed(1)} Lakhs`,
+    property_url: item.url,
+    pm_name: pm?.full_name ?? pm?.employee_code ?? 'Radha Real Homes Advisory Desk',
+    pm_phone: pm?.phone ?? '',
     visit_date: new Date().toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'long',
@@ -318,6 +332,7 @@ We found a premium property matching your exact requirements!
 📐 *Area*: ${item.areaSqft} sq.ft (${item.bedrooms ? item.bedrooms + ' BHK' : item.category})
 🧭 *Facing*: ${item.facing || 'East'}
 💰 *Asking Price*: ₹${(item.price / 100000).toFixed(1)} Lakhs
+🔗 *View Details*: ${item.url}
 
 📝 *Highlights*: ${
     item.description || 'Prime location with high growth potential and immediate registration.'

@@ -178,6 +178,7 @@ export const BookingManagement: React.FC = () => {
                         ? `${unit.project.name} — Unit ${unitLabel}`
                         : b.property?.title,
                       booking_code: b.booking_code,
+                      company_name: 'Radha Real Homes',
                     });
                   }
                 }}

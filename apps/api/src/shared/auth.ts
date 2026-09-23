@@ -206,6 +206,14 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.CUSTOMERS_KYC_WRITE,
     Permissions.EXPENSES_CREATE,
     Permissions.EXPENSES_READ_OWN,
+    // Complaints: everyone can file one (2026-09-23 product decision), but
+    // only MD/Admin/HR can see the queue — see COMPLAINTS_READ below.
+    Permissions.COMPLAINTS_CREATE,
+    Permissions.COMPLAINTS_READ,
+    Permissions.COMPLAINTS_UPDATE,
+    Permissions.COMPLAINTS_ASSIGN,
+    Permissions.COMPLAINTS_RESOLVE,
+    Permissions.COMPLAINTS_CLOSE,
   ],
 
   [Roles.FINANCE]: [
@@ -226,7 +234,10 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.DOCUMENTS_READ,
     Permissions.DOCUMENTS_VERIFY,
     Permissions.CUSTOMERS_KYC_WRITE,
-    Permissions.COMPLAINTS_READ,
+    // Everyone can file a complaint; viewing the queue is MD/Admin/HR-only
+    // (2026-09-23 product decision) — Finance previously had COMPLAINTS_READ,
+    // now scoped down to create-only like every other non-management role.
+    Permissions.COMPLAINTS_CREATE,
     // Phase-19 audit #4: Finance now sees a "My Active Leads" count on its
     // dashboard, scoped in the query layer to leads assigned to that employee.
     Permissions.LEADS_READ,
@@ -270,6 +281,7 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.DOCUMENTS_READ,
     Permissions.EXPENSES_CREATE,
     Permissions.EXPENSES_READ_OWN,
+    Permissions.COMPLAINTS_CREATE,
   ],
 
   [Roles.PROJECT_MANAGER]: [
@@ -305,12 +317,10 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.PAYMENTS_READ,
     Permissions.DOCUMENTS_CREATE,
     Permissions.DOCUMENTS_READ,
+    // Everyone can file a complaint; viewing/working the queue is now
+    // MD/Admin/HR-only (2026-09-23 product decision) — PM previously had
+    // the full read/assign/resolve/close set, scoped down to create-only.
     Permissions.COMPLAINTS_CREATE,
-    Permissions.COMPLAINTS_READ,
-    Permissions.COMPLAINTS_UPDATE,
-    Permissions.COMPLAINTS_ASSIGN,
-    Permissions.COMPLAINTS_RESOLVE,
-    Permissions.COMPLAINTS_CLOSE,
     Permissions.EXPENSES_CREATE,
     Permissions.EXPENSES_READ_OWN,
     // Without this, GET /employees 403s, which empties three unrelated
@@ -348,8 +358,9 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.PAYMENTS_READ,
     Permissions.DOCUMENTS_CREATE,
     Permissions.DOCUMENTS_READ,
-    Permissions.COMPLAINTS_READ,
-    Permissions.COMPLAINTS_UPDATE,
+    // Everyone can file a complaint; viewing the queue is MD/Admin/HR-only
+    // (2026-09-23 product decision) — this role previously had READ/UPDATE.
+    Permissions.COMPLAINTS_CREATE,
     Permissions.EXPENSES_CREATE,
     Permissions.EXPENSES_READ_OWN,
     Permissions.EMPLOYEES_READ,
@@ -398,6 +409,7 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.DOCUMENTS_READ,
     Permissions.EXPENSES_CREATE,
     Permissions.EXPENSES_READ_OWN,
+    Permissions.COMPLAINTS_CREATE,
   ],
 
   [Roles.DIGITAL_MARKETING_HEAD]: [
@@ -411,6 +423,7 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.EXPENSES_CREATE,
     Permissions.EXPENSES_READ_OWN,
     Permissions.EMPLOYEES_READ,
+    Permissions.COMPLAINTS_CREATE,
   ],
 
   [Roles.AGENT]: [
@@ -434,12 +447,10 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.BOOKINGS_READ,
     Permissions.PAYMENTS_READ,
     Permissions.DOCUMENTS_READ,
+    // Everyone can file a complaint; viewing/working the queue is now
+    // MD/Admin/HR-only (2026-09-23 product decision) — Agent previously had
+    // the full read/assign/resolve/close set, scoped down to create-only.
     Permissions.COMPLAINTS_CREATE,
-    Permissions.COMPLAINTS_READ,
-    Permissions.COMPLAINTS_UPDATE,
-    Permissions.COMPLAINTS_ASSIGN,
-    Permissions.COMPLAINTS_RESOLVE,
-    Permissions.COMPLAINTS_CLOSE,
     Permissions.EXPENSES_CREATE,
     Permissions.EXPENSES_READ_OWN,
     // Phase-19 audit #4: Agent now sees a "My Active Leads" count on its
@@ -469,6 +480,7 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.PROPERTIES_DM_POLISH,
     Permissions.PROJECTS_DM_POLISH,
     Permissions.EMPLOYEES_READ,
+    Permissions.COMPLAINTS_CREATE,
   ],
 
   [Roles.SALES_MANAGER]: [
@@ -499,6 +511,7 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     // needs EMPLOYEES_READ — without it the dropdown was always empty, so
     // there was no one to actually assign a created task to.
     Permissions.EMPLOYEES_READ,
+    Permissions.COMPLAINTS_CREATE,
   ],
 
   [Roles.CHANNEL_PARTNER_MANAGER]: [
@@ -521,6 +534,7 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.EXPENSES_CREATE,
     Permissions.EXPENSES_READ_OWN,
     Permissions.CUSTOMERS_CONVERT,
+    Permissions.COMPLAINTS_CREATE,
   ],
 
   [Roles.STAFF]: [
@@ -528,6 +542,7 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.ATTENDANCE_SCAN,
     Permissions.ATTENDANCE_LATE_PROPOSAL,
     Permissions.ATTENDANCE_LEAVE_PROPOSAL,
+    Permissions.COMPLAINTS_CREATE,
   ],
 };
 

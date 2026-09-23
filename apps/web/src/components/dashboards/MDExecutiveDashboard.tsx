@@ -18,6 +18,7 @@ import {
   Percent,
 } from 'lucide-react';
 import { StatCard, ListWidget, ListItem } from '../ui';
+import { getTimeBasedGreeting } from '../../utils/greeting';
 import { UnassignedPropertiesWidget } from '../md/UnassignedPropertiesWidget';
 import { MDEscalationQueue } from '../md/MDEscalationQueue';
 import { LeadPipelineTabs } from '../md/LeadPipelineTabs';
@@ -61,6 +62,12 @@ export const MDExecutiveDashboard: React.FC = () => {
   const [pmRouting, setPmRouting] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [greeting, setGreeting] = useState(getTimeBasedGreeting());
+
+  useEffect(() => {
+    const timer = setInterval(() => setGreeting(getTimeBasedGreeting()), 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchMDData = async () => {
     setIsLoading(true);
@@ -192,7 +199,7 @@ export const MDExecutiveDashboard: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-navy-900 tracking-tight">Executive Dashboard</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Good morning, {user?.fullName || user?.employeeCode}. Here's the company overview.
+            {greeting}, {user?.fullName || user?.employeeCode}. Here's the company overview.
           </p>
         </div>
       </div>

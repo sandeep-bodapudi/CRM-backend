@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getPanFormatError, getAadhaarFormatError } from '../../utils/idValidation';
 import {
   Building2,
   User,
@@ -130,7 +131,12 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
   const [dateOfJoining, setDateOfJoining] = useState(
     employee.dateOfJoining ? new Date(employee.dateOfJoining).toISOString().split('T')[0] : '',
   );
-  const [salaryCtc, setSalaryCtc] = useState(employee.salaryCtc ? String(employee.salaryCtc) : '');
+  // `employee.salaryCtc` is the stored MONTHLY figure (see AddEmployeeWizard
+  // for why) — this form edits Annual Salary and converts back to monthly.
+  const [annualSalary, setAnnualSalary] = useState(
+    employee.salaryCtc ? String(employee.salaryCtc * 12) : '',
+  );
+  const monthlySalary = annualSalary ? (parseFloat(annualSalary) / 12).toFixed(2) : '';
   const [backgroundEducation, setBackgroundEducation] = useState(
     employee.backgroundEducation || '',
   );
@@ -145,6 +151,12 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
     e.preventDefault();
     if (!fullName || !phone) {
       showError({ message: 'Full Name and Primary Phone Number are required.' });
+      return;
+    }
+    const panError = getPanFormatError(panNumber);
+    const aadhaarError = getAadhaarFormatError(aadhaarNumber);
+    if (panError || aadhaarError) {
+      showError({ message: panError || aadhaarError || 'Invalid government ID format.' });
       return;
     }
 
@@ -180,7 +192,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
         report_required: reportRequired,
         reporting_manager_id: reportingManagerId || undefined,
         date_of_joining: dateOfJoining || undefined,
-        salary_ctc: salaryCtc || undefined,
+        salary_ctc: monthlySalary || undefined,
         background_education: backgroundEducation || undefined,
 
         bank_name: bankName || undefined,
@@ -522,9 +534,18 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                       type="text"
                       value={panNumber}
                       onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
-                      className="w-full p-3 pl-10 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500 font-mono uppercase"
+                      className={`w-full p-3 pl-10 border rounded-xl focus:ring-2 font-mono uppercase ${
+                        getPanFormatError(panNumber)
+                          ? 'border-danger-400 focus:ring-danger-400'
+                          : 'border-slate-300 focus:ring-navy-500'
+                      }`}
                     />
                   </div>
+                  {getPanFormatError(panNumber) && (
+                    <p className="text-[11px] text-danger-600 mt-1">
+                      {getPanFormatError(panNumber)}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -537,9 +558,18 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                       type="text"
                       value={aadhaarNumber}
                       onChange={(e) => setAadhaarNumber(e.target.value)}
-                      className="w-full p-3 pl-10 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500"
+                      className={`w-full p-3 pl-10 border rounded-xl focus:ring-2 ${
+                        getAadhaarFormatError(aadhaarNumber)
+                          ? 'border-danger-400 focus:ring-danger-400'
+                          : 'border-slate-300 focus:ring-navy-500'
+                      }`}
                     />
                   </div>
+                  {getAadhaarFormatError(aadhaarNumber) && (
+                    <p className="text-[11px] text-danger-600 mt-1">
+                      {getAadhaarFormatError(aadhaarNumber)}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -622,17 +652,22 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Salary (CTC)
+                    Annual Salary (₹)
                   </label>
                   <div className="relative">
                     <DollarSign className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
                     <input
                       type="number"
-                      value={salaryCtc}
-                      onChange={(e) => setSalaryCtc(e.target.value)}
+                      value={annualSalary}
+                      onChange={(e) => setAnnualSalary(e.target.value)}
                       className="w-full p-3 pl-10 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500"
                     />
                   </div>
+                  {monthlySalary && (
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Monthly Salary: ₹{Number(monthlySalary).toLocaleString('en-IN')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="col-span-1 md:col-span-2">

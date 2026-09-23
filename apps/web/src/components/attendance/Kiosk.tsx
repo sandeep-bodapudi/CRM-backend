@@ -18,6 +18,7 @@ import {
 import { API_BASE_URL } from '../../config';
 import { ScanResult } from '../../types';
 import jsQR from 'jsqr';
+import { getTimeBasedGreeting } from '../../utils/greeting';
 
 type KioskMode = 'KIOSK_LOGIN' | 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
 
@@ -496,12 +497,7 @@ export const Kiosk: React.FC = () => {
             </div>
 
             <h2 className="text-3xl font-bold text-white mb-1">
-              {(() => {
-                const hour = new Date().getHours();
-                if (hour < 12) return `Good morning, ${scanResult.name}`;
-                if (hour < 17) return `Good afternoon, ${scanResult.name}`;
-                return `Good evening, ${scanResult.name}`;
-              })()}
+              {getTimeBasedGreeting()}, {scanResult.name}
             </h2>
             <p className="text-slate-400 font-medium mb-6">
               {scanResult.type === 'LOG_IN'

@@ -9,7 +9,9 @@ export interface WhatsAppContext {
   property_location?: string;
   property_price?: string;
   property_code?: string;
+  property_url?: string;
   pm_name?: string;
+  pm_phone?: string;
   agent_name?: string;
   visit_date?: string;
   visit_time?: string;
@@ -25,7 +27,7 @@ export const useWhatsApp = () => {
   const sendWhatsAppMessage = async (
     templateKey: string,
     phone: string,
-    context?: WhatsAppContext
+    context?: WhatsAppContext,
   ) => {
     try {
       const url = `${API_BASE_URL}/whatsapp/resolve`;
@@ -36,10 +38,10 @@ export const useWhatsApp = () => {
         body: JSON.stringify({
           template_key: templateKey,
           phone,
-          context: context || {}
-        })
+          context: context || {},
+        }),
       });
-      
+
       if (!res.ok) {
         if (res.status === 403) {
           throw new Error('Permission denied. You cannot generate this message.');
