@@ -238,12 +238,38 @@ model Company {
   pm_location_assignments PMLocationAssignment[]
   website_accounts        WebsiteAccount[]
   website_activity        WebsiteActivityEvent[]
+  // Superseded by the Offer model below (multi-image carousel + audience
+  // targeting) — left in place, unused, rather than dropped, so an old
+  // deploy still reading these columns doesn't break.
   announcement_image_url  String?                @db.Text
   announcement_active     Boolean                @default(false)
+  offers                  Offer[]
 
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
+}
+
+enum OfferAudience {
+  ALL
+  EMPLOYEES
+  CHANNEL_PARTNERS
+}
+
+model Offer {
+  id         Int           @id @default(autoincrement())
+  company_id Int
+  image_url  String        @db.Text
+  audience   OfferAudience @default(ALL)
+  active     Boolean       @default(true)
+  sort_order Int           @default(0)
+
+  company Company @relation(fields: [company_id], references: [id])
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([company_id, active])
 }
 
 model Branch {

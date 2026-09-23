@@ -1,43 +1,112 @@
-import React, { useState, useEffect } from 'react';
-import { Image, ToggleLeft, ToggleRight, Check } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Image, Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 import { mediaUrl } from '../../utils/imageUtils';
 
+interface Offer {
+  id: number;
+  image_url: string;
+  audience: 'ALL' | 'EMPLOYEES' | 'CHANNEL_PARTNERS';
+  active: boolean;
+  sort_order: number;
+}
+
+const AUDIENCE_LABELS: Record<Offer['audience'], string> = {
+  ALL: 'Everyone',
+  EMPLOYEES: 'Employees Only',
+  CHANNEL_PARTNERS: 'CPs & Associates Only',
+};
+
 export const BannerControlWidget: React.FC = () => {
   const { fetchWithAuth } = useAuth();
-  const [imageUrl, setImageUrl] = useState('');
-  const [active, setActive] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [newImageUrl, setNewImageUrl] = useState('');
+  const [newAudience, setNewAudience] = useState<Offer['audience']>('ALL');
+  const [isAdding, setIsAdding] = useState(false);
 
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/announcement`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.imageUrl) setImageUrl(data.imageUrl);
-        if (data.active !== undefined) setActive(data.active);
-      })
-      .catch((err) => console.error(err));
-  }, []);
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSaveSuccess(false);
+  const fetchOffers = async () => {
+    setIsLoading(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/announcement`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl, active }),
-      });
+      const res = await fetchWithAuth(`${API_BASE_URL}/offers/admin`);
       if (res.ok) {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        const data = await res.json();
+        setOffers(data.offers || []);
       }
     } catch (e) {
       console.error(e);
     } finally {
-      setIsSaving(false);
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOffers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleAdd = async () => {
+    if (!newImageUrl.trim()) return;
+    setIsAdding(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/offers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_url: newImageUrl.trim(),
+          audience: newAudience,
+          active: true,
+          sort_order: offers.length,
+        }),
+      });
+      if (res.ok) {
+        setNewImageUrl('');
+        setNewAudience('ALL');
+        fetchOffers();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleToggleActive = async (offer: Offer) => {
+    setOffers((prev) => prev.map((o) => (o.id === offer.id ? { ...o, active: !o.active } : o)));
+    try {
+      await fetchWithAuth(`${API_BASE_URL}/offers/${offer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !offer.active }),
+      });
+    } catch (e) {
+      console.error(e);
+      fetchOffers();
+    }
+  };
+
+  const handleAudienceChange = async (offer: Offer, audience: Offer['audience']) => {
+    setOffers((prev) => prev.map((o) => (o.id === offer.id ? { ...o, audience } : o)));
+    try {
+      await fetchWithAuth(`${API_BASE_URL}/offers/${offer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audience }),
+      });
+    } catch (e) {
+      console.error(e);
+      fetchOffers();
+    }
+  };
+
+  const handleDelete = async (offer: Offer) => {
+    setOffers((prev) => prev.filter((o) => o.id !== offer.id));
+    try {
+      await fetchWithAuth(`${API_BASE_URL}/offers/${offer.id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+      fetchOffers();
     }
   };
 
@@ -45,69 +114,97 @@ export const BannerControlWidget: React.FC = () => {
     <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
       <div className="flex items-center gap-2 mb-4">
         <Image className="w-5 h-5 text-navy-500" />
-        <h3 className="font-extrabold text-slate-900 text-lg">Global Announcement Banner</h3>
+        <h3 className="font-extrabold text-slate-900 text-lg">Offers Carousel</h3>
       </div>
       <p className="text-xs text-slate-500 mb-6">
-        Configure the image banner that appears at the top of every dashboard. Recommended
-        dimensions: <strong>1200x200 pixels</strong> (or similar wide aspect ratio without
-        compression).
+        Add one or more offer images shown as a rotating carousel at the top of every dashboard.
+        Target each offer to everyone, employees only, or channel partners & associates only.
+        Recommended dimensions: <strong>1200x200 pixels</strong>.
       </p>
 
-      <div className="space-y-4">
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">Image URL</label>
-          <input
-            type="text"
-            placeholder="https://example.com/banner.jpg"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            className="w-full px-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-500"
-          />
-        </div>
-
-        <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
-          <div>
-            <span className="block text-sm font-bold text-slate-900">Banner Status</span>
-            <span className="text-[10px] text-slate-500">Toggle visibility across all apps</span>
+      <div className="space-y-3 mb-6">
+        {isLoading ? (
+          <div className="text-xs text-slate-400 py-4 text-center">Loading offers...</div>
+        ) : offers.length === 0 ? (
+          <div className="text-xs text-slate-400 py-4 text-center">
+            No offers yet. Add one below.
           </div>
-          <button
-            onClick={() => setActive(!active)}
-            className={`p-1 rounded-full transition-colors ${active ? 'text-emerald-500' : 'text-slate-400'}`}
-          >
-            {active ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
-          </button>
-        </div>
-
-        {imageUrl && active && (
-          <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-500 border-b border-slate-200">
-              Preview
+        ) : (
+          offers.map((offer) => (
+            <div
+              key={offer.id}
+              className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200"
+            >
+              <img
+                src={mediaUrl(offer.image_url)}
+                alt="Offer preview"
+                className="w-20 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-slate-500 truncate">{offer.image_url}</p>
+                <select
+                  value={offer.audience}
+                  onChange={(e) => handleAudienceChange(offer, e.target.value as Offer['audience'])}
+                  className="mt-1 text-xs font-semibold border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-navy-500"
+                >
+                  {Object.entries(AUDIENCE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={() => handleToggleActive(offer)}
+                title={offer.active ? 'Active — click to disable' : 'Inactive — click to enable'}
+                className={`p-1 rounded-full transition-colors shrink-0 ${offer.active ? 'text-emerald-500' : 'text-slate-400'}`}
+              >
+                {offer.active ? (
+                  <ToggleRight className="w-7 h-7" />
+                ) : (
+                  <ToggleLeft className="w-7 h-7" />
+                )}
+              </button>
+              <button
+                onClick={() => handleDelete(offer)}
+                title="Delete offer"
+                className="p-1.5 text-danger-500 hover:bg-danger-50 rounded-lg transition-colors shrink-0"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
-            <img
-              src={mediaUrl(imageUrl)}
-              alt="Preview"
-              className="w-full h-auto max-h-[150px] object-cover"
-            />
-          </div>
+          ))
         )}
+      </div>
 
-        <div className="pt-2">
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="w-full py-2.5 bg-navy-600 hover:bg-navy-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors flex items-center justify-center gap-2"
-          >
-            {isSaving ? (
-              'Saving...'
-            ) : saveSuccess ? (
-              <>
-                <Check className="w-4 h-4" /> Saved Successfully
-              </>
-            ) : (
-              'Save Banner Settings'
-            )}
-          </button>
-        </div>
+      <div className="pt-3 border-t border-slate-200 space-y-3">
+        <label className="block text-xs font-bold text-slate-700">Add New Offer</label>
+        <input
+          type="text"
+          placeholder="https://example.com/offer.jpg"
+          value={newImageUrl}
+          onChange={(e) => setNewImageUrl(e.target.value)}
+          className="w-full px-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-500"
+        />
+        <select
+          value={newAudience}
+          onChange={(e) => setNewAudience(e.target.value as Offer['audience'])}
+          className="w-full px-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-500"
+        >
+          {Object.entries(AUDIENCE_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={handleAdd}
+          disabled={isAdding || !newImageUrl.trim()}
+          className="w-full py-2.5 bg-navy-600 hover:bg-navy-700 text-white font-bold text-sm rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          <Plus className="w-4 h-4" />
+          {isAdding ? 'Adding...' : 'Add Offer'}
+        </button>
       </div>
     </div>
   );

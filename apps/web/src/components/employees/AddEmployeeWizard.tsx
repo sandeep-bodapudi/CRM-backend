@@ -28,6 +28,7 @@ import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { useToast } from '../../context/ToastContext';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
+import { getPanFormatError, getAadhaarFormatError } from '../../utils/idValidation';
 
 // Mirrors apps/api/src/shared/employee.ts's initial_password Zod schema
 // exactly, so a weak password is caught here instead of failing late after
@@ -475,9 +476,18 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
                       type="text"
                       value={panNumber}
                       onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
-                      className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500 font-mono uppercase"
+                      className={`w-full p-3 border rounded-xl focus:ring-2 font-mono uppercase ${
+                        getPanFormatError(panNumber)
+                          ? 'border-danger-400 focus:ring-danger-400'
+                          : 'border-slate-300 focus:ring-navy-500'
+                      }`}
                       placeholder="ABCDE1234F"
                     />
+                    {getPanFormatError(panNumber) && (
+                      <p className="text-[11px] text-danger-600 mt-1">
+                        {getPanFormatError(panNumber)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -487,9 +497,18 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
                       type="text"
                       value={aadhaarNumber}
                       onChange={(e) => setAadhaarNumber(e.target.value)}
-                      className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500 font-mono tracking-widest"
+                      className={`w-full p-3 border rounded-xl focus:ring-2 font-mono tracking-widest ${
+                        getAadhaarFormatError(aadhaarNumber)
+                          ? 'border-danger-400 focus:ring-danger-400'
+                          : 'border-slate-300 focus:ring-navy-500'
+                      }`}
                       placeholder="1234 5678 9012"
                     />
+                    {getAadhaarFormatError(aadhaarNumber) && (
+                      <p className="text-[11px] text-danger-600 mt-1">
+                        {getAadhaarFormatError(aadhaarNumber)}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -880,7 +899,11 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
             {step < 5 ? (
               <button
                 onClick={handleNext}
-                disabled={step === 1 && (!fullName || !phone || !addBranchId)}
+                disabled={
+                  (step === 1 && (!fullName || !phone || !addBranchId)) ||
+                  (step === 2 &&
+                    (!!getPanFormatError(panNumber) || !!getAadhaarFormatError(aadhaarNumber)))
+                }
                 className="px-8 py-3 bg-navy-700 text-white font-bold rounded-xl shadow-md hover:bg-navy-800 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 Continue <ArrowRight className="w-4 h-4" />

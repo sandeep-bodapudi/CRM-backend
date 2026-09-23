@@ -49,6 +49,7 @@ import adminRoutes from './routes/admin';
 import expenseRefundRoutes from './routes/expenseRefunds';
 import pushRoutes from './routes/pushSubscriptions';
 import announcementRoutes from './routes/announcement';
+import offerRoutes from './routes/offers';
 import bookingRoutes from './routes/booking.routes';
 import paymentRoutes from './routes/payment.routes';
 import integrationRoutes from './routes/integration.routes';
@@ -238,6 +239,7 @@ if (mountInternal) {
   app.use('/api/v1/expense-refunds', expenseRefundRoutes);
   app.use('/api/v1/push', pushRoutes);
   app.use('/api/v1/announcement', announcementRoutes);
+  app.use('/api/v1/offers', offerRoutes);
   app.use('/api/v1/bookings', bookingRoutes);
   app.use('/api/v1/payments', paymentRoutes);
   app.use('/api/v1/integration', integrationRoutes);

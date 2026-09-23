@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getPanFormatError, getAadhaarFormatError } from '../../utils/idValidation';
 import {
   Building2,
   User,
@@ -150,6 +151,12 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
     e.preventDefault();
     if (!fullName || !phone) {
       showError({ message: 'Full Name and Primary Phone Number are required.' });
+      return;
+    }
+    const panError = getPanFormatError(panNumber);
+    const aadhaarError = getAadhaarFormatError(aadhaarNumber);
+    if (panError || aadhaarError) {
+      showError({ message: panError || aadhaarError || 'Invalid government ID format.' });
       return;
     }
 
@@ -527,9 +534,18 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                       type="text"
                       value={panNumber}
                       onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
-                      className="w-full p-3 pl-10 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500 font-mono uppercase"
+                      className={`w-full p-3 pl-10 border rounded-xl focus:ring-2 font-mono uppercase ${
+                        getPanFormatError(panNumber)
+                          ? 'border-danger-400 focus:ring-danger-400'
+                          : 'border-slate-300 focus:ring-navy-500'
+                      }`}
                     />
                   </div>
+                  {getPanFormatError(panNumber) && (
+                    <p className="text-[11px] text-danger-600 mt-1">
+                      {getPanFormatError(panNumber)}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -542,9 +558,18 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                       type="text"
                       value={aadhaarNumber}
                       onChange={(e) => setAadhaarNumber(e.target.value)}
-                      className="w-full p-3 pl-10 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500"
+                      className={`w-full p-3 pl-10 border rounded-xl focus:ring-2 ${
+                        getAadhaarFormatError(aadhaarNumber)
+                          ? 'border-danger-400 focus:ring-danger-400'
+                          : 'border-slate-300 focus:ring-navy-500'
+                      }`}
                     />
                   </div>
+                  {getAadhaarFormatError(aadhaarNumber) && (
+                    <p className="text-[11px] text-danger-600 mt-1">
+                      {getAadhaarFormatError(aadhaarNumber)}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
