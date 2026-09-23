@@ -3,12 +3,42 @@ import { Router, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { Roles } from '../shared';
+import { memoryUpload, getStorageService } from '../services/storage.service';
 
 const router = Router();
 
 router.use(authenticateToken);
 
 const isManager = (roles: string[]) => roles.includes(Roles.MD) || roles.includes(Roles.ADMIN);
+
+// POST /api/v1/offers/upload-image — MD/Admin only. Uploads an image file to
+// storage and returns its public URL, for the "Add New Offer" form to then
+// POST /offers with — kept as a separate step (rather than accepting the
+// file directly on offer creation) so the same endpoint also covers
+// re-uploading an image for an existing offer from the admin UI.
+router.post('/upload-image', async (req: AuthenticatedRequest, res: Response) => {
+  if (!isManager(req.user!.roles)) {
+    return res.status(403).json({ error: 'Only MD and Admin can manage offers' });
+  }
+  (memoryUpload.single('image') as any)(req, res, async (err: any) => {
+    if (err) {
+      logger.error('Multer error (offer image upload):', err);
+      return res.status(400).json({ error: err.message || 'File upload failed' });
+    }
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: 'No image file provided.' });
+      }
+      const storageService = getStorageService('offers');
+      const imageUrl = await storageService.upload(file.buffer, file.originalname, file.mimetype);
+      return res.status(201).json({ image_url: imageUrl });
+    } catch (error) {
+      logger.error('Error uploading offer image:', error);
+      return res.status(500).json({ error: 'Failed to upload image' });
+    }
+  });
+});
 
 // GET /api/v1/offers
 // Active offers targeted at the caller's audience, for the dashboard carousel.

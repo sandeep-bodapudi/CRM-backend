@@ -167,6 +167,9 @@ const expenseProofsDir = path.join(uploadDir, 'expense-proofs');
 const projectsLayoutDir = path.join(uploadDir, 'projects-layout');
 const projectsMediaDir = path.join(uploadDir, 'projects-media');
 const projectsDocumentsDir = path.join(uploadDir, 'projects-documents');
+// Dashboard offer-carousel images, uploaded via getStorageService('offers')
+// — public the same way property/project media is, no sensitive data.
+const offersDir = path.join(uploadDir, 'offers');
 
 if (!fs.existsSync(propertiesDir)) fs.mkdirSync(propertiesDir, { recursive: true });
 if (!fs.existsSync(profilesDir)) fs.mkdirSync(profilesDir, { recursive: true });
@@ -174,12 +177,14 @@ if (!fs.existsSync(expenseProofsDir)) fs.mkdirSync(expenseProofsDir, { recursive
 if (!fs.existsSync(projectsLayoutDir)) fs.mkdirSync(projectsLayoutDir, { recursive: true });
 if (!fs.existsSync(projectsMediaDir)) fs.mkdirSync(projectsMediaDir, { recursive: true });
 if (!fs.existsSync(projectsDocumentsDir)) fs.mkdirSync(projectsDocumentsDir, { recursive: true });
+if (!fs.existsSync(offersDir)) fs.mkdirSync(offersDir, { recursive: true });
 
 app.use('/uploads/properties', express.static(propertiesDir));
 app.use('/uploads/profiles', express.static(profilesDir));
 app.use('/uploads/projects-layout', express.static(projectsLayoutDir));
 app.use('/uploads/projects-media', express.static(projectsMediaDir));
 app.use('/uploads/projects-documents', express.static(projectsDocumentsDir));
+app.use('/uploads/offers', express.static(offersDir));
 // expense-proofs is intentionally NOT served statically — these are private
 // financial documents. They're only served via the authenticated,
 // ownership-checked GET /expense-refunds/:id/proof route (expenseRefunds.ts),
