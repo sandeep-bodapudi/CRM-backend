@@ -130,7 +130,12 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
   const [dateOfJoining, setDateOfJoining] = useState(
     employee.dateOfJoining ? new Date(employee.dateOfJoining).toISOString().split('T')[0] : '',
   );
-  const [salaryCtc, setSalaryCtc] = useState(employee.salaryCtc ? String(employee.salaryCtc) : '');
+  // `employee.salaryCtc` is the stored MONTHLY figure (see AddEmployeeWizard
+  // for why) — this form edits Annual Salary and converts back to monthly.
+  const [annualSalary, setAnnualSalary] = useState(
+    employee.salaryCtc ? String(employee.salaryCtc * 12) : '',
+  );
+  const monthlySalary = annualSalary ? (parseFloat(annualSalary) / 12).toFixed(2) : '';
   const [backgroundEducation, setBackgroundEducation] = useState(
     employee.backgroundEducation || '',
   );
@@ -180,7 +185,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
         report_required: reportRequired,
         reporting_manager_id: reportingManagerId || undefined,
         date_of_joining: dateOfJoining || undefined,
-        salary_ctc: salaryCtc || undefined,
+        salary_ctc: monthlySalary || undefined,
         background_education: backgroundEducation || undefined,
 
         bank_name: bankName || undefined,
@@ -622,17 +627,22 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Salary (CTC)
+                    Annual Salary (₹)
                   </label>
                   <div className="relative">
                     <DollarSign className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
                     <input
                       type="number"
-                      value={salaryCtc}
-                      onChange={(e) => setSalaryCtc(e.target.value)}
+                      value={annualSalary}
+                      onChange={(e) => setAnnualSalary(e.target.value)}
                       className="w-full p-3 pl-10 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500"
                     />
                   </div>
+                  {monthlySalary && (
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Monthly Salary: ₹{Number(monthlySalary).toLocaleString('en-IN')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="col-span-1 md:col-span-2">

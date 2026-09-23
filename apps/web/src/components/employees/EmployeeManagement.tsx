@@ -976,10 +976,20 @@ export const EmployeeManagement: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">
-                        Monthly Salary CTC
+                        Monthly Salary
                       </span>
                       <span className="font-mono font-extrabold text-navy-800 text-sm">
                         {formatSalaryRange(dossierEmp.salaryCtc)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                        Annual Salary
+                      </span>
+                      <span className="font-mono font-extrabold text-navy-800 text-sm">
+                        {formatSalaryRange(
+                          dossierEmp.salaryCtc ? dossierEmp.salaryCtc * 12 : dossierEmp.salaryCtc,
+                        )}
                       </span>
                     </div>
                   </div>

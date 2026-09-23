@@ -253,13 +253,6 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     requiredPermission: Permissions.CUSTOMERS_READ,
   },
   {
-    id: 'complaints',
-    label: 'Complaints',
-    icon: MessageSquareWarning,
-    path: '/complaints',
-    requiredPermission: Permissions.COMPLAINTS_READ,
-  },
-  {
     id: 'site-visits',
     label: 'Site Visits',
     icon: CalendarCheck,
@@ -474,6 +467,15 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   // group an item is nested under, so a mislabeled group here mislabels it
   // in both places at once.
   { id: 'group-account', label: 'ACCOUNT', group: true, icon: undefined },
+  {
+    id: 'complaints',
+    label: 'Complaints',
+    icon: MessageSquareWarning,
+    path: '/complaints',
+    // Everyone can file a complaint; the page itself hides the queue from
+    // anyone without COMPLAINTS_READ (MD/Admin/HR only).
+    requiredPermission: Permissions.COMPLAINTS_CREATE,
+  },
   { id: 'settings', label: 'Settings', icon: Settings2, path: '/settings' },
   { id: 'profile', label: 'Profile', icon: UserCircle, path: '/profile' },
   { id: 'faq', label: 'Help & FAQ', icon: HelpCircle, path: '/faq' },

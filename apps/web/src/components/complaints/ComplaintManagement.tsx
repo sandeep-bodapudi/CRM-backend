@@ -12,7 +12,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { Roles } from '../../shared';
+import { Permissions } from '../../shared';
 import { API_BASE_URL } from '../../config';
 import { DataTable, ColumnDef } from '../ui/DataTable';
 
@@ -85,7 +85,7 @@ const NEXT_STATUS: Record<string, string[]> = {
 };
 
 export const ComplaintManagement: React.FC = () => {
-  const { fetchWithAuth, activeRole } = useAuth();
+  const { fetchWithAuth, user } = useAuth();
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,18 +111,12 @@ export const ComplaintManagement: React.FC = () => {
   const [resolutionText, setResolutionText] = useState('');
   const [isResolving, setIsResolving] = useState(false);
 
-  const canCreate = (
-    [Roles.MD, Roles.ADMIN, Roles.PROJECT_MANAGER, Roles.AGENT] as string[]
-  ).includes(activeRole);
-  const canManage = (
-    [
-      Roles.MD,
-      Roles.ADMIN,
-      Roles.PROJECT_MANAGER,
-      Roles.AGENT,
-      Roles.DIGITAL_LEAD_OPERATOR,
-    ] as string[]
-  ).includes(activeRole);
+  // Everyone can file a complaint; only MD/Admin/HR (who hold
+  // COMPLAINTS_READ) can see and work the queue (2026-09-23 product
+  // decision) — these used to be hardcoded role lists that had drifted out
+  // of sync with the actual permission matrix.
+  const canCreate = (user?.permissions || []).includes(Permissions.COMPLAINTS_CREATE);
+  const canManage = (user?.permissions || []).includes(Permissions.COMPLAINTS_READ);
 
   const fetchComplaints = async () => {
     setIsLoading(true);
@@ -152,8 +146,16 @@ export const ComplaintManagement: React.FC = () => {
   // would re-fire this fetch on renders unrelated to the actual filters.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    // A regular employee only has COMPLAINTS_CREATE, not COMPLAINTS_READ —
+    // GET /complaints would 403 for them, so skip it and just show the
+    // "File a Complaint" call-to-action instead of an error state.
+    if (!canManage) {
+      setIsLoading(false);
+      return;
+    }
     fetchComplaints();
-  }, [statusFilter, priorityFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, priorityFilter, canManage]);
 
   const searchCustomers = useCallback(async (q: string) => {
     if (q.trim().length < 2) {
@@ -446,55 +448,70 @@ export const ComplaintManagement: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
-          <div className="text-2xl font-extrabold text-amber-600">{openCount}</div>
-          <div className="text-xs font-semibold text-slate-500 mt-0.5">Open</div>
+      {!canManage ? (
+        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center">
+          <MessageSquareWarning className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+          <p className="text-sm font-semibold text-slate-600">
+            Complaint viewing is limited to MD, Admin and HR.
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Use "New Complaint" above to log an issue on a customer's behalf — management will
+            follow up.
+          </p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
-          <div className="text-2xl font-extrabold text-navy-700">{inProgressCount}</div>
-          <div className="text-xs font-semibold text-slate-500 mt-0.5">In Progress</div>
-        </div>
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
-          <div className="text-2xl font-extrabold text-emerald-600">{resolvedCount}</div>
-          <div className="text-xs font-semibold text-slate-500 mt-0.5">Resolved / Closed</div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 focus:outline-none focus:border-navy-500"
-        >
-          <option value="">All Statuses</option>
-          <option value="OPEN">Open</option>
-          <option value="IN_PROGRESS">In Progress</option>
-          <option value="RESOLVED">Resolved</option>
-          <option value="CLOSED">Closed</option>
-          <option value="REOPENED">Reopened</option>
-        </select>
-        <select
-          value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value)}
-          className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 focus:outline-none focus:border-navy-500"
-        >
-          <option value="">All Priorities</option>
-          <option value="HIGH">High</option>
-          <option value="MEDIUM">Medium</option>
-          <option value="LOW">Low</option>
-        </select>
-      </div>
-
-      {isLoading ? (
-        <div className="py-12 text-center text-slate-500">Loading complaints...</div>
       ) : (
-        <DataTable
-          columns={columns}
-          data={complaints}
-          searchable
-          emptyMessage="No complaints found. Try adjusting your filters or log a new complaint."
-        />
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div className="text-2xl font-extrabold text-amber-600">{openCount}</div>
+              <div className="text-xs font-semibold text-slate-500 mt-0.5">Open</div>
+            </div>
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div className="text-2xl font-extrabold text-navy-700">{inProgressCount}</div>
+              <div className="text-xs font-semibold text-slate-500 mt-0.5">In Progress</div>
+            </div>
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div className="text-2xl font-extrabold text-emerald-600">{resolvedCount}</div>
+              <div className="text-xs font-semibold text-slate-500 mt-0.5">Resolved / Closed</div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 focus:outline-none focus:border-navy-500"
+            >
+              <option value="">All Statuses</option>
+              <option value="OPEN">Open</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="RESOLVED">Resolved</option>
+              <option value="CLOSED">Closed</option>
+              <option value="REOPENED">Reopened</option>
+            </select>
+            <select
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 focus:outline-none focus:border-navy-500"
+            >
+              <option value="">All Priorities</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+          </div>
+
+          {isLoading ? (
+            <div className="py-12 text-center text-slate-500">Loading complaints...</div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={complaints}
+              searchable
+              emptyMessage="No complaints found. Try adjusting your filters or log a new complaint."
+            />
+          )}
+        </>
       )}
 
       {isCreating && (
