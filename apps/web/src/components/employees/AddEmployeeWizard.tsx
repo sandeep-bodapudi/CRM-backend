@@ -168,7 +168,7 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
 
       const data = await res.json();
       if (res.ok) {
-        setCreatedEmployeeCode(data.employee.employee_code);
+        setCreatedEmployeeCode(data.employee.employeeCode);
         setStep(6); // Move to Success screen
       } else {
         await handleApiError(res, showError, data);
