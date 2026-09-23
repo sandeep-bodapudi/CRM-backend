@@ -244,10 +244,15 @@ export async function buildProjectScope(user: TokenPayload): Promise<Prisma.Proj
     };
   }
 
-  // 8. Everyone else (e.g. Telecallers) — only see VERIFIED projects
+  // 8. Everyone else (e.g. Telecallers) — VERIFIED projects, PLUS anything
+  // they personally created. New projects default to DRAFT (see schema),
+  // so without this OR, a role granted PROJECTS_CREATE (e.g. a telecaller)
+  // can successfully POST a new project but then 404s on every request
+  // right after (re-fetch, detail view, edit) until someone else verifies
+  // it. Same bug/fix as buildPropertyScope's equivalent fallback branch.
   return {
     ...baseScope,
-    verification_status: 'VERIFIED',
+    OR: [{ verification_status: 'VERIFIED' }, { created_by_id: user.employeeId }],
   };
 }
 
