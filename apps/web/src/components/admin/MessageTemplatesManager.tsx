@@ -187,15 +187,15 @@ export const MessageTemplatesManager: React.FC = () => {
               <div key={def.key} className="border border-slate-200 rounded-2xl overflow-hidden">
                 <button
                   onClick={() => setExpandedKey(expanded ? null : def.key)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                  className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
                 >
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold text-slate-800">{def.name}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">{def.key}</p>
+                    <p className="text-[10px] text-slate-400 font-mono truncate">{def.key}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
                         customized ? 'bg-navy-100 text-navy-700' : 'bg-amber-100 text-amber-700'
                       }`}
                     >
