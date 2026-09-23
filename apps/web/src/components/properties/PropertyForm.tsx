@@ -189,6 +189,20 @@ function buildPayload(form: PropertyInput, details: Record<DetailKey, any>): any
   // other 6 stay untouched server-side (see subRecordUpdate: undefined = no-op).
   const activeKey = detailKeyForCategory(form.category);
   for (const key of DETAIL_KEYS) payload[key] = key === activeKey ? details[key] || {} : undefined;
+  // A blank "Add Charge" row the user never filled in (no label, no amount)
+  // shouldn't block submission — the backend requires a non-empty label on
+  // every line it receives, so a leftover empty row 500'd with a raw Zod
+  // message ("manual_lines.2.label: String must contain at least 1
+  // character(s)"). Drop those silently; validateStep() below still catches
+  // a row that has an amount but no label, since that one IS a real mistake.
+  if (Array.isArray(payload.manual_lines)) {
+    payload.manual_lines = payload.manual_lines
+      .map((l: { label: string; amount: number; category?: string }) => ({
+        ...l,
+        label: l.label.trim(),
+      }))
+      .filter((l: { label: string; amount: number }) => l.label || l.amount);
+  }
   return payload;
 }
 
@@ -364,8 +378,12 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
           return 'Built-up Area or Carpet Area is required';
       }
     }
-    if (STEPS[s] === 'Pricing' && (!form.base_rate || form.base_rate <= 0))
-      return 'Base rate is required';
+    if (STEPS[s] === 'Pricing') {
+      if (!form.base_rate || form.base_rate <= 0) return 'Base rate is required';
+      const unlabeled = (form.manual_lines || []).findIndex((l) => !l.label.trim() && l.amount);
+      if (unlabeled !== -1)
+        return `Please add a label for the additional charge amount (₹${form.manual_lines![unlabeled].amount}) you entered, or remove that row.`;
+    }
     return null;
   };
 
