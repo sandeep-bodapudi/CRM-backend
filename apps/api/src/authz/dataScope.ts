@@ -159,6 +159,21 @@ export async function buildPropertyScope(user: TokenPayload): Promise<Prisma.Pro
 }
 
 /**
+ * requireAuthz resource loader for `/properties/:id...` routes: the property
+ * if it is inside the caller's read scope, else null (-> 404). Lets
+ * requireAuthz apply PropertyPolicy to mutations on it.
+ */
+export async function loadPropertyInScope(req: {
+  params: Record<string, string>;
+  user?: TokenPayload;
+}) {
+  const propertyId = parseInt(req.params.id, 10);
+  if (isNaN(propertyId) || !req.user) return null;
+  const scope = await buildPropertyScope(req.user);
+  return prisma.property.findFirst({ where: { id: propertyId, ...scope } });
+}
+
+/**
  * Builds the read-visibility scope for Projects.
  *
  * Authorization per Phase 5 docs (03-project-level-authorization.md):

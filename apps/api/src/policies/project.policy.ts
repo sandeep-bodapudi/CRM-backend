@@ -15,6 +15,20 @@ import { Roles, Permissions } from '../shared';
  * TELECALLER / AGENT: Read-only on launched projects (no write rights).
  */
 export class ProjectPolicy {
+  /**
+   * A Project Manager "owns" a record when it is assigned to them, or when
+   * they created it and nobody has been assigned yet -- without the second
+   * case a PM who creates something with no PM set could not edit their own
+   * new record.
+   */
+  private static isOwningPm(
+    user: TokenPayload,
+    rec: { assigned_pm_id: number | null; created_by_id?: number | null },
+  ): boolean {
+    if (rec.assigned_pm_id === user.employeeId) return true;
+    return rec.assigned_pm_id == null && rec.created_by_id === user.employeeId;
+  }
+
   private static isManagement(user: TokenPayload): boolean {
     return user.roles.some((r) =>
       [
@@ -24,7 +38,7 @@ export class ProjectPolicy {
         Roles.MARKETING_DIRECTOR,
         Roles.DIGITAL_LEAD_OPERATOR,
         Roles.DIGITAL_MARKETING_HEAD,
-      ].includes(r as any)
+      ].includes(r as any),
     );
   }
 
@@ -34,7 +48,10 @@ export class ProjectPolicy {
    * - Project Manager: may only read projects explicitly assigned to them.
    * - Telecaller/Agent: may read non-PLANNING, non-CANCELLED projects (read-only for pitching).
    */
-  static canRead(user: TokenPayload, project: { company_id: number; assigned_pm_id: number | null; status: string }): boolean {
+  static canRead(
+    user: TokenPayload,
+    project: { company_id: number; assigned_pm_id: number | null; status: string },
+  ): boolean {
     // Cross-company access is always forbidden (except Admin who has no company_id restriction)
     if (!user.roles.includes(Roles.ADMIN) && project.company_id !== user.companyId) {
       return false;
@@ -52,7 +69,7 @@ export class ProjectPolicy {
 
     // Project Manager: ONLY explicitly assigned projects
     if (user.roles.includes(Roles.PROJECT_MANAGER)) {
-      return project.assigned_pm_id === user.employeeId;
+      return this.isOwningPm(user, project);
     }
 
     // Telecaller / Agent: read launched projects (UNDER_CONSTRUCTION or COMPLETED)
@@ -78,7 +95,10 @@ export class ProjectPolicy {
    * - Project Manager: may ONLY update projects explicitly assigned to them.
    * - Telecaller/Agent: NO write access to projects.
    */
-  static canUpdate(user: TokenPayload, project: { company_id: number; assigned_pm_id: number | null }): boolean {
+  static canUpdate(
+    user: TokenPayload,
+    project: { company_id: number; assigned_pm_id: number | null },
+  ): boolean {
     if (!(user.permissions || []).includes(Permissions.PROJECTS_UPDATE)) {
       return false;
     }
@@ -90,7 +110,7 @@ export class ProjectPolicy {
 
     // Project Manager: assignment-based
     if (user.roles.includes(Roles.PROJECT_MANAGER)) {
-      return project.assigned_pm_id === user.employeeId;
+      return this.isOwningPm(user, project);
     }
 
     return false;
@@ -100,7 +120,10 @@ export class ProjectPolicy {
    * Determines whether a user may delete (archive/cancel) a specific Project.
    * Same rules as canUpdate.
    */
-  static canDelete(user: TokenPayload, project: { company_id: number; assigned_pm_id: number | null }): boolean {
+  static canDelete(
+    user: TokenPayload,
+    project: { company_id: number; assigned_pm_id: number | null },
+  ): boolean {
     if (!(user.permissions || []).includes(Permissions.PROJECTS_DELETE)) {
       return false;
     }
@@ -112,7 +135,7 @@ export class ProjectPolicy {
 
     // Project Manager: assignment-based
     if (user.roles.includes(Roles.PROJECT_MANAGER)) {
-      return project.assigned_pm_id === user.employeeId;
+      return this.isOwningPm(user, project);
     }
 
     return false;

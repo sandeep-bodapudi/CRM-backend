@@ -159,6 +159,21 @@ router.get(
     try {
       const id = parseInt(req.params.id, 10);
       const proofUrl = await ExpenseRefundService.getProof(req.user!, id);
+
+      // Remote storage (STORAGE_DRIVER=sftp/ftp) stores a full URL, which the
+      // local-disk lookup below could never find (always 404). Fetch it
+      // through the storage driver and stream it back here, so the proof is
+      // still only served through this authenticated, ownership-checked route.
+      if (/^https?:\/\//i.test(proofUrl)) {
+        try {
+          const buffer = await getStorageService('expense-proofs').download(proofUrl);
+          res.type(path.extname(new URL(proofUrl).pathname) || 'application/octet-stream');
+          return res.send(buffer);
+        } catch {
+          return res.status(404).json({ error: 'Proof image file not found on server.' });
+        }
+      }
+
       // proofUrl is "/uploads/<subdir>/<file>" (LocalStorageService); resolve
       // it against the same UPLOAD_DIR the file was written to, not cwd.
       const relative = proofUrl.replace(/^\/?uploads\//, '');

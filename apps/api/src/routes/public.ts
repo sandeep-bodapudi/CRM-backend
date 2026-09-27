@@ -606,6 +606,9 @@ router.get('/:brand/projects', async (req: any, res: Response) => {
 
     const projects = await p.project.findMany({
       where: {
+        // Scoped to the API key's company -- companyId was read but never
+        // used, so each brand's site listed the other company's projects too.
+        company_id: companyId,
         is_published: true,
         status: { not: 'CANCELLED' },
       },
@@ -661,7 +664,7 @@ router.get('/:brand/projects/:id', async (req: any, res: Response) => {
     const companyId = req.apiKeyContext.company_id;
 
     const project = await p.project.findFirst({
-      where: { id: projectId, is_published: true },
+      where: { id: projectId, company_id: companyId, is_published: true },
       select: PUBLIC_PROJECT_DETAIL_SELECT,
     });
 

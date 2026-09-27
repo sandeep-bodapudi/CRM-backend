@@ -4,7 +4,7 @@ import { Response, NextFunction, Router } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../../middleware/auth';
 import { requireAuthz } from '../../middleware/authz';
 import { PropertyImageMetadataSchema, EmptyBodySchema, Permissions } from '../../shared';
-import { buildPropertyScope } from '../../authz/dataScope';
+import { buildPropertyScope, loadPropertyInScope } from '../../authz/dataScope';
 import { validateRequestBody } from '../../middleware/validate';
 import { propertyImageUpload, getPropertyImageStorage } from '../../services/storage.service';
 import { Prisma } from '@prisma/client';
@@ -17,7 +17,7 @@ const p = prisma;
 router.post(
   '/:id/images',
   authenticateToken,
-  requireAuthz(Permissions.PROPERTIES_UPDATE),
+  requireAuthz(Permissions.PROPERTIES_UPDATE, loadPropertyInScope),
   propertyImageUpload.single('image') as any,
   validateRequestBody(PropertyImageMetadataSchema),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -86,7 +86,7 @@ router.post(
 router.put(
   '/:id/images/:imageId',
   authenticateToken,
-  requireAuthz(Permissions.PROPERTIES_UPDATE),
+  requireAuthz(Permissions.PROPERTIES_UPDATE, loadPropertyInScope),
   validateRequestBody(PropertyImageMetadataSchema),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
@@ -164,7 +164,7 @@ router.put(
 router.delete(
   '/:id/images/:imageId',
   authenticateToken,
-  requireAuthz(Permissions.PROPERTIES_UPDATE),
+  requireAuthz(Permissions.PROPERTIES_UPDATE, loadPropertyInScope),
   validateRequestBody(EmptyBodySchema),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {

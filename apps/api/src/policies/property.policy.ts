@@ -3,6 +3,20 @@ import { Roles, Permissions } from '../shared';
 import { Property } from '@prisma/client';
 
 export class PropertyPolicy {
+  /**
+   * A Project Manager "owns" a record when it is assigned to them, or when
+   * they created it and nobody has been assigned yet -- without the second
+   * case a PM who creates something with no PM set could not edit their own
+   * new record.
+   */
+  private static isOwningPm(
+    user: TokenPayload,
+    rec: { assigned_pm_id: number | null; created_by_id?: number | null },
+  ): boolean {
+    if (rec.assigned_pm_id === user.employeeId) return true;
+    return rec.assigned_pm_id == null && rec.created_by_id === user.employeeId;
+  }
+
   private static isManagement(user: TokenPayload): boolean {
     return user.roles.some((r) =>
       [
@@ -43,7 +57,7 @@ export class PropertyPolicy {
       return true;
     }
     if (user.roles.includes(Roles.PROJECT_MANAGER)) {
-      return property.assigned_pm_id === user.employeeId;
+      return this.isOwningPm(user, property);
     }
     return false;
   }
@@ -63,7 +77,7 @@ export class PropertyPolicy {
       return true;
     }
     if (user.roles.includes(Roles.PROJECT_MANAGER)) {
-      return property.assigned_pm_id === user.employeeId;
+      return this.isOwningPm(user, property);
     }
     return false;
   }

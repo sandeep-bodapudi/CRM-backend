@@ -141,7 +141,15 @@ router.post(
 router.put(
   '/:id',
   authenticateToken,
-  requireAuthz(Permissions.PROPERTIES_UPDATE),
+  // Loads the property so requireAuthz can apply PropertyPolicy.canUpdate
+  // (a Project Manager may only edit properties assigned to them). Without
+  // it, any PM could edit every LIVE property in their read scope.
+  requireAuthz(Permissions.PROPERTIES_UPDATE, async (req: AuthenticatedRequest) => {
+    const propertyId = parseInt(req.params.id, 10);
+    if (isNaN(propertyId)) return null;
+    const scope = await buildPropertyScope(req.user!);
+    return await prisma.property.findFirst({ where: { id: propertyId, ...scope } });
+  }),
   validateRequestBody(PropertyUpdateSchema),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {

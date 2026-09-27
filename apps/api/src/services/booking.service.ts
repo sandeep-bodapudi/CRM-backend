@@ -286,8 +286,22 @@ export class BookingService {
     if (status === 'CONFIRMED') {
       return BookingService.confirmBooking(user, id);
     }
+    // Likewise CANCELLED goes through the real cancellation, which releases
+    // the inventory it holds -- a plain status write here left the unit
+    // locked/BOOKED against a cancelled booking.
+    if (status === 'CANCELLED') {
+      return BookingService.cancelBooking(user, id);
+    }
 
-    await BookingService.getBookingById(user, id);
+    const booking = await BookingService.getBookingById(user, id);
+    const allowedFrom: Record<string, string[]> = {
+      TOKEN_RECEIVED: ['PENDING'],
+      COMPLETED: ['CONFIRMED'],
+    };
+    const allowed = allowedFrom[status];
+    if (allowed && !allowed.includes(booking.status)) {
+      throw new AppError(409, `Cannot move a ${booking.status} booking to ${status}`);
+    }
     return prisma.booking.update({ where: { id }, data: { status } });
   }
 
@@ -298,6 +312,14 @@ export class BookingService {
     }
 
     const booking = await BookingService.getBookingById(user, id);
+
+    // Only a live, not-yet-confirmed booking can be confirmed. Without this a
+    // CANCELLED booking could be confirmed (re-marking its released unit as
+    // BOOKED), and re-confirming a CONFIRMED one wrote a fresh set of
+    // PROPERTY_BOOKED_CONTRIBUTION events each time, inflating performance.
+    if (!['PENDING', 'TOKEN_RECEIVED'].includes(booking.status)) {
+      throw new AppError(409, `Cannot confirm a booking that is ${booking.status}`);
+    }
 
     const customer = await p.customer.findUnique({ where: { id: booking.customer_id } });
 
@@ -350,7 +372,7 @@ export class BookingService {
 
       const confirmRef = refFromRecord(booking);
       if (confirmRef) {
-        await markInventoryBooked(tx, confirmRef, booking.company_id);
+        await markInventoryBooked(tx, confirmRef, booking.company_id, id);
       }
 
       const existingEvent = await tx.integrationEvent.findFirst({
@@ -482,6 +504,9 @@ export class BookingService {
 
   static async cancelBooking(user: TokenPayload, id: number, reason: string = 'Booking cancelled') {
     const booking = await BookingService.getBookingById(user, id);
+    if (booking.status === 'CANCELLED') {
+      return booking; // already cancelled -- nothing to release or notify
+    }
 
     // Cancelling the booking and releasing the inventory it holds must succeed or
     // fail together: previously these were two independent writes, so a failure
@@ -767,8 +792,19 @@ export class BookingService {
       } as any,
     });
 
-    // Run the full confirmation (KYC gate, inventory BOOKED, audit, portal handoff)
-    return BookingService.confirmBooking(user, id);
+    // Run the full confirmation (KYC gate, inventory BOOKED, audit, portal handoff).
+    // If it fails (missing KYC, item now held by another booking, ...) put the
+    // form back to SUBMITTED -- otherwise it sat "MD_APPROVED" but unconfirmed,
+    // and the SUBMITTED check above blocked any retry.
+    try {
+      return await BookingService.confirmBooking(user, id);
+    } catch (err) {
+      await prisma.booking.update({
+        where: { id },
+        data: { form_status: 'SUBMITTED', md_approved_at: null } as any,
+      });
+      throw err;
+    }
   }
 
   /**

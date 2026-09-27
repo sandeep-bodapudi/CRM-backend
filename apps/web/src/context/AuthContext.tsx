@@ -114,7 +114,20 @@ const refreshAccessToken = async (): Promise<RefreshResult> => {
     return refreshPromise;
   }
 
-  refreshPromise = performRefresh().finally(() => {
+  // `refreshPromise` only de-duplicates within this tab. Refresh tokens
+  // rotate on every use and the server treats a second use of the same one
+  // as theft (revoking every session for the user) -- so two tabs, or the
+  // installed app plus a browser tab, refreshing at the same moment with the
+  // same stored token logged the employee out everywhere. The Web Locks API
+  // serializes refreshes across all tabs of this origin; performRefresh reads
+  // the token from IndexedDB *inside* the lock, so the second tab picks up
+  // the token the first tab just stored instead of reusing the old one.
+  const run = (): Promise<RefreshResult> =>
+    typeof navigator !== 'undefined' && navigator.locks?.request
+      ? navigator.locks.request('rrh-token-refresh', performRefresh)
+      : performRefresh();
+
+  refreshPromise = run().finally(() => {
     refreshPromise = null;
   });
 

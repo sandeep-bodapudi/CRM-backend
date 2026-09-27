@@ -2,6 +2,7 @@ import { logger } from '../../utils/logger';
 import { Response, NextFunction, Router } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../../middleware/auth';
 import { requireAuthz } from '../../middleware/authz';
+import { loadPropertyInScope } from '../../authz/dataScope';
 import { PropertyTogglePublicationBodySchema, Permissions } from '../../shared';
 import { validateRequestBody } from '../../middleware/validate';
 import { PropertyService } from '../../services/property.service';
@@ -12,7 +13,7 @@ const router = Router();
 router.post(
   '/:id/publications',
   authenticateToken,
-  requireAuthz(Permissions.PROPERTIES_UPDATE),
+  requireAuthz(Permissions.PROPERTIES_UPDATE, loadPropertyInScope),
   validateRequestBody(PropertyTogglePublicationBodySchema),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {

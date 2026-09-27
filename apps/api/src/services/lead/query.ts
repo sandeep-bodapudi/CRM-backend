@@ -195,13 +195,26 @@ export async function getDistributionMonitor(companyId: number) {
   return { totalLeadsCount, unassignedCount, telecallers: monitorData };
 }
 
-export async function getMatches(user: TokenPayload, leadId: number) {
-  const lead = await p.lead.findFirst({ where: { id: leadId } });
-  if (!lead) throw new AppError(404, 'Lead not found');
-
-  if (!can(user, Permissions.LEADS_READ, lead)) {
-    throw new AppError(403, 'Forbidden: You do not have permission to view matches for this lead');
+/**
+ * The lead, if the caller may read it -- using the SAME visibility as the
+ * lead list (buildLeadScope: every company they have access to, plus their
+ * downstream team). These detail endpoints used LeadPolicy.canView instead,
+ * which only allows the home company and the caller's own leads, so a
+ * manager or team lead could see a lead in the list and then get 403 on its
+ * matches / tasks / property interests.
+ */
+async function findReadableLead(user: TokenPayload, leadId: number) {
+  if (!can(user, Permissions.LEADS_READ)) {
+    throw new AppError(403, 'Forbidden: You do not have permission to read this lead');
   }
+  const scope = await buildLeadScope(user);
+  const lead = await p.lead.findFirst({ where: { id: leadId, ...scope } });
+  if (!lead) throw new AppError(404, 'Lead not found');
+  return lead;
+}
+
+export async function getMatches(user: TokenPayload, leadId: number) {
+  await findReadableLead(user, leadId);
 
   // Call the matching engine (defined in matchingEngine.ts)
   // Note: To avoid circular imports or redefining the engine here, we imported it at the top.
@@ -212,12 +225,7 @@ export async function getMatches(user: TokenPayload, leadId: number) {
 }
 
 export async function getLeadTasks(user: TokenPayload, leadId: number) {
-  const lead = await p.lead.findFirst({ where: { id: leadId } });
-  if (!lead) throw new AppError(404, 'Lead not found');
-
-  if (!can(user, Permissions.LEADS_READ, lead)) {
-    throw new AppError(403, 'Forbidden: You do not have permission to read this lead');
-  }
+  await findReadableLead(user, leadId);
 
   const tasks = await p.task.findMany({
     where: { lead_id: leadId },
@@ -229,12 +237,7 @@ export async function getLeadTasks(user: TokenPayload, leadId: number) {
 }
 
 export async function getPropertyInterests(user: TokenPayload, leadId: number) {
-  const lead = await p.lead.findFirst({ where: { id: leadId } });
-  if (!lead) throw new AppError(404, 'Lead not found');
-
-  if (!can(user, Permissions.LEADS_READ, lead)) {
-    throw new AppError(403, 'Forbidden: You do not have permission to read this lead');
-  }
+  await findReadableLead(user, leadId);
 
   const interests = await p.leadPropertyInterest.findMany({
     where: { lead_id: leadId, is_active: true },

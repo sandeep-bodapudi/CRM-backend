@@ -194,21 +194,50 @@ export async function claimInventoryLock(
   });
 }
 
-/** Moves the item to BOOKED on booking confirmation. */
+/**
+ * Moves the item to BOOKED on booking confirmation.
+ *
+ * Refuses (409) when the item is held by a DIFFERENT booking -- e.g. this
+ * booking's lock expired and someone else has since locked or booked the
+ * same item. Previously it overwrote the status unconditionally, so
+ * confirming the stale booking silently "double-sold" the item.
+ */
 export async function markInventoryBooked(
   client: Prisma.TransactionClient,
   ref: InventoryRef,
   expectedCompanyId: number,
+  bookingId: number,
 ): Promise<void> {
   if (ref.kind === 'PROPERTY') {
     const row = await client.property.findUnique({ where: { id: ref.id } });
     if (!row || row.company_id !== expectedCompanyId) return;
-    await client.property.update({ where: { id: ref.id }, data: { status: 'BOOKED' } });
+    if (row.locked_by_booking_id != null && row.locked_by_booking_id !== bookingId) {
+      throw new AppError(409, 'This property is now held by another booking');
+    }
+    if (row.status === 'BOOKED' && row.locked_by_booking_id !== bookingId) {
+      throw new AppError(409, 'This property has already been booked');
+    }
+    await client.property.update({
+      where: { id: ref.id },
+      data: { status: 'BOOKED', locked_by_booking_id: bookingId },
+    });
     return;
   }
   const row = await client.projectUnit.findUnique({ where: { id: ref.id } });
   if (!row || row.company_id !== expectedCompanyId) return;
-  await client.projectUnit.update({ where: { id: ref.id }, data: { sales_status: 'BOOKED' } });
+  if (row.locked_by_booking_id != null && row.locked_by_booking_id !== bookingId) {
+    throw new AppError(409, 'This unit is now held by another booking');
+  }
+  if (
+    (row.sales_status === 'BOOKED' || row.sales_status === 'SOLD') &&
+    row.locked_by_booking_id !== bookingId
+  ) {
+    throw new AppError(409, 'This unit has already been booked');
+  }
+  await client.projectUnit.update({
+    where: { id: ref.id },
+    data: { sales_status: 'BOOKED', locked_by_booking_id: bookingId },
+  });
 }
 
 /**
@@ -408,33 +437,52 @@ export async function getInventoryPortalDetail(
 /**
  * Releases the lock when a booking is cancelled.
  *
- * Only releases a lock this booking actually holds. The previous implementation
- * forced the property back to LIVE unconditionally, which meant cancelling a
- * stale booking could resurrect an item that had since been sold or blocked by
- * someone else. If the item is not held by `bookingId`, this is a no-op.
+ * Only releases an item this booking actually holds. The guard used to be
+ * `!heldByThisBooking && !isHeldState`, which let the release through for ANY
+ * held item -- so cancelling a stale booking whose lock had expired freed an
+ * item another booking had since locked or even confirmed, putting a sold
+ * unit back on sale.
+ *
+ * Legacy rows (booked before locked_by_booking_id existed) have a held
+ * status but no owner recorded; those are released only when no other live
+ * booking points at the same item.
  */
 export async function releaseInventoryLock(
   client: Prisma.TransactionClient,
   ref: InventoryRef,
   bookingId: number,
 ): Promise<void> {
+  const row =
+    ref.kind === 'PROPERTY'
+      ? await client.property.findUnique({ where: { id: ref.id } })
+      : await client.projectUnit.findUnique({ where: { id: ref.id } });
+  if (!row) return;
+
+  const state = ref.kind === 'PROPERTY' ? (row as any).status : (row as any).sales_status;
+  const heldStates = ref.kind === 'PROPERTY' ? ['LOCKED', 'BOOKED'] : ['RESERVED', 'BOOKED'];
+  if (!heldStates.includes(state)) return;
+
+  if (row.locked_by_booking_id != null) {
+    if (row.locked_by_booking_id !== bookingId) return; // someone else's hold
+  } else {
+    const otherLiveBooking = await client.booking.findFirst({
+      where: {
+        id: { not: bookingId },
+        status: { notIn: ['CANCELLED'] },
+        ...(ref.kind === 'PROPERTY' ? { property_id: ref.id } : { project_unit_id: ref.id }),
+      },
+      select: { id: true },
+    });
+    if (otherLiveBooking) return;
+  }
+
   if (ref.kind === 'PROPERTY') {
-    const row = await client.property.findUnique({ where: { id: ref.id } });
-    if (!row) return;
-    const heldByThisBooking = row.locked_by_booking_id === bookingId;
-    const isHeldState = row.status === 'LOCKED' || row.status === 'BOOKED';
-    if (!heldByThisBooking && !isHeldState) return;
     await client.property.update({
       where: { id: ref.id },
       data: { status: 'LIVE', locked_until: null, locked_by_booking_id: null },
     });
     return;
   }
-  const row = await client.projectUnit.findUnique({ where: { id: ref.id } });
-  if (!row) return;
-  const heldByThisBooking = row.locked_by_booking_id === bookingId;
-  const isHeldState = row.sales_status === 'RESERVED' || row.sales_status === 'BOOKED';
-  if (!heldByThisBooking && !isHeldState) return;
   await client.projectUnit.update({
     where: { id: ref.id },
     data: { sales_status: 'AVAILABLE', locked_until: null, locked_by_booking_id: null },
