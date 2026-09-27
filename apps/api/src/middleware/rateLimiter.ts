@@ -6,7 +6,22 @@ const p = prisma;
 const skipRateLimitInTests = (req: any) =>
   process.env.NODE_ENV === 'test' && req.headers['x-strict-rate-limit'] !== 'true';
 
+/**
+ * The real visitor IP. Both Render deployments sit behind Cloudflare, so with
+ * `trust proxy = 1` Express's req.ip is a Cloudflare EDGE address, which
+ * changes between requests -- every IP-keyed limit here was effectively off
+ * (or, at times, lumped unrelated users into one bucket). Cloudflare sets
+ * CF-Connecting-IP to the actual client and overwrites any client-supplied
+ * value; fall back to req.ip when it's absent (local dev, tests).
+ */
+export const clientIp = (req: any): string => {
+  const cf = req.headers?.['cf-connecting-ip'];
+  if (typeof cf === 'string' && cf.trim()) return cf.trim();
+  return req.ip || 'UNKNOWN_IP';
+};
+
 export const apiRateLimiter = rateLimit({
+  keyGenerator: (req: any) => clientIp(req),
   windowMs: 60 * 1000, // 1 minute
   max: 3000,
   skip: skipRateLimitInTests,
@@ -16,6 +31,7 @@ export const apiRateLimiter = rateLimit({
 });
 
 export const refreshRateLimiter = rateLimit({
+  keyGenerator: (req: any) => clientIp(req),
   windowMs: 15 * 60 * 1000,
   max: 20,
   skip: skipRateLimitInTests,
@@ -28,6 +44,7 @@ export const refreshRateLimiter = rateLimit({
 });
 
 export const publicReadLimiter = rateLimit({
+  keyGenerator: (req: any) => clientIp(req),
   windowMs: 60 * 1000, // 1 minute
   skip: skipRateLimitInTests,
   max: 120, // 120 public read requests per IP per minute
@@ -40,6 +57,7 @@ export const publicReadLimiter = rateLimit({
 });
 
 export const publicWriteLimiter = rateLimit({
+  keyGenerator: (req: any) => clientIp(req),
   windowMs: 60 * 1000, // 1 minute
   skip: skipRateLimitInTests,
   max: 10, // 10 public lead submissions per IP per minute
@@ -58,6 +76,7 @@ export const publicWriteLimiter = rateLimit({
 // "once per lock event, many times a day" for a single returning user,
 // potentially several staff sharing one office IP.
 export const appLockRateLimiter = rateLimit({
+  keyGenerator: (req: any) => clientIp(req),
   windowMs: 60 * 1000,
   skip: skipRateLimitInTests,
   max: 20,
@@ -75,6 +94,7 @@ export const appLockRateLimiter = rateLimit({
 // publicReadLimiter/publicWriteLimiter (those are scoped to the API-key-gated
 // routes in routes/public.ts, a different trust boundary).
 export const feedbackRateLimiter = rateLimit({
+  keyGenerator: (req: any) => clientIp(req),
   windowMs: 60 * 1000,
   skip: skipRateLimitInTests,
   max: 20,
@@ -96,7 +116,7 @@ export const loginRateLimitKey = (req: any): string => {
     typeof req.body?.employee_code === 'string'
       ? req.body.employee_code.trim().toUpperCase()
       : 'UNKNOWN_CODE';
-  return `${req.ip || 'UNKNOWN_IP'}:${code}`;
+  return `${clientIp(req)}:${code}`;
 };
 
 export const loginRateLimiter = rateLimit({
@@ -111,7 +131,7 @@ export const loginRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: async (req, res, next, options) => {
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'UNKNOWN_IP';
+    const ip = clientIp(req);
     const emailOrCode = req.body?.employee_code || 'UNKNOWN_CODE';
 
     try {
@@ -143,7 +163,7 @@ export const kioskLoginRateLimiter = rateLimit({
   keyGenerator: (req: any) => {
     const username =
       typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : 'UNKNOWN';
-    return `${req.ip || 'UNKNOWN_IP'}:${username}`;
+    return `${clientIp(req)}:${username}`;
   },
   message: {
     error: 'Too many kiosk login attempts, please try again after a minute',
@@ -156,6 +176,7 @@ export const kioskLoginRateLimiter = rateLimit({
 // AI Search endpoint — conservative because each call invokes a provider (costly + slow).
 // Follows the existing express-rate-limit conventions (IP-based window, test skip).
 export const aiSearchLimiter = rateLimit({
+  keyGenerator: (req: any) => clientIp(req),
   windowMs: 60 * 1000, // 1 minute
   skip: skipRateLimitInTests,
   max: 10, // 10 AI search requests per IP per minute
