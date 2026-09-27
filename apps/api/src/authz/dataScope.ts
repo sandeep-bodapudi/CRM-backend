@@ -118,6 +118,12 @@ export async function buildPropertyScope(user: TokenPayload): Promise<Prisma.Pro
     return propertyBaseScope;
   }
 
+  // Inventory Executive enters and maintains data for every PM, so sees
+  // every property in their company(ies), at any verification stage.
+  if (user.roles.includes(Roles.INVENTORY_EXECUTIVE)) {
+    return propertyBaseScope;
+  }
+
   // 2. PROJECT MANAGER
   if (user.roles.includes(Roles.PROJECT_MANAGER)) {
     return {
@@ -190,8 +196,10 @@ export async function buildProjectScope(user: TokenPayload): Promise<Prisma.Proj
 
   const baseScope = await getBaseScope(user);
 
-  // 2. MD — sees all projects in their company (any verification_status)
-  if (user.roles.includes(Roles.MD)) {
+  // 2. MD — sees all projects in their company (any verification_status).
+  // Inventory Executive likewise: they enter/maintain every PM's projects,
+  // including drafts they didn't create themselves.
+  if (user.roles.includes(Roles.MD) || user.roles.includes(Roles.INVENTORY_EXECUTIVE)) {
     return baseScope;
   }
 

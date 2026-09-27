@@ -86,8 +86,17 @@ export const requireAuthz = (
         // The policies re-check the base permission against user.permissions;
         // include `action` so a live DB role grant (step 1) isn't rejected
         // again just because it isn't in the token yet.
+        //
+        // companyId: the policies compare the record's company against the
+        // user's single HOME company, but staff can be granted access to more
+        // than one company (EmployeeCompanyAccess). Every route that uses one
+        // of these actions loads the resource through the caller's data scope
+        // (which already enforces that multi-company access), so the company
+        // boundary is settled by the time we get here; evaluate the rest of
+        // the policy (assignment, role) against the record's own company.
         const userWithAction = {
           ...req.user,
+          companyId: resource.company_id ?? req.user.companyId,
           permissions: Array.from(new Set([...(req.user.permissions || []), action])),
         };
         if (!can(userWithAction, action, resource)) {

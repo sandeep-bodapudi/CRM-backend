@@ -12,10 +12,11 @@ const COMMON_STEPS: TourStep[] = [
   {
     target: '[data-tour="sidebar-dashboard"]',
     title: 'Dashboard',
-    description: 'Your central command area. Get a quick overview of your key metrics, performance, and daily priorities.',
+    description:
+      'Your central command area. Get a quick overview of your key metrics, performance, and daily priorities.',
     route: '/dashboard',
-    placement: 'right'
-  }
+    placement: 'right',
+  },
 ];
 
 export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
@@ -30,51 +31,56 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
     {
       target: '[data-tour="sidebar-analytics"]',
       title: 'Analytics & Goals',
-      description: 'Review deep analytics across departments, track target achievement, and make data-driven decisions.',
+      description:
+        'Review deep analytics across departments, track target achievement, and make data-driven decisions.',
       route: '/analytics',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="sidebar-finance"]',
       title: 'Finance Overview',
-      description: 'Monitor payments, manage refunds, and track the financial health of the organization.',
+      description:
+        'Monitor payments, manage refunds, and track the financial health of the organization.',
       route: '/finance',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="sidebar-hr-hub"]',
       title: 'HR Overview',
-      description: 'Review employee performance, attendance metrics, and manage organizational structure.',
+      description:
+        'Review employee performance, attendance metrics, and manage organizational structure.',
       route: '/hr-hub',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.ADMIN]: [
     ...COMMON_STEPS,
     {
       target: '[data-tour="sidebar-system-control"]',
       title: 'System Control',
-      description: 'Manage technical system administration, configure security settings, and view audit logs.',
+      description:
+        'Manage technical system administration, configure security settings, and view audit logs.',
       route: '/system-control',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.MARKETING_DIRECTOR]: [
     ...COMMON_STEPS,
     {
       target: '[data-tour="sidebar-leads"]',
       title: 'Leads & Acquisition',
-      description: 'Oversee lead generation, review source performance, and hand off qualified leads to sales.',
+      description:
+        'Oversee lead generation, review source performance, and hand off qualified leads to sales.',
       route: '/leads',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="sidebar-analytics"]',
       title: 'Marketing Analytics',
       description: 'Analyze campaign performance and bulk lead acquisition metrics.',
       route: '/analytics',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.SALES_MANAGER]: [
     ...COMMON_STEPS,
@@ -87,7 +93,8 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
     {
       target: '[data-tour="dashboard-pipeline"]',
       title: 'Pipeline Conversion',
-      description: 'Track how efficiently your team is converting leads into site visits and closed deals.',
+      description:
+        'Track how efficiently your team is converting leads into site visits and closed deals.',
       route: '/dashboard',
     },
     {
@@ -99,13 +106,15 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
     {
       target: '[data-tour="dashboard-lead-attribution"]',
       title: 'Lead Attribution',
-      description: 'See who originally introduced each lead. Assignment changes do not change introduction credit.',
+      description:
+        'See who originally introduced each lead. Assignment changes do not change introduction credit.',
       route: '/dashboard',
     },
     {
       target: '[data-tour="dashboard-stalled-leads"]',
       title: 'Stalled Leads',
-      description: 'Identify leads that need managerial intervention because follow-up has stopped.',
+      description:
+        'Identify leads that need managerial intervention because follow-up has stopped.',
       route: '/dashboard',
     },
     {
@@ -129,14 +138,16 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
     {
       target: '[data-tour="sidebar-leads"]',
       title: 'Lead Distribution',
-      description: 'Manage the sales lead pipeline here. Review lead status, ownership, follow-ups and assignment.',
+      description:
+        'Manage the sales lead pipeline here. Review lead status, ownership, follow-ups and assignment.',
       route: '/leads',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="lead-attribution-block"]',
       title: 'Attribution vs Assignment',
-      description: '"Introduced By" is permanent attribution credit \u2014 whoever originally brought the lead into the CRM. "Assigned To" is who is currently working the lead and may change via reassignment. These are two distinct concepts: credit versus responsibility.',
+      description:
+        '"Introduced By" is permanent attribution credit \u2014 whoever originally brought the lead into the CRM. "Assigned To" is who is currently working the lead and may change via reassignment. These are two distinct concepts: credit versus responsibility.',
       route: '/leads',
     },
     {
@@ -144,29 +155,31 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
       title: 'Tasks & Follow-ups',
       description: 'Monitor team follow-ups and overdue sales activities.',
       route: '/tasks',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="sidebar-analytics"]',
       title: 'Analytics & Targets',
       description: 'Review deep team performance analytics, conversion rates, and lead sources.',
       route: '/analytics',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.TELECALLER]: [
     ...COMMON_STEPS,
     {
       target: '[data-tour="sidebar-leads"]',
       title: 'Assigned Leads',
-      description: 'View your calling queue, qualify leads, log interactions, and schedule site visits.',
+      description:
+        'View your calling queue, qualify leads, log interactions, and schedule site visits.',
       route: '/leads',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="lead-create"]',
       title: 'Lead Creation',
-      description: 'This lead is automatically attributed to you as the person who introduced it into CRM.',
+      description:
+        'This lead is automatically attributed to you as the person who introduced it into CRM.',
       route: '/leads',
     },
     {
@@ -174,8 +187,8 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
       title: 'Follow-ups',
       description: 'Track your scheduled calls and follow-up activities.',
       route: '/tasks',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.AGENT]: [
     ...COMMON_STEPS,
@@ -184,22 +197,22 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
       title: 'My Leads',
       description: 'Manage leads assigned to you and work them through the conversion pipeline.',
       route: '/leads',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="sidebar-site-visits"]',
       title: 'Site Visits',
       description: 'Review site visits assigned to you and log the outcomes.',
       route: '/site-visits',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="sidebar-customers"]',
       title: 'Customers',
       description: 'Manage your active customer relationships.',
       route: '/customers',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.PROJECT_MANAGER]: [
     ...COMMON_STEPS,
@@ -208,42 +221,63 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
       title: 'Property Operations',
       description: 'Manage property inventory, verification, and operational status.',
       route: '/properties',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="sidebar-projects"]',
       title: 'Projects',
       description: 'Manage ongoing real estate projects and workflow milestones.',
       route: '/projects',
-      placement: 'right'
+      placement: 'right',
     },
     {
       target: '[data-tour="sidebar-site-visits"]',
       title: 'Site Visits',
       description: 'Monitor site visits occurring at your properties.',
       route: '/site-visits',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
+  ],
+  [Roles.INVENTORY_EXECUTIVE]: [
+    ...COMMON_STEPS,
+    {
+      target: '[data-tour="sidebar-projects"]',
+      title: 'Projects',
+      description:
+        'Add and update projects for the Project Managers. Pick the PM who gave you the data — they review and submit it.',
+      route: '/projects',
+      placement: 'right',
+    },
+    {
+      target: '[data-tour="sidebar-properties"]',
+      title: 'Properties',
+      description:
+        'Add and update property listings, photos and pricing. New listings go to the assigned PM for verification.',
+      route: '/properties',
+      placement: 'right',
+    },
   ],
   [Roles.HR_MANAGER]: [
     ...COMMON_STEPS,
     {
       target: '[data-tour="sidebar-hr-hub"]',
       title: 'Employees & HR',
-      description: 'Manage employees, review attendance, process leave proposals, and track HR metrics.',
+      description:
+        'Manage employees, review attendance, process leave proposals, and track HR metrics.',
       route: '/hr-hub',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.FINANCE]: [
     ...COMMON_STEPS,
     {
       target: '[data-tour="sidebar-finance"]',
       title: 'Finance Workspace',
-      description: 'Process payments, manage expense/refund workflows, and generate financial reports.',
+      description:
+        'Process payments, manage expense/refund workflows, and generate financial reports.',
       route: '/finance',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.DIGITAL_MARKETING_HEAD]: [
     ...COMMON_STEPS,
@@ -252,8 +286,8 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
       title: 'Digital Marketing Leads',
       description: 'Monitor lead acquisition from digital campaigns and performance metrics.',
       route: '/leads',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.DIGITAL_MARKETING_EXECUTIVE]: [
     ...COMMON_STEPS,
@@ -262,8 +296,8 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
       title: 'Marketing Tasks',
       description: 'Manage your assigned marketing tasks and execution workflows.',
       route: '/tasks',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
   [Roles.DIGITAL_LEAD_OPERATOR]: [
     ...COMMON_STEPS,
@@ -272,19 +306,19 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
       title: 'Lead Operations',
       description: 'Process incoming leads and manage lead distribution.',
       route: '/leads',
-      placement: 'right'
-    }
+      placement: 'right',
+    },
   ],
-  'GENERAL': [
+  GENERAL: [
     ...COMMON_STEPS,
     {
       target: '[data-tour="sidebar-profile"]',
       title: 'Profile & Settings',
       description: 'Manage your personal profile and account settings.',
       route: '/profile',
-      placement: 'right'
-    }
-  ]
+      placement: 'right',
+    },
+  ],
 };
 
 export const getRoleTour = (roles: string[]): TourStep[] => {
@@ -295,6 +329,7 @@ export const getRoleTour = (roles: string[]): TourStep[] => {
     Roles.MARKETING_DIRECTOR,
     'Sales manager',
     Roles.PROJECT_MANAGER,
+    Roles.INVENTORY_EXECUTIVE,
     Roles.HR_MANAGER,
     Roles.FINANCE,
     Roles.DIGITAL_MARKETING_HEAD,

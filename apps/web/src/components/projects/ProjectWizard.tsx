@@ -221,7 +221,21 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
     initialData?.assigned_pm_id ? String(initialData.assigned_pm_id) : '',
   );
 
+  // Inventory Executive enters projects on a PM's behalf and must name that
+  // PM (they review and submit it); they get a PM-only lookup since their
+  // own employee scope doesn't include the PMs.
+  const isInventoryExecutive = activeRole === Roles.INVENTORY_EXECUTIVE;
+
   useEffect(() => {
+    if (isInventoryExecutive) {
+      fetchWithAuth(`${API_BASE_URL}/employees?role=PROJECT_MANAGER`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.employees) setPms(data.employees);
+        })
+        .catch(() => {});
+      return;
+    }
     if (([Roles.MD, Roles.ADMIN, Roles.HR_MANAGER] as string[]).includes(activeRole)) {
       fetchWithAuth(`${API_BASE_URL}/employees`)
         .then((res) => res.json())
@@ -235,7 +249,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
         })
         .catch(() => {});
     }
-  }, [activeRole, fetchWithAuth]);
+  }, [activeRole, fetchWithAuth, isInventoryExecutive]);
 
   useEffect(() => {
     if ((step === 5 || step === 7) && projectId) {
@@ -895,14 +909,18 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
             <h3 className="text-lg font-bold text-slate-800">Team & Review</h3>
             {pms.length > 0 && (
               <div>
-                <FieldLabel>Assign Project Manager</FieldLabel>
+                <FieldLabel>
+                  {isInventoryExecutive
+                    ? 'Project Manager who provided this data *'
+                    : 'Assign Project Manager'}
+                </FieldLabel>
                 <select
                   className={selectCls}
                   value={assignedPmId}
                   onChange={(e) => setAssignedPmId(e.target.value)}
                 >
                   <option value="" className="text-slate-800 bg-white">
-                    -- No PM Assigned --
+                    {isInventoryExecutive ? '-- Select Project Manager --' : '-- No PM Assigned --'}
                   </option>
                   {pms.map((pm) => (
                     <option key={pm.id} value={pm.id} className="text-slate-800 bg-white">

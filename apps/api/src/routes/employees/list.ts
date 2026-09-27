@@ -6,7 +6,7 @@ import { requireAuthz } from '../../middleware/authz';
 import { Roles, Permissions } from '../../shared';
 import { can } from '../../authz/authorization';
 import { decryptData } from '../../utils/crypto';
-import { buildEmployeeScope } from '../../authz/dataScope';
+import { buildEmployeeScope, getAccessibleCompanyIds } from '../../authz/dataScope';
 
 const router = Router();
 
@@ -35,14 +35,30 @@ router.get(
       const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 500, 1), 1000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
-      const whereClause: any = await buildEmployeeScope(req.user!);
-
       const roleQuery = req.query.role as string;
       let resolvedRoleName: string | null = null;
 
       if (roleQuery) {
         resolvedRoleName = (Roles as Record<string, string>)[roleQuery] || roleQuery;
       }
+
+      // "Pick a Project Manager" lookup for someone entering project/property
+      // data on the PMs' behalf (Inventory Executive): their own employee
+      // scope is just themselves, which left the PM dropdown empty. Widen to
+      // every PM in their accessible companies -- but return picker fields
+      // only (no contact/address/KYC data), since this bypasses the normal
+      // team scope.
+      const isPmPickerLookup =
+        resolvedRoleName === Roles.PROJECT_MANAGER &&
+        req.user!.roles.includes(Roles.INVENTORY_EXECUTIVE);
+
+      const whereClause: any = isPmPickerLookup
+        ? {
+            company_id: { in: await getAccessibleCompanyIds(req.user!) },
+            status: 'ACTIVE',
+            roles: { none: { role: { is_invisible: true } } },
+          }
+        : await buildEmployeeScope(req.user!);
 
       // Filter out ADMIN from general employee list unless explicitly requested.
       if (resolvedRoleName !== Roles.ADMIN) {
@@ -145,6 +161,18 @@ router.get(
         dateOfJoining: emp.date_of_joining ? emp.date_of_joining.toISOString().split('T')[0] : '',
         backgroundEducation: emp.background_education || '',
       }));
+
+      if (isPmPickerLookup) {
+        return res.status(200).json({
+          employees: formatted.map((e: any) => ({
+            id: e.id,
+            employeeCode: e.employeeCode,
+            fullName: e.fullName,
+            roles: e.roles,
+          })),
+          pagination: { limit, offset, total },
+        });
+      }
 
       // SENSITIVE DATA FILTERING (Stage 2)
       const canViewSensitive = can(req.user!, Permissions.EMPLOYEES_VIEW_SENSITIVE, {

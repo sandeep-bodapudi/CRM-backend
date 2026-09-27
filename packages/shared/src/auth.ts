@@ -28,6 +28,7 @@ export const Roles = {
   SALES_MANAGER: 'Sales manager',
   CHANNEL_PARTNER_MANAGER: 'Channel partner manager',
   STAFF: 'Staff',
+  INVENTORY_EXECUTIVE: 'Inventory Executive',
 } as const;
 
 export type RoleName = (typeof Roles)[keyof typeof Roles];
@@ -49,6 +50,7 @@ export const DepartmentCodes: Record<string, string> = {
   [Roles.SALES_MANAGER]: 'SL',
   [Roles.CHANNEL_PARTNER_MANAGER]: 'CP',
   [Roles.STAFF]: 'ST',
+  [Roles.INVENTORY_EXECUTIVE]: 'OP',
 };
 
 // Canonical Permissions Model (Phase 1 - Stage 2 Blueprint Section 7)
@@ -522,6 +524,36 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.EXPENSES_CREATE,
     Permissions.EXPENSES_READ_OWN,
     Permissions.CUSTOMERS_CONVERT,
+  ],
+
+  // Enters and maintains project/property data on behalf of the (busy)
+  // Project Managers. Add + edit only, company-wide: no delete (stays with
+  // MD/Admin), no verify, and deliberately NOT PROJECTS_SUBMIT_VERIFY -- the
+  // assigned PM reviews what was entered and submits it, so the PM who
+  // supplied the data still signs it off. Properties likewise still wait
+  // for their assigned PM's on-site verification.
+  [Roles.INVENTORY_EXECUTIVE]: [
+    Permissions.PROJECTS_CREATE,
+    Permissions.PROJECTS_READ,
+    Permissions.PROJECTS_UPDATE,
+    Permissions.PROPERTIES_CREATE,
+    Permissions.PROPERTIES_READ,
+    Permissions.PROPERTIES_UPDATE,
+    Permissions.DOCUMENTS_CREATE,
+    Permissions.DOCUMENTS_READ,
+    // Lets the project wizard list Project Managers to assign.
+    Permissions.EMPLOYEES_READ,
+    Permissions.TASKS_READ,
+    Permissions.TASKS_UPDATE,
+    Permissions.REPORTS_READ_OWN,
+    Permissions.PERFORMANCE_READ_OWN,
+    Permissions.ATTENDANCE_READ_OWN,
+    Permissions.ATTENDANCE_SCAN,
+    Permissions.ATTENDANCE_LATE_PROPOSAL,
+    Permissions.ATTENDANCE_LEAVE_PROPOSAL,
+    Permissions.EXPENSES_CREATE,
+    Permissions.EXPENSES_READ_OWN,
+    Permissions.COMPLAINTS_CREATE,
   ],
 
   [Roles.STAFF]: [

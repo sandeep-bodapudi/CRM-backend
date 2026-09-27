@@ -36,8 +36,14 @@ export async function syncRolePermissions(): Promise<void> {
   // 2. Sync roles
   for (const roleName of Object.keys(RolePermissionsMatrix)) {
     const matrixPermissions = RolePermissionsMatrix[roleName as keyof typeof RolePermissionsMatrix];
-    const role = await prisma.role.findUnique({ where: { name: roleName } });
-    if (!role) continue;
+    // A role added to the matrix in code (e.g. Inventory Executive) has no
+    // Role row yet; create it so it appears in the employee role picker and
+    // gets its default permissions seeded below. Existing roles untouched.
+    let role = await prisma.role.findUnique({ where: { name: roleName } });
+    if (!role) {
+      role = await prisma.role.create({ data: { name: roleName } });
+      logger.info(`[authz] Created new role "${roleName}".`);
+    }
 
     const existingRolePermsCount = await prisma.rolePermission.count({
       where: { role_id: role.id },

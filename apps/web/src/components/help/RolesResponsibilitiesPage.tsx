@@ -78,6 +78,18 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.INVENTORY_EXECUTIVE,
+    role: 'Inventory Executive',
+    tagline: 'Enters and maintains project and property data on behalf of Project Managers.',
+    icon: Building2,
+    responsibilities: [
+      'Adds and edits every Project and Property in the company — details, units, pricing, amenities, photos, brochures and documents — from the information the Project Manager provides.',
+      'When creating a Project, selects the Project Manager who provided the data; that PM reviews the entry and submits it for approval.',
+      "New Properties go to their assigned Project Manager's verification queue, exactly as if the PM had entered them.",
+      'Cannot delete/archive listings or approve them — deletion stays with MD/Admin, and verification stays with the PM and MD.',
+    ],
+  },
+  {
     key: Roles.SALES_MANAGER,
     role: 'Sales Manager',
     tagline: 'Runs the sales team — lead distribution and site-visit assignment.',
