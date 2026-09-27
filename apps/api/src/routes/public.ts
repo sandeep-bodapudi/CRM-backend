@@ -610,6 +610,10 @@ router.get('/:brand/projects', async (req: any, res: Response) => {
         // used, so each brand's site listed the other company's projects too.
         company_id: companyId,
         is_published: true,
+        // Only MD-approved projects are public. is_published alone isn't
+        // enough: projects used to be auto-published at creation, so older
+        // drafts still carry is_published = true.
+        verification_status: 'VERIFIED',
         status: { not: 'CANCELLED' },
       },
       select: PUBLIC_PROJECT_SELECT,
@@ -664,7 +668,12 @@ router.get('/:brand/projects/:id', async (req: any, res: Response) => {
     const companyId = req.apiKeyContext.company_id;
 
     const project = await p.project.findFirst({
-      where: { id: projectId, company_id: companyId, is_published: true },
+      where: {
+        id: projectId,
+        company_id: companyId,
+        is_published: true,
+        verification_status: 'VERIFIED',
+      },
       select: PUBLIC_PROJECT_DETAIL_SELECT,
     });
 

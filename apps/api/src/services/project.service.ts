@@ -206,7 +206,10 @@ export class ProjectService {
             assigned_pm_id: finalPmId,
             created_by_id: user.employeeId,
             status: 'PLANNING',
-            is_published: true, // Auto-publish: new projects appear on website immediately
+            // Not public until verified: the MD's final approval publishes it
+            // (routes/projects/core.ts md-approve), same as a property going LIVE.
+            // Auto-publishing on create put unverified drafts on the websites.
+            is_published: false,
             slug,
             ...mapCommonProjectFields(data),
           },

@@ -391,6 +391,9 @@ router.post(
           verified_by_id: req.user!.employeeId,
           verified_at: new Date(),
           verification_notes: notes || null,
+          // MD approval is what puts a project on the public websites (the
+          // public API also requires VERIFIED); a rejection takes it off.
+          is_published: approved,
         },
       });
       logger.info(`Project ${projectId} ${newStatus} by MD employee ${req.user!.employeeId}`);
