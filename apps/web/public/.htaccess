@@ -24,7 +24,10 @@
   <FilesMatch "\.(js|css|woff2?)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
-  <FilesMatch "^(index\.html|sw\.js)$">
+  # push-notifications-sw.js and the manifest are NOT content-hashed, so
+  # they must revalidate too -- the generic rule above cached the push
+  # handler for a year, so push-notification fixes never reached phones.
+  <FilesMatch "^(index\.html|sw\.js|push-notifications-sw\.js|manifest\.webmanifest)$">
     Header set Cache-Control "no-cache, no-store, must-revalidate"
   </FilesMatch>
 </IfModule>

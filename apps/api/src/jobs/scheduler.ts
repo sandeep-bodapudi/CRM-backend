@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import { jobManager } from './index';
 import * as tasks from './tasks';
 
@@ -106,4 +107,14 @@ jobManager.register({
 
 export const initJobs = () => {
   jobManager.startAll();
+
+  // The host sleeps when idle, so the 23:58 rollup is routinely missed --
+  // run it on wake-up instead if last night's run never happened.
+  if (process.env.DISABLE_JOB_ATTENDANCE_ROLLUP !== 'true') {
+    tasks
+      .runMissedDailyRollup()
+      .catch((err) =>
+        logger.error({ err }, '[Jobs] Missed Daily Attendance Rollup catch-up failed'),
+      );
+  }
 };

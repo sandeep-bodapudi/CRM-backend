@@ -227,14 +227,22 @@ export const dailyAttendanceRollupJob = async (referenceDate: Date = new Date())
 
     for (const [companyId, logs] of byCompany.entries()) {
       for (const log of logs) {
+        // Close at the IST midnight ending the log's OWN check-in day, not
+        // tonight's -- the same instant for a normal nightly run, but a log
+        // left open for several days (missed runs) would otherwise get a
+        // multi-day working duration.
+        const checkInDay = getISTComponents(log.check_in_at).dateString;
+        const checkOutAt = new Date(
+          getISTMidnightInstant(checkInDay).getTime() + 24 * 60 * 60 * 1000,
+        );
         const durationMinutes = Math.round(
-          (midnightInstant.getTime() - log.check_in_at.getTime()) / 60000,
+          (checkOutAt.getTime() - log.check_in_at.getTime()) / 60000,
         );
         await prisma.$transaction([
           prisma.attendanceLog.update({
             where: { id: log.id },
             data: {
-              check_out_at: midnightInstant,
+              check_out_at: checkOutAt,
               working_duration_minutes: Math.max(0, durationMinutes),
             },
           }),
@@ -244,7 +252,7 @@ export const dailyAttendanceRollupJob = async (referenceDate: Date = new Date())
               action: 'ATTENDANCE_AUTO_CHECKOUT_MIDNIGHT',
               entity_type: 'ATTENDANCE_LOG',
               entity_id: log.id,
-              new_value: JSON.stringify({ check_out_at: midnightInstant }),
+              new_value: JSON.stringify({ check_out_at: checkOutAt }),
               reason: 'Employee did not check out; auto-closed at midnight.',
             },
           }),
@@ -491,6 +499,57 @@ export const dailyAttendanceRollupJob = async (referenceDate: Date = new Date())
       }
     }
   }
+
+  // Completion marker for the day just finalized -- lets runMissedDailyRollup
+  // tell on startup whether last night's run actually happened.
+  await prisma.auditEvent.create({
+    data: {
+      actor_id: 0,
+      action: DAILY_ROLLUP_DONE_ACTION,
+      entity_type: 'JOB',
+      entity_id: 0,
+      new_value: JSON.stringify({ date: yesterday.dateString }),
+    },
+  });
+};
+
+const DAILY_ROLLUP_DONE_ACTION = 'JOB_DAILY_ATTENDANCE_ROLLUP_DONE';
+
+/**
+ * Catch-up for dailyAttendanceRollupJob, called once on server start.
+ *
+ * Production runs on a host that puts the process to sleep when idle, so it
+ * is usually not running at 23:58 IST and the in-process cron never fires --
+ * nobody was ever auto-checked-out, and an employee who forgot to check out
+ * stayed "checked in" forever. The job is idempotent (every write it makes
+ * is guarded against a re-run), and it always stamps check_out_at with the
+ * day's IST midnight rather than "now", so running it late on the next
+ * wake-up produces the same records the 23:58 run would have.
+ */
+export const runMissedDailyRollup = async () => {
+  const now = new Date();
+  const todayIST = getISTComponents(now);
+  // Between 23:50 and midnight the scheduled run is imminent (and the job's
+  // own +10 min offset would treat "today" as already finished) -- leave it
+  // to the cron.
+  if (todayIST.hours === 23 && todayIST.minutes >= 50) return;
+
+  const yesterday = getISTComponents(
+    new Date(getISTMidnightInstant(todayIST.dateString).getTime() - 1),
+  );
+  const alreadyDone = await prisma.auditEvent.findFirst({
+    where: {
+      action: DAILY_ROLLUP_DONE_ACTION,
+      new_value: { contains: yesterday.dateString },
+    },
+    select: { id: true },
+  });
+  if (alreadyDone) return;
+
+  logger.info(
+    `[Jobs] Daily Attendance Rollup for ${yesterday.dateString} was missed -- catching up.`,
+  );
+  await dailyAttendanceRollupJob(now);
 };
 
 // 4. Expired session cleanup

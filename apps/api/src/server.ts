@@ -132,6 +132,8 @@ app.use(
       callback(null, false);
     },
     credentials: true,
+    // Lets the public sites read the pagination total on GET /public/:brand/properties.
+    exposedHeaders: ['X-Total-Count'],
   }),
 );
 app.use(cookieParser());
@@ -155,8 +157,12 @@ setupSwagger(app);
 
 import { apiRateLimiter } from './middleware/rateLimiter';
 
-// Serve property and profile images publicly.
-const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+// Serve property and profile images publicly. Must resolve to the exact
+// same directory storage.service.ts writes into (it also honours
+// UPLOAD_ROOT) -- reading UPLOAD_DIR alone here meant setting only
+// UPLOAD_ROOT would save every upload to one folder and serve from another.
+import { UPLOAD_DIR } from './services/storage.service';
+const uploadDir = UPLOAD_DIR;
 const propertiesDir = path.join(uploadDir, 'properties');
 const profilesDir = path.join(uploadDir, 'profiles');
 const expenseProofsDir = path.join(uploadDir, 'expense-proofs');
@@ -335,6 +341,15 @@ if (process.env.NODE_ENV === 'production') {
     );
   }
 }
+
+// Express 4 does not catch a rejected promise from an async route handler,
+// and Node >= 15 terminates the whole process on an unhandled rejection by
+// default -- so one missing try/catch anywhere took the API down for every
+// user. Log it instead; the individual request still needs its own
+// try/catch to get a proper response.
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, '[server] Unhandled promise rejection');
+});
 
 import { initJobs } from './jobs/scheduler';
 import { syncRolePermissions } from './authz/syncRolePermissions';

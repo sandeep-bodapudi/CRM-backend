@@ -13,6 +13,7 @@ import {
   calculateAttendanceStatus,
   getISTComponents,
   getISTDayOfWeek,
+  getISTMidnightInstant,
   toHolidayDateKey,
 } from '../../utils/time';
 import { Roles, AttendanceQRPayloadSchema } from '../../shared';
@@ -136,6 +137,43 @@ router.get('/my-status', authenticateToken, async (req: AuthenticatedRequest, re
   }
 });
 
+// An AttendanceLog still open from an EARLIER IST day (the employee forgot
+// to check out and the nightly rollup didn't close it -- the host sleeps
+// overnight, so it often doesn't run) used to block every later scan: the
+// check-in path saw "already checked in" and never created today's log.
+// Close it exactly the way dailyAttendanceRollupJob would (at the IST
+// midnight ending its check-in day, same audit action), so the scan can
+// carry on. Returns true if the log was stale and has been closed.
+const closeIfStaleOpenLog = async (
+  tx: import('@prisma/client').Prisma.TransactionClient,
+  log: { id: number; employee_id: number; check_in_at: Date; check_out_at: Date | null },
+  todayDateString: string,
+): Promise<boolean> => {
+  if (log.check_out_at !== null) return false;
+  const checkInDay = getISTComponents(new Date(log.check_in_at)).dateString;
+  if (checkInDay >= todayDateString) return false;
+
+  const checkOutAt = new Date(getISTMidnightInstant(checkInDay).getTime() + 24 * 60 * 60 * 1000);
+  const durationMinutes = Math.round(
+    (checkOutAt.getTime() - new Date(log.check_in_at).getTime()) / 60000,
+  );
+  await tx.attendanceLog.update({
+    where: { id: log.id },
+    data: { check_out_at: checkOutAt, working_duration_minutes: Math.max(0, durationMinutes) },
+  });
+  await tx.auditEvent.create({
+    data: {
+      actor_id: log.employee_id,
+      action: 'ATTENDANCE_AUTO_CHECKOUT_MIDNIGHT',
+      entity_type: 'ATTENDANCE_LOG',
+      entity_id: log.id,
+      new_value: JSON.stringify({ check_out_at: checkOutAt }),
+      reason: 'Employee did not check out; auto-closed at midnight (on next scan).',
+    },
+  });
+  return true;
+};
+
 // Helper to parse and verify payload
 const parseAndVerifyQR = (req: AuthenticatedRequest, qrPayload: any) => {
   let payload = qrPayload;
@@ -212,7 +250,10 @@ router.post(
             take: 5,
           });
 
-          const activeCheckIn = existingLogs.find((l: any) => l.check_out_at === null);
+          let activeCheckIn = existingLogs.find((l: any) => l.check_out_at === null);
+          if (activeCheckIn && (await closeIfStaleOpenLog(tx, activeCheckIn, dateString))) {
+            activeCheckIn = undefined;
+          }
           if (activeCheckIn) return { alreadyStamped: true, log: activeCheckIn };
 
           const alreadyCheckedInToday = existingLogs.find((l: any) => {
@@ -378,6 +419,12 @@ router.post(
 
           if (!activeLog)
             return { error: 'Already logged out, no need to scan again. You can leave now.' };
+
+          // A log left open from an earlier day is not today's check-in --
+          // close it at its own midnight rather than stretching it to now.
+          if (await closeIfStaleOpenLog(tx, activeLog, dateString)) {
+            return { error: 'No check-in found for today. Please contact HR.' };
+          }
 
           const checkInTime = new Date(activeLog.check_in_at).getTime();
           const diffMs = now.getTime() - checkInTime;

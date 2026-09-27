@@ -8,6 +8,7 @@ import { Roles } from '../shared';
 import bcrypt from 'bcryptjs';
 import { validateRequestBody } from '../middleware/validate';
 import { z } from 'zod';
+import { kioskLoginRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 const p = prisma;
@@ -38,6 +39,7 @@ export const KioskCredentialUpdateSchema = z.object({
 
 router.post(
   '/login',
+  kioskLoginRateLimiter,
   validateRequestBody(KioskLoginSchema),
   async (req: Request, res: Response) => {
     try {

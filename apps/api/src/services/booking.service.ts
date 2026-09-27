@@ -235,7 +235,12 @@ export class BookingService {
     // Company-scope the customer. A non-existent customer is intentionally NOT
     // rejected here so the booking FK constraint surfaces a Prisma error (500),
     // matching the existing transaction rollback contract (lock is reverted).
+    // An existing customer from another company is rejected, though -- the
+    // lookup used to be fetched and then never checked.
     const customer = await client.customer.findUnique({ where: { id: dto.customer_id } });
+    if (customer && customer.company_id !== dto.company_id) {
+      throw new AppError(404, 'Customer not found');
+    }
 
     let assignedEmployeeId = dto.assigned_employee_id ?? user.employeeId ?? null;
     if (assignedEmployeeId) {

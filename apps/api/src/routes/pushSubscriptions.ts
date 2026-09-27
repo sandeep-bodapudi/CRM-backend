@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger';
 /**
  * pushSubscriptions.ts
- * 
+ *
  * Manages Web Push subscription registration per employee device.
  * Employees subscribe when they allow browser notifications.
  */
@@ -40,7 +40,12 @@ router.post('/subscribe', authenticateToken, async (req: AuthenticatedRequest, r
       where: {
         employee_id_endpoint: {
           employee_id: employeeId,
-          endpoint: endpoint.substring(0, 200), // index uses first 200 chars
+          // Full endpoint, same value `create` stores below. The unique index
+          // only covers the first 200 chars, but Prisma compares this field
+          // against the whole column -- passing a truncated value here never
+          // matched any endpoint longer than 200 chars, so every re-subscribe
+          // fell through to `create` and hit the unique index (500).
+          endpoint,
         },
       },
       update: {
@@ -66,27 +71,31 @@ router.post('/subscribe', authenticateToken, async (req: AuthenticatedRequest, r
 
 // DELETE /api/v1/push/unsubscribe
 // Remove all push subscriptions for this employee (on logout)
-router.delete('/unsubscribe', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  const employeeId = req.user!.employeeId;
-  const { endpoint } = req.body;
+router.delete(
+  '/unsubscribe',
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const employeeId = req.user!.employeeId;
+    const { endpoint } = req.body;
 
-  try {
-    if (endpoint) {
-      // Remove specific device subscription
-      await p.pushSubscription.deleteMany({
-        where: { employee_id: employeeId, endpoint },
-      });
-    } else {
-      // Remove all subscriptions for this employee
-      await p.pushSubscription.deleteMany({
-        where: { employee_id: employeeId },
-      });
+    try {
+      if (endpoint) {
+        // Remove specific device subscription
+        await p.pushSubscription.deleteMany({
+          where: { employee_id: employeeId, endpoint },
+        });
+      } else {
+        // Remove all subscriptions for this employee
+        await p.pushSubscription.deleteMany({
+          where: { employee_id: employeeId },
+        });
+      }
+      return res.status(200).json({ message: 'Push subscription removed.' });
+    } catch (error) {
+      logger.error('[PushUnsubscribe] Error:', error);
+      return res.status(500).json({ error: 'Failed to remove push subscription.' });
     }
-    return res.status(200).json({ message: 'Push subscription removed.' });
-  } catch (error) {
-    logger.error('[PushUnsubscribe] Error:', error);
-    return res.status(500).json({ error: 'Failed to remove push subscription.' });
-  }
-});
+  },
+);
 
 export default router;

@@ -12,13 +12,28 @@ export interface QrTokenPayload {
   signedToken: string;
 }
 
-export const generateQrHmac = (employeeId: number, employeeCode: string, version: number = 1): string => {
+export const generateQrHmac = (
+  employeeId: number,
+  employeeCode: string,
+  version: number = 1,
+): string => {
   const data = `${employeeId}:${employeeCode}:${version}`;
   return crypto.createHmac('sha256', QR_HMAC_SECRET).update(data).digest('hex');
 };
 
-export const verifyQrHmac = (employeeId: number, employeeCode: string, version: number, signature: string): boolean => {
-  if (!signature) return false;
+export const verifyQrHmac = (
+  employeeId: number,
+  employeeCode: string,
+  version: number,
+  signature: string,
+): boolean => {
+  // A malformed QR (non-string signature, wrong length) must read as
+  // "invalid", not throw -- timingSafeEqual throws on length mismatch, which
+  // surfaced at the kiosk as a 500 "Scan failed" instead of "Invalid QR".
+  if (typeof signature !== 'string' || !signature) return false;
   const expected = generateQrHmac(employeeId, employeeCode, version);
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  const expectedBuf = Buffer.from(expected);
+  const signatureBuf = Buffer.from(signature);
+  if (expectedBuf.length !== signatureBuf.length) return false;
+  return crypto.timingSafeEqual(expectedBuf, signatureBuf);
 };

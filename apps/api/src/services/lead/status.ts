@@ -50,6 +50,19 @@ export async function claimLead(user: TokenPayload, leadId: number) {
   }
 
   return await p.$transaction(async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+    // The checks above read a snapshot from outside this transaction, so two
+    // telecallers clicking Claim at the same moment both passed them and the
+    // later write silently won (both got a success toast). This conditional
+    // write takes the row lock and only succeeds while the lead is still
+    // unclaimed; the loser blocks on the lock, then sees count 0.
+    const claimed = await tx.lead.updateMany({
+      where: { id: leadId, assigned_to_id: null, status: 'NEW' },
+      data: { assigned_to_id: user.employeeId },
+    });
+    if (claimed.count === 0) {
+      throw new AppError(409, 'This lead has already been claimed by someone else');
+    }
+
     const updated = await WorkflowEngine.transitionLead(
       tx,
       leadId,

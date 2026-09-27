@@ -86,10 +86,24 @@ export const feedbackRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Keyed by IP *and* the employee code being tried, not IP alone. With an
+// IP-only key, one successful login reset the whole IP's counter -- so an
+// attacker holding any valid account could interleave their own login to
+// brute-force someone else indefinitely -- and a whole office behind one
+// shared IP shared a single 5/min budget during the morning login rush.
+export const loginRateLimitKey = (req: any): string => {
+  const code =
+    typeof req.body?.employee_code === 'string'
+      ? req.body.employee_code.trim().toUpperCase()
+      : 'UNKNOWN_CODE';
+  return `${req.ip || 'UNKNOWN_IP'}:${code}`;
+};
+
 export const loginRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   skip: skipRateLimitInTests,
-  max: 5, // Limit each IP to 5 login requests per window
+  max: 5, // 5 attempts per IP per employee code per window
+  keyGenerator: loginRateLimitKey,
   message: {
     error: 'Too many login attempts from this IP, please try again after a minute',
     code: 'RATE_LIMIT_EXCEEDED',
@@ -116,6 +130,27 @@ export const loginRateLimiter = rateLimit({
 
     res.status(options.statusCode).json(options.message);
   },
+});
+
+// Kiosk login had no throttle at all, and a successful login returns a
+// 10-year token -- an unlimited password-guessing target. Same IP+username
+// keying as staff login so kiosks sharing an office IP don't lock each
+// other out.
+export const kioskLoginRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  skip: skipRateLimitInTests,
+  max: 10,
+  keyGenerator: (req: any) => {
+    const username =
+      typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : 'UNKNOWN';
+    return `${req.ip || 'UNKNOWN_IP'}:${username}`;
+  },
+  message: {
+    error: 'Too many kiosk login attempts, please try again after a minute',
+    code: 'RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // AI Search endpoint — conservative because each call invokes a provider (costly + slow).

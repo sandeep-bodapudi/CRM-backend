@@ -73,19 +73,29 @@ router.post(
 );
 
 router.get('/:brand/account/me', requireWebsiteAccount, async (req: any, res: Response) => {
-  if (!validBrand(req.params.brand))
-    return res.status(400).json({ error: 'Invalid brand specified in URL' });
-  res.status(200).json({ account: WebsiteAccountService.me(req.websiteAccount) });
+  try {
+    if (!validBrand(req.params.brand))
+      return res.status(400).json({ error: 'Invalid brand specified in URL' });
+    res.status(200).json({ account: WebsiteAccountService.me(req.websiteAccount) });
+  } catch (error) {
+    logger.error('Website account me error:', error);
+    res.status(500).json({ error: 'Failed to load account' });
+  }
 });
 
 // ─── Shortlist / Compare ─────────────────────────────────────────────────────
 
 function savedItemRoutes(kind: 'shortlist' | 'compare') {
   router.get(`/:brand/account/${kind}`, requireWebsiteAccount, async (req: any, res: Response) => {
-    if (!validBrand(req.params.brand))
-      return res.status(400).json({ error: 'Invalid brand specified in URL' });
-    const items = await WebsiteSavedItemsService.list(req.websiteAccount.id, kind);
-    res.status(200).json({ items });
+    try {
+      if (!validBrand(req.params.brand))
+        return res.status(400).json({ error: 'Invalid brand specified in URL' });
+      const items = await WebsiteSavedItemsService.list(req.websiteAccount.id, kind);
+      res.status(200).json({ items });
+    } catch (error) {
+      logger.error(`Website ${kind} list error:`, error);
+      res.status(500).json({ error: `Failed to load ${kind}` });
+    }
   });
 
   router.post(
@@ -93,10 +103,18 @@ function savedItemRoutes(kind: 'shortlist' | 'compare') {
     requireWebsiteAccount,
     validateRequestBody(WebsiteSavedItemSchema),
     async (req: any, res: Response) => {
-      if (!validBrand(req.params.brand))
-        return res.status(400).json({ error: 'Invalid brand specified in URL' });
-      const item = await WebsiteSavedItemsService.add(req.websiteAccount.id, kind, req.body);
-      res.status(201).json({ item });
+      try {
+        if (!validBrand(req.params.brand))
+          return res.status(400).json({ error: 'Invalid brand specified in URL' });
+        const item = await WebsiteSavedItemsService.add(req.websiteAccount.id, kind, req.body);
+        res.status(201).json({ item });
+      } catch (error: any) {
+        // P2003: the property/unit id doesn't exist (FK violation) -- a
+        // client error, not a server fault.
+        if (error?.code === 'P2003') return res.status(404).json({ error: 'Item not found' });
+        logger.error(`Website ${kind} add error:`, error);
+        res.status(500).json({ error: `Failed to save to ${kind}` });
+      }
     },
   );
 
@@ -105,10 +123,15 @@ function savedItemRoutes(kind: 'shortlist' | 'compare') {
     requireWebsiteAccount,
     validateRequestBody(WebsiteSavedItemSchema),
     async (req: any, res: Response) => {
-      if (!validBrand(req.params.brand))
-        return res.status(400).json({ error: 'Invalid brand specified in URL' });
-      const result = await WebsiteSavedItemsService.remove(req.websiteAccount.id, kind, req.body);
-      res.status(200).json(result);
+      try {
+        if (!validBrand(req.params.brand))
+          return res.status(400).json({ error: 'Invalid brand specified in URL' });
+        const result = await WebsiteSavedItemsService.remove(req.websiteAccount.id, kind, req.body);
+        res.status(200).json(result);
+      } catch (error) {
+        logger.error(`Website ${kind} remove error:`, error);
+        res.status(500).json({ error: `Failed to remove from ${kind}` });
+      }
     },
   );
 }
@@ -123,15 +146,20 @@ router.post(
   optionalWebsiteAccount,
   validateRequestBody(WebsiteActivityTrackSchema),
   async (req: any, res: Response) => {
-    if (!validBrand(req.params.brand))
-      return res.status(400).json({ error: 'Invalid brand specified in URL' });
-    // Never fails the caller — see WebsiteActivityService.track.
-    await WebsiteActivityService.track(
-      req.apiKeyContext.company_id,
-      req.websiteAccount?.id ?? null,
-      req.body,
-    );
-    res.status(200).json({ tracked: true });
+    try {
+      if (!validBrand(req.params.brand))
+        return res.status(400).json({ error: 'Invalid brand specified in URL' });
+      // Never fails the caller — see WebsiteActivityService.track.
+      await WebsiteActivityService.track(
+        req.apiKeyContext.company_id,
+        req.websiteAccount?.id ?? null,
+        req.body,
+      );
+      res.status(200).json({ tracked: true });
+    } catch (error) {
+      logger.error('Website activity track error:', error);
+      res.status(200).json({ tracked: false });
+    }
   },
 );
 

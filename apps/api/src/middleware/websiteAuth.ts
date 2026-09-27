@@ -25,16 +25,20 @@ export async function requireWebsiteAccount(req: any, res: Response, next: NextF
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
-  const account = await p.websiteAccount.findUnique({ where: { id: payload.accountId } });
-  if (!account || account.token_version !== payload.tokenVersion) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-  if (account.company_id !== req.apiKeyContext?.company_id) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
+  try {
+    const account = await p.websiteAccount.findUnique({ where: { id: payload.accountId } });
+    if (!account || account.token_version !== payload.tokenVersion) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    if (account.company_id !== req.apiKeyContext?.company_id) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
 
-  req.websiteAccount = account;
-  next();
+    req.websiteAccount = account;
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 /** Same verification, but a missing/invalid token is not an error — used by

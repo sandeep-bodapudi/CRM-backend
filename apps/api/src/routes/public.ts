@@ -495,6 +495,10 @@ router.get('/:brand/properties', async (req: any, res: Response) => {
       take: take,
     });
 
+    // The body stays a bare array (both public sites parse it that way);
+    // the count for pagination goes in a header instead of being computed
+    // and thrown away.
+    res.setHeader('X-Total-Count', String(total));
     res.status(200).json(properties.map(shapePublicProperty));
   } catch (error) {
     logger.error('Fetch public properties error:', error);

@@ -8,7 +8,7 @@ import { generateAccessToken, generateRefreshToken, REFRESH_TOKEN_TTL_MS } from 
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { LoginSchema, ChangePasswordSchema, Roles } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
-import { loginRateLimiter, refreshRateLimiter } from '../middleware/rateLimiter';
+import { loginRateLimiter, loginRateLimitKey, refreshRateLimiter } from '../middleware/rateLimiter';
 import { publicAssetUrl } from '../utils/media';
 import { decryptData } from '../utils/crypto';
 
@@ -141,8 +141,8 @@ router.post(
       });
 
       // Reset rate limiter on success
-      const ip = req.ip || req.headers['x-forwarded-for'] || 'UNKNOWN_IP';
-      loginRateLimiter.resetKey(ip as string);
+      // Only this account's own counter -- see loginRateLimitKey.
+      loginRateLimiter.resetKey(loginRateLimitKey(req));
 
       // Set httpOnly refresh cookie
       res.cookie('refreshToken', refreshToken, {
@@ -496,12 +496,18 @@ router.post(
 
 router.post('/logout', validateRequestBody(EmptyBodySchema), async (req, res: Response) => {
   const refreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'];
-  if (refreshToken) {
+  if (typeof refreshToken === 'string' && refreshToken) {
     const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    await p.authSession.updateMany({
-      where: { refresh_token_hash: refreshTokenHash },
-      data: { revoked: true, revocation_reason: 'LOGGED_OUT' },
-    });
+    try {
+      await p.authSession.updateMany({
+        where: { refresh_token_hash: refreshTokenHash },
+        data: { revoked: true, revocation_reason: 'LOGGED_OUT' },
+      });
+    } catch (error) {
+      // The client is logging out either way -- still clear the cookie and
+      // answer 200 rather than leaving the request hanging.
+      logger.error('Logout session revoke error:', error);
+    }
   }
   res.clearCookie('refreshToken', { path: '/' });
   return res.status(200).json({ message: 'Logged out successfully' });

@@ -16,7 +16,7 @@ import fs from 'fs';
 
 const router = Router();
 
-import { memoryUpload, getStorageService } from '../services/storage.service';
+import { memoryUpload, getStorageService, UPLOAD_DIR } from '../services/storage.service';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -159,7 +159,13 @@ router.get(
     try {
       const id = parseInt(req.params.id, 10);
       const proofUrl = await ExpenseRefundService.getProof(req.user!, id);
-      const filePath = path.join(process.cwd(), proofUrl);
+      // proofUrl is "/uploads/<subdir>/<file>" (LocalStorageService); resolve
+      // it against the same UPLOAD_DIR the file was written to, not cwd.
+      const relative = proofUrl.replace(/^\/?uploads\//, '');
+      const filePath = path.resolve(UPLOAD_DIR, relative);
+      if (!filePath.startsWith(path.resolve(UPLOAD_DIR) + path.sep)) {
+        return res.status(404).json({ error: 'Proof image file not found on server.' });
+      }
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: 'Proof image file not found on server.' });
       }

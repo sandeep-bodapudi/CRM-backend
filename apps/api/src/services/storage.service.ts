@@ -10,7 +10,7 @@ import SftpClient = require('ssh2-sftp-client');
 // Accepts either name: existing deployments (Render, .env.example) already
 // document UPLOAD_ROOT; the code historically read UPLOAD_DIR instead, so
 // UPLOAD_ROOT was silently never applied. Both now work.
-const UPLOAD_DIR =
+export const UPLOAD_DIR =
   process.env.UPLOAD_DIR || process.env.UPLOAD_ROOT || path.join(process.cwd(), 'uploads');
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
