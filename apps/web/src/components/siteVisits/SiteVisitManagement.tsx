@@ -19,7 +19,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useWhatsApp } from '../../hooks/useWhatsApp';
-import { API_BASE_URL } from '../../config';
+import { API_BASE_URL, mediaUrl } from '../../config';
 import { Roles, Permissions } from '../../shared';
 import { EmployeeListItem } from '../../types';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
@@ -52,6 +52,23 @@ interface SiteVisit {
   feedback_notes?: string;
   rating?: string;
   proof_photo_url?: string;
+  // Already returned by the API but never displayed (the MD's "site visit
+  // data is not clear" -- when it was completed, why it was cancelled, who
+  // it was passed between, whether management was alerted).
+  created_at?: string;
+  completed_at?: string | null;
+  cancellation_reason?: string | null;
+  reassignments?: {
+    id: number;
+    created_at: string;
+    reason?: string | null;
+    from_employee?: { id: number; full_name: string } | null;
+    to_employee?: { id: number; full_name: string } | null;
+  }[];
+  escalation?: {
+    managing_director_notified_at?: string | null;
+    marketing_director_notified_at?: string | null;
+  } | null;
   lead: {
     id: number;
     lead_code: string;
@@ -769,6 +786,67 @@ export const SiteVisitManagement: React.FC = () => {
                     <p className="text-slate-700 text-[11px] italic">"{visit.feedback_notes}"</p>
                   </div>
                 )}
+
+                {['REQUESTED', 'PENDING_ACCEPTANCE'].includes(visit.status) &&
+                  new Date(visit.scheduled_date) < new Date() && (
+                    <div className="text-[11px] font-bold text-red-700 bg-red-50 p-2 rounded-xl border border-red-200">
+                      Overdue — the visit date has passed and the PM never accepted it. Update
+                      whether it happened.
+                    </div>
+                  )}
+
+                <details className="text-[11px] text-slate-600 bg-slate-50 rounded-xl border border-slate-200 px-3 py-2">
+                  <summary className="cursor-pointer font-bold text-slate-700">Visit history</summary>
+                  <ul className="mt-2 space-y-1">
+                    {visit.created_at && (
+                      <li>
+                        Booked by <b>{visit.telecaller?.full_name}</b> on{' '}
+                        {new Date(visit.created_at).toLocaleString('en-IN')}
+                      </li>
+                    )}
+                    <li>Scheduled for {new Date(visit.scheduled_date).toLocaleString('en-IN')}</li>
+                    {visit.escalation?.marketing_director_notified_at && (
+                      <li>
+                        Marketing Director alerted{' '}
+                        {new Date(visit.escalation.marketing_director_notified_at).toLocaleString('en-IN')}
+                      </li>
+                    )}
+                    {visit.escalation?.managing_director_notified_at && (
+                      <li>
+                        MD alerted{' '}
+                        {new Date(visit.escalation.managing_director_notified_at).toLocaleString('en-IN')}
+                      </li>
+                    )}
+                    {(visit.reassignments || []).map((r) => (
+                      <li key={r.id}>
+                        Passed from <b>{r.from_employee?.full_name || '—'}</b> to{' '}
+                        <b>{r.to_employee?.full_name || '—'}</b> on{' '}
+                        {new Date(r.created_at).toLocaleString('en-IN')}
+                        {r.reason ? ` — "${r.reason}"` : ''}
+                      </li>
+                    ))}
+                    {visit.completed_at && (
+                      <li>
+                        Completed {new Date(visit.completed_at).toLocaleString('en-IN')}
+                      </li>
+                    )}
+                    {visit.proof_photo_url && (
+                      <li>
+                        <a
+                          href={mediaUrl(visit.proof_photo_url)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-navy-700 font-bold underline"
+                        >
+                          View visit photo
+                        </a>
+                      </li>
+                    )}
+                    {visit.cancellation_reason && (
+                      <li className="text-red-700">Cancelled: {visit.cancellation_reason}</li>
+                    )}
+                  </ul>
+                </details>
               </div>
 
               {/* Action Buttons based on Workflow Stage */}
