@@ -285,10 +285,21 @@ router.patch(
       // trivial self-assigned tasks.
       const isSelfAssigned = existingTask.created_by === existingTask.assignee_id;
 
-      if (isCompleting && !isSelfAssigned) {
+      // Award the point once per task, to the person the task belongs to.
+      // Previously: reopening and re-completing a task earned +1 every
+      // time, and the point went to whoever clicked Complete (a manager
+      // closing a subordinate's task took the credit).
+      const alreadyAwarded =
+        isCompleting &&
+        !isSelfAssigned &&
+        (await p.auditEvent.count({
+          where: { action: 'TASK_COMPLETED', entity_type: 'TASK', entity_id: taskId },
+        })) > 0;
+
+      if (isCompleting && !isSelfAssigned && !alreadyAwarded) {
         await p.auditEvent.create({
           data: {
-            actor_id: employeeId,
+            actor_id: existingTask.assignee_id,
             action: 'TASK_COMPLETED',
             entity_type: 'TASK',
             entity_id: taskId,
@@ -298,13 +309,13 @@ router.patch(
 
         await p.notification.create({
           data: {
-            employee_id: employeeId,
+            employee_id: existingTask.assignee_id,
             title: '🎉 Task Completed!',
             message: `Great job! You completed "${updatedTask.title}" and earned +1.0 performance points!`,
             type: 'SYSTEM_ALERT',
           },
         });
-      } else if (isCompleting) {
+      } else if (isCompleting && isSelfAssigned) {
         await p.notification.create({
           data: {
             employee_id: employeeId,

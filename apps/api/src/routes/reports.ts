@@ -10,6 +10,56 @@ const router = Router();
 
 const p = prisma;
 
+/** [start, end) of the current IST calendar day as UTC instants. */
+function istTodayRange(now = new Date()) {
+  const { dateString } = getISTComponents(now);
+  const start = new Date(`${dateString}T00:00:00+05:30`);
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000), dateString };
+}
+
+/**
+ * What the system itself recorded for this employee today. Calls are the
+ * logged call attempts (POST /leads/:id/calls); leads worked counts every
+ * lead they actually acted on (imports excluded).
+ */
+async function verifiedActivityToday(employeeId: number) {
+  const { start, end } = istTodayRange();
+  const [calls, leadsWorked] = await Promise.all([
+    p.leadActivity.count({
+      where: {
+        actor_id: employeeId,
+        activity_type: 'CALL_LOGGED',
+        created_at: { gte: start, lt: end },
+      },
+    }),
+    p.leadActivity.findMany({
+      where: {
+        actor_id: employeeId,
+        activity_type: { notIn: ['LEAD_CREATED', 'ASSIGNED_TO_AGENT'] },
+        created_at: { gte: start, lt: end },
+      },
+      select: { lead_id: true },
+      distinct: ['lead_id'],
+    }),
+  ]);
+  return { calls, leads_worked: leadsWorked.length };
+}
+
+// GET /api/v1/reports/today-activity - what the system recorded for me today
+// (shown on the daily report form next to the self-reported numbers).
+router.get(
+  '/today-activity',
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      return res.status(200).json(await verifiedActivityToday(req.user!.employeeId));
+    } catch (error) {
+      logger.error('Today activity error:', error);
+      return res.status(500).json({ error: "Failed to load today's activity" });
+    }
+  },
+);
+
 // POST /api/v1/reports/daily - Submit Daily Report with Below-Target Validation
 router.post(
   '/daily',
@@ -21,7 +71,25 @@ router.post(
       const { role_name, metrics, summary_notes, below_target_reason } = req.body;
       const now = new Date();
 
-      const calls = parseInt(metrics?.callsMade || metrics?.call_count || '0', 10);
+      // One report per IST day. Several submissions on the same day each
+      // earned the "target exceeded" bonus again.
+      const { start: dayStart, end: dayEnd } = istTodayRange(now);
+      const existing = await p.dailyReport.findFirst({
+        where: { employee_id: employeeId, submitted_at: { gte: dayStart, lt: dayEnd } },
+        select: { id: true },
+      });
+      if (existing) {
+        return res.status(409).json({ error: "You have already submitted today's report." });
+      }
+
+      // Calls are judged on what the system recorded (logged call attempts),
+      // not the number typed into the form. Points/penalties used to follow
+      // the typed number, which rewarded typing the target (production
+      // reports said "100 calls" on days with zero recorded activity). The
+      // typed figure is still stored, so the two can be compared.
+      const reportedCalls = parseInt(metrics?.callsMade || metrics?.call_count || '0', 10);
+      const verified = await verifiedActivityToday(employeeId);
+      const calls = verified.calls;
       const visits = parseInt(metrics?.siteVisits || metrics?.site_visit_count || '0', 10);
       const deals = parseInt(metrics?.leadsQualified || metrics?.closed_deal_count || '0', 10);
 
@@ -47,7 +115,7 @@ router.post(
       if (activeTarget) {
         if (calls < activeTarget.calls_target) {
           isBelowTarget = true;
-          missedMetrics.push(`Calls: ${calls}/${activeTarget.calls_target}`);
+          missedMetrics.push(`Calls logged in CRM: ${calls}/${activeTarget.calls_target}`);
         }
         if (visits < activeTarget.site_visits_target) {
           isBelowTarget = true;
@@ -83,12 +151,16 @@ router.post(
           employee_id: employeeId,
           submitted_at: now,
           summary: summary_notes || 'Daily work summary submitted.',
-          call_count: calls,
+          call_count: reportedCalls,
           site_visit_count: visits,
           closed_deal_count: deals,
           target_met: !isBelowTarget,
           below_target_reason: isBelowTarget ? below_target_reason : null,
-          metrics_json: metrics || null,
+          metrics_json: {
+            ...(metrics || {}),
+            verified_calls: verified.calls,
+            verified_leads_worked: verified.leads_worked,
+          },
         },
       });
 
@@ -99,7 +171,13 @@ router.post(
           action: 'SUBMIT_DAILY_REPORT',
           entity_type: 'DAILY_REPORT',
           entity_id: report.id,
-          new_value: JSON.stringify({ calls, visits, deals, isBelowTarget }),
+          new_value: JSON.stringify({
+            calls,
+            reported_calls: reportedCalls,
+            visits,
+            deals,
+            isBelowTarget,
+          }),
         },
       });
 
