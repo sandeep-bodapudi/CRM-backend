@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger';
+import { getISTMidnightInstant } from '../../utils/time';
 import { Router, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { authenticateToken, AuthenticatedRequest } from '../../middleware/auth';
@@ -40,11 +41,15 @@ router.get(
 
       if (startDate || endDate) {
         whereClause.check_in_at = {};
-        if (startDate) whereClause.check_in_at.gte = new Date(startDate as string);
+        // Whole IST calendar days. new Date('YYYY-MM-DD') is UTC midnight and
+        // setHours used the server's (UTC) clock, so "1 Oct" ran from
+        // 05:30 IST on 1 Oct to 05:29 IST on 2 Oct.
+        if (startDate) {
+          whereClause.check_in_at.gte = getISTMidnightInstant(String(startDate).slice(0, 10));
+        }
         if (endDate) {
-          const end = new Date(endDate as string);
-          end.setHours(23, 59, 59, 999);
-          whereClause.check_in_at.lte = end;
+          const end = getISTMidnightInstant(String(endDate).slice(0, 10));
+          whereClause.check_in_at.lt = new Date(end.getTime() + 24 * 60 * 60 * 1000);
         }
       }
 

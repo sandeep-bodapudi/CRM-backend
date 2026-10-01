@@ -256,8 +256,8 @@ export class AnalyticsService {
   private static async attendanceExceptionsToday(
     companyId: number,
   ): Promise<{ exceptions: number; active: number }> {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    // IST midnight (setHours used the server's UTC clock -> 05:30 IST).
+    const startOfDay = getISTMidnightInstant(getISTComponents(new Date()).dateString);
 
     const res: any = await p.$queryRaw`
       SELECT COUNT(DISTINCT e.id) as count

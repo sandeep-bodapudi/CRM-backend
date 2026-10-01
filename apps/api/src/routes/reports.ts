@@ -241,8 +241,8 @@ router.get('/today-status', authenticateToken, async (req: AuthenticatedRequest,
       where: {
         employee_id: employeeId,
         submitted_at: {
-          gte: new Date(`${dateString}T00:00:00.000Z`),
-          lte: new Date(`${dateString}T23:59:59.999Z`),
+          gte: new Date(`${dateString}T00:00:00.000+05:30`),
+          lte: new Date(`${dateString}T23:59:59.999+05:30`),
         },
       },
     });
@@ -301,12 +301,12 @@ router.get(
       let endDate: Date;
 
       if (date && typeof date === 'string') {
-        startDate = new Date(`${date}T00:00:00.000Z`);
-        endDate = new Date(`${date}T23:59:59.999Z`);
+        startDate = new Date(`${date}T00:00:00.000+05:30`);
+        endDate = new Date(`${date}T23:59:59.999+05:30`);
       } else {
         const { dateString } = getISTComponents(new Date());
-        startDate = new Date(`${dateString}T00:00:00.000Z`);
-        endDate = new Date(`${dateString}T23:59:59.999Z`);
+        startDate = new Date(`${dateString}T00:00:00.000+05:30`);
+        endDate = new Date(`${dateString}T23:59:59.999+05:30`);
       }
 
       const reports = await p.dailyReport.findMany({

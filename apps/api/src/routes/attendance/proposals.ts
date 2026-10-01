@@ -81,11 +81,9 @@ router.post(
       }
 
       // Check if start_date is >= tomorrow
-      const startDateObj = new Date(start_date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      if (startDateObj <= today) {
+      // Compare IST calendar dates (the server clock is UTC).
+      const todayIST = getISTComponents(new Date()).dateString;
+      if (String(start_date).slice(0, 10) <= todayIST) {
         return res.status(400).json({
           error: 'Leave requests must be submitted at least 1 day in advance.',
         });

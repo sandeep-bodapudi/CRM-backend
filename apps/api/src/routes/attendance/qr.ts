@@ -377,8 +377,8 @@ router.post(
             type: 'EARLY_CHECKOUT',
             status: 'APPROVED',
             target_date: {
-              gte: new Date(`${dateString}T00:00:00.000Z`),
-              lte: new Date(`${dateString}T23:59:59.999Z`),
+              gte: new Date(`${dateString}T00:00:00.000+05:30`),
+              lte: new Date(`${dateString}T23:59:59.999+05:30`),
             },
           },
         });
@@ -397,8 +397,8 @@ router.post(
           where: {
             employee_id: targetEmployeeId,
             submitted_at: {
-              gte: new Date(`${dateString}T00:00:00.000Z`),
-              lte: new Date(`${dateString}T23:59:59.999Z`),
+              gte: new Date(`${dateString}T00:00:00.000+05:30`),
+              lte: new Date(`${dateString}T23:59:59.999+05:30`),
             },
           },
         });
