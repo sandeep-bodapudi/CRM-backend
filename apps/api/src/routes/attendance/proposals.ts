@@ -445,6 +445,9 @@ router.post(
               check_out_at: checkOut,
               working_duration_minutes: 540,
               status: 'PRESENT',
+              // Created by approving a request, not by anyone scanning -- the
+              // column default (QR_SCAN) made these look like real kiosk scans.
+              source: 'PROPOSAL',
             },
           });
         } else if (existingLog.status !== 'PRESENT') {
@@ -514,6 +517,7 @@ router.post(
               check_out_at: checkOut,
               working_duration_minutes: 0,
               status: 'ABSENT',
+              source: 'PROPOSAL',
             },
           });
         } else if (existingLog.status !== 'ABSENT') {

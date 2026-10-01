@@ -723,12 +723,23 @@ export const siteVisitEscalationJob = async () => {
   logger.info('Executing Site Visit Escalation...');
   const now = new Date();
 
-  // Find all pending site visits (REQUESTED, RESCHEDULE_REQUESTED, PENDING_PM_RECONFIRMATION)
-  // that have not yet occurred
+  // Visits still waiting on a PM response. PENDING_ACCEPTANCE is where every
+  // new booking actually sits (bookVisit auto-routes REQUESTED straight to
+  // it) -- it was missing from this list, so in production no visit was ever
+  // escalated. Visits whose date has already passed without a PM response
+  // are included too (up to 7 days back, so ancient rows don't re-alert):
+  // those are exactly the ones the MD most needs to hear about.
   const pendingVisits = await prisma.siteVisitBooking.findMany({
     where: {
-      status: { in: ['REQUESTED', 'RESCHEDULE_REQUESTED', 'PENDING_PM_RECONFIRMATION'] },
-      scheduled_date: { gt: now },
+      status: {
+        in: [
+          'REQUESTED',
+          'PENDING_ACCEPTANCE',
+          'RESCHEDULE_REQUESTED',
+          'PENDING_PM_RECONFIRMATION',
+        ],
+      },
+      scheduled_date: { gt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) },
     },
     include: {
       escalation: true,
@@ -773,7 +784,8 @@ export const siteVisitEscalationJob = async () => {
     const hoursNotice =
       (visit.scheduled_date.getTime() - visit.created_at.getTime()) / (1000 * 60 * 60);
 
-    const needsMD = hoursUntilVisit <= 10 || hoursNotice <= 10;
+    const isOverdue = hoursUntilVisit < 0;
+    const needsMD = isOverdue || hoursUntilVisit <= 10 || hoursNotice <= 10;
     const needsMarketing = hoursUntilVisit <= 12 || hoursNotice <= 12;
 
     const directors = await getDirectors(visit.telecaller.company_id);
@@ -802,9 +814,14 @@ export const siteVisitEscalationJob = async () => {
 
     const notificationPayload = {
       type: 'SITE_VISIT_ESCALATED',
-      title: `URGENT: Site Visit Escalation (${visit.booking_code})`,
-      message: `Site Visit ${visit.booking_code} at ${locationInfo} on ${visit.scheduled_date.toLocaleString()} needs PM response. PM Status: ${pmStatus}. Customer: ${visit.lead.customer_name} (${visit.lead.phone}).`,
-      link: `/site-visits/${visit.id}`,
+      title: isOverdue
+        ? `OVERDUE: Site visit ${visit.booking_code} was never accepted`
+        : `URGENT: Site Visit Escalation (${visit.booking_code})`,
+      message: isOverdue
+        ? `The visit date (${visit.scheduled_date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}) has passed and the PM never accepted it. PM: ${pmStatus}. Location: ${locationInfo}. Customer: ${visit.lead.customer_name} (${visit.lead.phone}). Please check whether the visit happened and update it.`
+        : `Site Visit ${visit.booking_code} at ${locationInfo} on ${visit.scheduled_date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} needs PM response. PM Status: ${pmStatus}. Customer: ${visit.lead.customer_name} (${visit.lead.phone}).`,
+      // There is no per-visit page in the web app (/site-visits/:id 404'd).
+      link: '/site-visits',
     };
 
     if (needsMD && !visit.escalation!.managing_director_notified_at) {

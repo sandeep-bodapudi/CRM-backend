@@ -26,6 +26,13 @@ interface AttendanceLog {
   working_duration_minutes: number | null;
   status: string;
   source: string;
+  /** Last manual change, from the audit trail (null = never touched by hand). */
+  edited_by?: {
+    name: string;
+    at: string;
+    created_manually: boolean;
+    edit_count: number;
+  } | null;
   notes: string | null;
   employee: {
     id?: number;
@@ -592,11 +599,33 @@ export const AttendanceManagement: React.FC = () => {
                           className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md border ${
                             log.source === 'MANUAL'
                               ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                              : log.source === 'QR_SCAN_EDITED' || log.edited_by
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : log.source === 'PROPOSAL'
+                                  ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                  : 'bg-slate-50 text-slate-500 border-slate-200'
                           }`}
                         >
-                          {log.source.replace(/_/g, ' ')}
+                          {log.source === 'QR_SCAN_EDITED'
+                            ? 'Scan · edited'
+                            : log.source === 'PROPOSAL'
+                              ? 'From approved request'
+                              : log.source === 'QR_SCAN' && log.edited_by
+                                ? 'Scan · edited'
+                                : log.source.replace(/_/g, ' ')}
                         </span>
+                        {/* Who changed it by hand -- so an edit can never pass
+                            for a genuine scan, and a shared login stands out. */}
+                        {log.edited_by && (
+                          <div
+                            className="text-[10px] text-slate-500 mt-1 leading-tight"
+                            title={new Date(log.edited_by.at).toLocaleString('en-IN')}
+                          >
+                            {log.edited_by.created_manually ? 'Added' : 'Edited'} by{' '}
+                            <span className="font-bold text-slate-700">{log.edited_by.name}</span>
+                            {log.edited_by.edit_count > 1 && ` (${log.edited_by.edit_count}×)`}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-3 text-right">
                         <button

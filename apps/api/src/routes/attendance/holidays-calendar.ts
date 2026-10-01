@@ -215,9 +215,11 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
         // Prevent later SYSTEM_AUTO logs from overwriting earlier MANUAL or QR_SCAN logs
         if (calendarMap[dateString].log) {
           const prevLog = calendarMap[dateString].log;
-          const prevSourcePriority =
-            prevLog.source === 'MANUAL' ? 3 : prevLog.source === 'QR_SCAN' ? 2 : 1;
-          const currentSourcePriority = l.source === 'MANUAL' ? 3 : l.source === 'QR_SCAN' ? 2 : 1;
+          // An HR-edited scan is a human correction, same weight as MANUAL.
+          const sourcePriority = (src: string) =>
+            src === 'MANUAL' || src === 'QR_SCAN_EDITED' ? 3 : src === 'QR_SCAN' ? 2 : 1;
+          const prevSourcePriority = sourcePriority(prevLog.source);
+          const currentSourcePriority = sourcePriority(l.source);
 
           if (currentSourcePriority < prevSourcePriority) {
             // Keep the previous status and log, don't overwrite

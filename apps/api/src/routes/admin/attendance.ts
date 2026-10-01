@@ -67,8 +67,52 @@ router.get(
         p.attendanceLog.count({ where: whereClause }),
       ]);
 
+      // Who last created/edited each record by hand. Uses the audit trail
+      // rather than a new column, so older edits (made before edits were
+      // labelled) show up too. Falls back to the employee code when the
+      // account has no name -- e.g. the shared technical admin login, which
+      // is exactly what the MD needs to see.
+      const editEvents = logs.length
+        ? await p.auditEvent.findMany({
+            where: {
+              entity_type: 'ATTENDANCE_LOG',
+              action: { in: ['ADMIN_ATTENDANCE_UPDATE', 'ADMIN_ATTENDANCE_CREATE'] },
+              entity_id: { in: logs.map((l) => l.id) },
+            },
+            orderBy: { created_at: 'desc' },
+            select: { entity_id: true, actor_id: true, action: true, created_at: true },
+          })
+        : [];
+      const editors = editEvents.length
+        ? await p.employee.findMany({
+            where: { id: { in: [...new Set(editEvents.map((e) => e.actor_id))] } },
+            select: { id: true, full_name: true, employee_code: true },
+          })
+        : [];
+      const editorName = new Map(editors.map((e) => [e.id, e.full_name || e.employee_code]));
+      const lastEdit = new Map<number, (typeof editEvents)[number]>();
+      const editCount = new Map<number, number>();
+      for (const ev of editEvents) {
+        if (!lastEdit.has(ev.entity_id)) lastEdit.set(ev.entity_id, ev);
+        editCount.set(ev.entity_id, (editCount.get(ev.entity_id) || 0) + 1);
+      }
+      const logsWithEditor = logs.map((l) => {
+        const ev = lastEdit.get(l.id);
+        return {
+          ...l,
+          edited_by: ev
+            ? {
+                name: editorName.get(ev.actor_id) || `#${ev.actor_id}`,
+                at: ev.created_at,
+                created_manually: ev.action === 'ADMIN_ATTENDANCE_CREATE',
+                edit_count: editCount.get(l.id) || 1,
+              }
+            : null,
+        };
+      });
+
       return res.status(200).json({
-        logs,
+        logs: logsWithEditor,
         pagination: {
           total,
           page: Number(page),
@@ -250,6 +294,18 @@ router.patch(
       if (notes !== undefined) {
         updateData.notes = notes || null;
         auditActions.push(`notes updated`);
+      }
+
+      // A kiosk scan whose time or status was changed by hand must not keep
+      // looking like a genuine scan -- that made HR edits indistinguishable
+      // from real check-ins in every report. (Notes-only edits don't count.)
+      const changedRecord =
+        updateData.status !== undefined ||
+        updateData.check_in_at !== undefined ||
+        updateData.check_out_at !== undefined;
+      if (changedRecord && log.source === 'QR_SCAN') {
+        updateData.source = 'QR_SCAN_EDITED';
+        auditActions.push(`source: QR_SCAN → QR_SCAN_EDITED`);
       }
 
       const updated = await p.attendanceLog.update({
