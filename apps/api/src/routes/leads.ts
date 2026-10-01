@@ -272,6 +272,18 @@ router.patch(
   },
 );
 
+// Validated body for the generic lead edit -- it used to pass req.body straight
+// through (a string budget or a non-array preferred_locations reached Prisma
+// or produced a one-letter "location").
+const LeadGenericUpdateSchema = z.object({
+  budget_min: z.number().nonnegative().nullable().optional(),
+  budget_max: z.number().nonnegative().nullable().optional(),
+  property_type_preference: z.string().nullable().optional(),
+  preferred_location: z.string().nullable().optional(),
+  preferred_locations: z.array(z.string()).optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
 // PATCH /api/v1/leads/:id - Generic lead update (for qualification, budget, notes, etc.)
 router.patch(
   '/:id',
@@ -280,12 +292,24 @@ router.patch(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const leadId = parseInt(req.params.id, 10);
-      const updateData = req.body;
 
       const existingLead = await LeadService.getLeadById(req.user!, leadId);
       if (!existingLead) {
         return res.status(404).json({ error: 'Lead not found' });
       }
+      // Same rule as every other lead mutation: the assigned telecaller or
+      // management. Being able to SEE a lead (e.g. a team lead viewing a
+      // subordinate's) used to be enough to edit it here.
+      if (!existingLead.can_edit) {
+        return res.status(403).json({ error: 'Only the assigned telecaller can edit this lead' });
+      }
+      const parsed = LeadGenericUpdateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: parsed.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', '),
+        });
+      }
+      const updateData = parsed.data;
 
       // Basic update using prisma
       const updated = await prisma.$transaction(
