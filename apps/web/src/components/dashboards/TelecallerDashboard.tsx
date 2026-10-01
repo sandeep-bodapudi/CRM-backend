@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { CallOutcomeModal } from '../leads/CallOutcomeModal';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
 import { LeadListItem } from '../../types';
@@ -59,6 +60,9 @@ export const TelecallerDashboard: React.FC = () => {
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [qualifyingLead, setQualifyingLead] = useState<LeadListItem | null>(null);
   const [activeSection, setActiveSection] = useState<'leads' | 'tasks'>('leads');
+  // Lead whose call outcome we're waiting for (set when Call is tapped; the
+  // dialog is waiting when the telecaller comes back from the dialer).
+  const [callLead, setCallLead] = useState<LeadListItem | null>(null);
   // Render-side cap, independent of the fetch: a telecaller can have
   // thousands of active leads after a big bulk import, and rendering that
   // many DOM cards at once freezes the browser regardless of how much data
@@ -84,6 +88,7 @@ export const TelecallerDashboard: React.FC = () => {
       let assignedLeads = [];
       let tomorrowVisits: ListItem[] = [];
       let whatsappTasks = 0;
+      let callBacksDue = 0;
       let visitsByLead: Record<number, any[]> = {};
 
       if (leadsRes.ok) {
@@ -144,6 +149,15 @@ export const TelecallerDashboard: React.FC = () => {
       if (tasksRes.ok) {
         const data = await tasksRes.json();
         const tasks = data.tasks || [];
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+        callBacksDue = tasks.filter(
+          (t: any) =>
+            !['COMPLETED', 'CANCELLED'].includes(t.status) &&
+            typeof t.title === 'string' &&
+            t.title.startsWith('Call back ') &&
+            new Date(t.target_date) <= endOfToday,
+        ).length;
         whatsappTasks = tasks.filter(
           (t: any) =>
             !['COMPLETED', 'CANCELLED'].includes(t.status) &&
@@ -152,13 +166,21 @@ export const TelecallerDashboard: React.FC = () => {
         ).length;
       }
 
-      return { assignedLeads, tomorrowVisits, whatsappTasks, demosByLead, visitsByLead };
+      return {
+        assignedLeads,
+        tomorrowVisits,
+        whatsappTasks,
+        callBacksDue,
+        demosByLead,
+        visitsByLead,
+      };
     },
   });
 
   const assignedLeads = data?.assignedLeads || [];
   const tomorrowVisits = data?.tomorrowVisits || [];
   const whatsappTasks = data?.whatsappTasks || 0;
+  const callBacksDue = data?.callBacksDue || 0;
   const demosByLead = data?.demosByLead || {};
   const visitsByLead = data?.visitsByLead || {};
 
@@ -215,7 +237,12 @@ export const TelecallerDashboard: React.FC = () => {
   // Compute KPIs from existing data
   const myAssignedLeadsRaw = assignedLeads.filter((l: any) => l.assigned_to?.id === user?.id);
   const leadsAssigned = myAssignedLeadsRaw.length;
-  const contactedToday = myAssignedLeadsRaw.filter((l: any) => l.status === 'CONTACTED').length;
+  // Leads actually worked today (call logged / status changed today). This
+  // used to count every lead currently in CONTACTED status, however long ago.
+  const todayKey = new Date().toDateString();
+  const contactedToday = myAssignedLeadsRaw.filter(
+    (l: any) => l.last_contacted_at && new Date(l.last_contacted_at).toDateString() === todayKey,
+  ).length;
   const uncontactedLeads = myAssignedLeadsRaw.filter(
     (l: any) => l.status === 'NEW' || l.status === 'ASSIGNED',
   ).length;
@@ -263,7 +290,7 @@ export const TelecallerDashboard: React.FC = () => {
           <div className="bg-white/10 rounded-2xl p-3 text-center border border-white/10">
             <p className="text-emerald-400 font-black text-xl">{contactedToday}</p>
             <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mt-0.5">
-              Contacted
+              Worked today
             </p>
           </div>
         </div>
@@ -297,6 +324,35 @@ export const TelecallerDashboard: React.FC = () => {
           onDemoComplete={async () => {}}
           initialShowScheduleModal={scheduleModalOpen}
         />
+      )}
+
+      {callLead && (
+        <CallOutcomeModal
+          lead={callLead}
+          onClose={() => setCallLead(null)}
+          onLogged={() => queryClient.invalidateQueries({ queryKey: ['telecallerDashboardData'] })}
+        />
+      )}
+
+      {/* ─── CALL-BACKS DUE ─── */}
+      {callBacksDue > 0 && (
+        <div className="mx-4 sm:mx-0">
+          <div
+            onClick={() => setActiveSection('tasks')}
+            className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3.5 flex items-center gap-3 cursor-pointer hover:bg-emerald-100 transition-colors"
+          >
+            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0">
+              <PhoneCall className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-black text-emerald-900 text-sm">
+                {callBacksDue} call-back{callBacksDue > 1 ? 's' : ''} due today
+              </p>
+              <p className="text-emerald-700/70 text-xs mt-0.5">Customers waiting for your call</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+          </div>
+        </div>
       )}
 
       {/* ─── TOMORROW VISITS BANNER ─── */}
@@ -469,6 +525,11 @@ export const TelecallerDashboard: React.FC = () => {
                 >
                   <a
                     href={`tel:${lead.phone}`}
+                    onClick={() => {
+                      // Let the dialer open first; the outcome dialog is
+                      // waiting when they come back to the app.
+                      if (lead.can_edit !== false) setTimeout(() => setCallLead(lead), 400);
+                    }}
                     className="flex items-center justify-center gap-2 py-3 text-emerald-600 font-bold text-xs hover:bg-emerald-50 transition-colors"
                   >
                     <PhoneCall className="w-3.5 h-3.5" /> Call
@@ -479,11 +540,13 @@ export const TelecallerDashboard: React.FC = () => {
                       className="flex items-center justify-center gap-2 py-3 text-amber-600 font-bold text-xs hover:bg-amber-50 transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
-                        updateLeadStatus(lead.id, 'CONTACTED');
+                        // Replaces the old one-tap "Contacted": a lead becomes
+                        // contacted when a call is logged as answered.
+                        setCallLead(lead);
                       }}
                       disabled={lead.can_edit === false}
                     >
-                      <Zap className="w-3.5 h-3.5" /> Contacted
+                      <Zap className="w-3.5 h-3.5" /> Log call
                     </button>
                   )}
 

@@ -15,6 +15,8 @@ import { LeadService, AppError } from '../services/lead.service';
 import { syncLeadPreferredLocations } from '../services/lead/shared';
 import { OpportunityService } from '../services/opportunity.service';
 import prisma from '../lib/prisma';
+import { z } from 'zod';
+import { logCall } from '../services/lead/calls';
 
 const router = Router();
 
@@ -195,6 +197,38 @@ router.post(
         message: `Lead ${updated.lead_code} reassigned successfully`,
         lead: updated,
       });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
+// POST /api/v1/leads/:id/calls - Log a call attempt and its outcome
+// (optionally with a dated call-back, which becomes a follow-up task).
+const LogCallSchema = z.object({
+  outcome: z.enum([
+    'CONNECTED_INTERESTED',
+    'CONNECTED_NOT_INTERESTED',
+    'CALL_BACK',
+    'NO_ANSWER',
+    'BUSY_OR_SWITCHED_OFF',
+    'WRONG_NUMBER',
+  ]),
+  notes: z.string().max(1000).optional(),
+  follow_up_at: z.string().optional(),
+});
+
+router.post(
+  '/:id/calls',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_UPDATE),
+  validateRequestBody(LogCallSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const leadId = parseInt(req.params.id, 10);
+      if (isNaN(leadId)) return res.status(400).json({ error: 'Invalid Lead ID' });
+      const result = await logCall(req.user!, leadId, req.body);
+      return res.status(201).json({ message: 'Call logged', ...result });
     } catch (error: any) {
       return handleServiceError(error, res);
     }

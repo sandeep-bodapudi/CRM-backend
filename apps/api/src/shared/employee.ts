@@ -119,6 +119,8 @@ export const EmployeeUpdateSchema = EmployeeSelfUpdateSchema.extend({
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'RESIGNED']).optional().nullable(),
   attendance_required: z.boolean().optional().nullable(),
   role_name: z.string().optional().nullable(),
+  // The role the form showed and is replacing; other roles are kept.
+  replaces_role_name: z.string().optional().nullable(),
   accessible_company_ids: z.array(z.union([z.string(), z.number()])).optional(),
 });
 
@@ -137,6 +139,7 @@ export const EmployeePromoteSchema = z
     job_title: blankAsAbsent(z.string().min(1).optional()),
     salary_ctc: z.union([z.string(), z.number()]).optional(),
     role_name: z.string().optional(),
+    replaces_role_name: z.string().optional(),
     reason: z.string().optional(),
   })
   .refine((data) => data.job_title || data.salary_ctc !== undefined || data.role_name, {

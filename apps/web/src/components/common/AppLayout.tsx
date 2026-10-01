@@ -1,6 +1,7 @@
 import React, { type ComponentType, useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
+  KeyRound,
   Users,
   Building2,
   MapPinned,
@@ -452,6 +453,13 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     icon: ShieldCheck,
     path: '/super-admin',
     requiredAnyRole: [Roles.ADMIN],
+  },
+  {
+    id: 'access-control',
+    label: 'Roles & Access',
+    icon: KeyRound,
+    path: '/access-control',
+    requiredAnyRole: [Roles.MD, Roles.ADMIN],
   },
   {
     id: 'kiosk-management',

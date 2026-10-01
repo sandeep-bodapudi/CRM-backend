@@ -197,6 +197,9 @@ const KioskManagementPage = lazy(() =>
     default: m.KioskManagementPage,
   })),
 );
+const AccessControlPage = lazy(() =>
+  import('./components/admin/AccessControlPage').then((m) => ({ default: m.AccessControlPage })),
+);
 const AdminSuperHub = lazy(() =>
   import('./components/admin/AdminSuperHub').then((m) => ({ default: m.AdminSuperHub })),
 );
@@ -692,6 +695,10 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
       {/* System Control was folded into Super Admin (2026-09-15) — redirect any old bookmarks/links. */}
       <Route path="/system-control" element={<Navigate to="/super-admin" replace />} />
       <Route
+        path="/access-control"
+        element={isMD || isTechAdmin ? <AccessControlPage /> : <Navigate to="/" replace />}
+      />
+      <Route
         path="/kiosk-management"
         element={isMD || isTechAdmin ? <KioskManagementPage /> : <Navigate to="/" replace />}
       />
@@ -739,6 +746,7 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     '/hr-hub': 'Employees & Attendance',
     '/analytics': 'Analytics & Goals',
     '/kiosk-management': 'Kiosk Management',
+    '/access-control': 'Roles & Access',
     '/finance': 'Payments & Refunds',
     '/action-center': 'Action Center',
     '/pm/approvals': 'PM Approvals',

@@ -11,6 +11,7 @@ import {
 import { can } from '../../authz/authorization';
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import { validateRequestBody } from '../../middleware/validate';
+import { applyRoleChange, roleAssignmentError } from './roleChange';
 
 const router = Router();
 
@@ -113,7 +114,21 @@ router.post(
         return res.status(403).json({ error: 'Cannot modify salary' });
       }
 
-      const { job_title, salary_ctc, role_name, reason } = req.body;
+      const { job_title, salary_ctc, role_name, replaces_role_name, reason } = req.body;
+
+      // Same role-assignment rules as Edit. Promote previously had none, so
+      // anyone allowed to edit employees could promote themselves or others
+      // to Admin/MD through this endpoint.
+      if (role_name) {
+        const currentRoleNames = (
+          await prisma.employeeRole.findMany({
+            where: { employee_id: employeeId },
+            include: { role: true },
+          })
+        ).map((r) => r.role.name);
+        const roleError = roleAssignmentError(req.user!, employeeId, currentRoleNames, role_name);
+        if (roleError) return res.status(403).json({ error: roleError });
+      }
 
       const oldValue = {
         job_title: targetEmployee.job_title,
@@ -124,23 +139,9 @@ router.post(
       if (salary_ctc !== undefined) updateData.salary_ctc = parseFloat(salary_ctc as any);
 
       const updatedEmp = await prisma.$transaction(async (tx) => {
-        let roleChanged = false;
-        if (role_name) {
-          const targetRole = await tx.role.findUnique({ where: { name: role_name } });
-          if (targetRole) {
-            const currentRoles = await tx.employeeRole.findMany({
-              where: { employee_id: employeeId },
-              include: { role: true },
-            });
-            roleChanged = !currentRoles.some((r: any) => r.role.name === role_name);
-            if (roleChanged) {
-              await tx.employeeRole.deleteMany({ where: { employee_id: employeeId } });
-              await tx.employeeRole.create({
-                data: { employee_id: employeeId, role_id: targetRole.id },
-              });
-            }
-          }
-        }
+        const roleChanged = role_name
+          ? await applyRoleChange(tx, employeeId, role_name, replaces_role_name)
+          : false;
 
         if (roleChanged) {
           updateData.token_version = { increment: 1 };

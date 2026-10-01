@@ -35,10 +35,11 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { Roles } from '../../shared';
 import { API_BASE_URL } from '../../config';
 import { QRCodeVisual } from '../common/QRCodeVisual';
 import { AddEmployeeWizard } from './AddEmployeeWizard';
-import { EditEmployeeModal } from './EditEmployeeModal';
+import { EditEmployeeModal, ROLE_OPTIONS } from './EditEmployeeModal';
 import { DataTable, ColumnDef } from '../ui/DataTable';
 import {
   maskPAN,
@@ -100,7 +101,7 @@ interface ManagerOption {
 }
 
 export const EmployeeManagement: React.FC = () => {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [managers, setManagers] = useState<ManagerOption[]>([]);
@@ -129,6 +130,9 @@ export const EmployeeManagement: React.FC = () => {
   const [promoteJobTitle, setPromoteJobTitle] = useState('');
   const [promoteSalary, setPromoteSalary] = useState('');
   const [promoteReason, setPromoteReason] = useState('');
+  // Optional new system role. "Promote" used to change only the title and
+  // salary, so a telecaller promoted to Sales Manager kept telecaller access.
+  const [promoteRole, setPromoteRole] = useState('');
   const [convertType, setConvertType] = useState<'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN'>(
     'FULL_TIME',
   );
@@ -390,8 +394,8 @@ export const EmployeeManagement: React.FC = () => {
 
   const handlePromote = async () => {
     if (!dossierEmp) return;
-    if (!promoteJobTitle && !promoteSalary) {
-      alert('Provide a new job title and/or salary.');
+    if (!promoteJobTitle && !promoteSalary && !promoteRole) {
+      alert('Provide a new job title, salary and/or role.');
       return;
     }
     setIsSubmitting(true);
@@ -402,6 +406,9 @@ export const EmployeeManagement: React.FC = () => {
         body: JSON.stringify({
           job_title: promoteJobTitle || undefined,
           salary_ctc: promoteSalary || undefined,
+          ...(promoteRole && promoteRole !== dossierEmp.roles[0]
+            ? { role_name: promoteRole, replaces_role_name: dossierEmp.roles[0] || undefined }
+            : {}),
           reason: promoteReason || undefined,
         }),
       });
@@ -411,6 +418,7 @@ export const EmployeeManagement: React.FC = () => {
         setPromoteJobTitle('');
         setPromoteSalary('');
         setPromoteReason('');
+        setPromoteRole('');
         setDossierEmp(null);
         fetchEmployeesAndMetadata();
         setTimeout(() => setSuccessMessage(null), 4000);
@@ -1120,6 +1128,35 @@ export const EmployeeManagement: React.FC = () => {
               </button>
             </div>
             <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  New System Role (what they can access)
+                </label>
+                <select
+                  value={promoteRole}
+                  onChange={(e) => setPromoteRole(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy-500"
+                >
+                  <option value="">
+                    Keep current role ({dossierEmp.roles.join(', ') || 'none'})
+                  </option>
+                  {ROLE_OPTIONS.filter(
+                    (o) =>
+                      !dossierEmp.roles.includes(o.value) &&
+                      (o.value !== Roles.ADMIN || (user?.roles || []).includes(Roles.ADMIN)) &&
+                      (o.value !== Roles.MD ||
+                        (user?.roles || []).some((r) => r === Roles.ADMIN || r === Roles.MD)),
+                  ).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Changing the role changes what they can see and do; they'll be asked to log in
+                  again.
+                </p>
+              </div>
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
                   New Job Title

@@ -7,6 +7,7 @@ import { can } from '../../authz/authorization';
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import { encryptData, decryptData } from '../../utils/crypto';
 import { validateRequestBody } from '../../middleware/validate';
+import { applyRoleChange, roleAssignmentError } from './roleChange';
 import {
   findEmployeeContactConflict,
   employeeContactConflictMessage,
@@ -40,25 +41,23 @@ router.patch(
       const canViewSensitive = can(req.user!, Permissions.EMPLOYEES_VIEW_SENSITIVE, targetEmployee);
       const body = req.body;
 
-      // Privilege Escalation Check: Prevent self-promotion or assigning Admin/MD roles unless authorized
+      // Privilege escalation rules shared with /promote (see roleChange.ts).
+      // The old self-change check compared the new role with the person's
+      // JOB TITLE, so an MD re-saving their own profile was refused.
       if (body.role_name) {
-        if (employeeId === req.user!.employeeId && body.role_name !== targetEmployee.job_title) {
-          return res
-            .status(403)
-            .json({ error: 'Forbidden: Cannot self-promote or change own role' });
-        }
-
-        if (body.role_name === Roles.ADMIN && !req.user!.roles.includes(Roles.ADMIN)) {
-          return res.status(403).json({ error: 'Forbidden: Only Admin can assign Admin role' });
-        }
-
-        if (
-          body.role_name === Roles.MD &&
-          !req.user!.roles.includes(Roles.ADMIN) &&
-          !req.user!.roles.includes(Roles.MD)
-        ) {
-          return res.status(403).json({ error: 'Forbidden: Only MD or Admin can assign MD role' });
-        }
+        const currentRoleNames = (
+          await prisma.employeeRole.findMany({
+            where: { employee_id: employeeId },
+            include: { role: true },
+          })
+        ).map((r) => r.role.name);
+        const roleError = roleAssignmentError(
+          req.user!,
+          employeeId,
+          currentRoleNames,
+          body.role_name,
+        );
+        if (roleError) return res.status(403).json({ error: roleError });
       }
 
       const updateData: any = {};
@@ -148,25 +147,13 @@ router.patch(
 
       const updatedEmp = await prisma.$transaction(async (tx) => {
         if (body.role_name) {
-          const targetRole = await tx.role.findUnique({ where: { name: body.role_name } });
-          if (targetRole) {
-            const currentRoles = await tx.employeeRole.findMany({
-              where: { employee_id: employeeId },
-              include: { role: true },
-            });
-            const hasDifferentRole = !currentRoles.some((r: any) => r.role.name === body.role_name);
-            if (hasDifferentRole) {
-              shouldRevokeSessions = true;
-            }
-
-            await tx.employeeRole.deleteMany({ where: { employee_id: employeeId } });
-            await tx.employeeRole.create({
-              data: {
-                employee_id: employeeId,
-                role_id: targetRole.id,
-              },
-            });
-          }
+          const roleChanged = await applyRoleChange(
+            tx,
+            employeeId,
+            body.role_name,
+            body.replaces_role_name,
+          );
+          if (roleChanged) shouldRevokeSessions = true;
         }
 
         if (body.accessible_company_ids !== undefined) {

@@ -102,7 +102,9 @@ router.put(
       }
 
       // Tenant check: target employee must be in same company_id
-      if (targetEmployee.branch?.company_id !== req.user!.companyId && !isUserAdmin) {
+      // Employee's own company (not their branch's): an employee with no
+      // branch has branch === null, which made this refuse the MD outright.
+      if (targetEmployee.company_id !== req.user!.companyId && !isUserAdmin) {
         return res
           .status(403)
           .json({ error: 'Forbidden: Cannot manage roles for an employee outside your company' });

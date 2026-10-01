@@ -25,6 +25,36 @@ import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { useToast } from '../../context/ToastContext';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
+import { Roles } from '../../shared';
+
+const ROLE_LABELS: Record<string, string> = {
+  [Roles.TELECALLER]: 'Telecaller',
+  [Roles.AGENT]: 'Agent',
+  [Roles.SALES_MANAGER]: 'Sales Manager',
+  [Roles.DIGITAL_MARKETING_EXECUTIVE]: 'Digital Marketing Executive',
+  [Roles.DIGITAL_LEAD_OPERATOR]: 'Digital Lead Operator',
+  [Roles.DIGITAL_MARKETING_HEAD]: 'Digital Marketing Head',
+  [Roles.MARKETING_DIRECTOR]: 'Marketing Director',
+  [Roles.PROJECT_MANAGER]: 'Project Manager',
+  [Roles.INVENTORY_EXECUTIVE]: 'Inventory Executive',
+  [Roles.CHANNEL_PARTNER_MANAGER]: 'Channel Partner Manager',
+  [Roles.HR_MANAGER]: 'HR',
+  [Roles.FINANCE]: 'Accountant',
+  [Roles.STAFF]: 'Staff',
+  [Roles.MD]: 'Managing Director (MD)',
+  [Roles.ADMIN]: 'System Admin',
+};
+// Every role in the shared list, labelled; unknown future roles fall back
+// to their stored name rather than silently missing from the dropdown.
+export const ROLE_OPTIONS = Object.values(Roles).map((value) => ({
+  value,
+  label: ROLE_LABELS[value] || value,
+}));
+
+const COMPANY_OPTIONS = [
+  { id: '1', name: 'Radha Real Homes' },
+  { id: '2', name: 'Sonthillu Constructions' },
+];
 
 interface Employee {
   id: number;
@@ -81,7 +111,8 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
   branches,
   managers,
 }) => {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, user } = useAuth();
+  const currentUserRoles = user?.roles || [];
   const { showToast, showError } = useToast();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -93,7 +124,13 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
   const [fullName, setFullName] = useState(employee.fullName || '');
   const [phone, setPhone] = useState(employee.phone || '');
   const [email, setEmail] = useState(employee.email || '');
-  const [roleName, setRoleName] = useState(employee.roles[0] || 'Telecaller');
+  // The role shown in the dropdown. Only sent when actually changed, and
+  // then as a swap of just this role -- the form used to always resend it,
+  // and the backend replaced ALL roles with it on every save, silently
+  // deleting a second role whenever anything (even a phone number) was edited.
+  const initialRoleName = employee.roles[0] || '';
+  const otherRoles = employee.roles.slice(1);
+  const [roleName, setRoleName] = useState(initialRoleName);
   const [branchId, setBranchId] = useState<string>(String(employee.branchId || ''));
   const [accessibleCompanyIds, setAccessibleCompanyIds] = useState<string[]>(
     employee.accessibleCompanyIds?.map(String) || [],
@@ -168,9 +205,13 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
         secondary_phone: secondaryPhone || undefined,
         whatsapp_number: whatsappNumber || undefined,
         email: email || undefined,
-        role_name: roleName || undefined,
+        ...(roleName && roleName !== initialRoleName
+          ? { role_name: roleName, replaces_role_name: initialRoleName || undefined }
+          : {}),
         branch_id: branchId || undefined,
-        accessible_company_ids: accessibleCompanyIds.length > 0 ? accessibleCompanyIds : undefined,
+        // Always the explicit list ticked below (empty = home company only);
+        // "empty means keep current" made access impossible to remove.
+        accessible_company_ids: accessibleCompanyIds,
 
         current_address: currentAddress || undefined,
         permanent_address: permanentAddress || undefined,
@@ -324,21 +365,29 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                     onChange={(e) => setRoleName(e.target.value)}
                     className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500"
                   >
-                    <option value="telecallers">Telecaller</option>
-                    <option value="Agent">Agent</option>
-                    <option value="Sales manager">Sales Manager</option>
-                    <option value="digital marketing executive">Digital Marketing Executive</option>
-                    <option value="Digital lead operator">Digital Lead Operator</option>
-                    <option value="Digital Marketing head(manager)">Digital Marketing Head</option>
-                    <option value="marketing director">Marketing Director</option>
-                    <option value="project managers">Project Manager</option>
-                    <option value="Channel partner manager">Channel Partner Manager</option>
-                    <option value="HR">HR</option>
-                    <option value="accountant">Accountant</option>
-                    <option value="Managing director">Managing Director (MD)</option>
-                    <option value="Admin (Technical)">System Admin</option>
-                    <option value="Staff">Staff</option>
+                    {/* Built from the shared role list so a newly added role
+                        (e.g. Inventory Executive) appears without a code
+                        change here. Admin/MD are only offered to people the
+                        backend would allow to assign them. */}
+                    {ROLE_OPTIONS.filter(
+                      (o) =>
+                        o.value === initialRoleName ||
+                        ((o.value !== Roles.ADMIN || currentUserRoles.includes(Roles.ADMIN)) &&
+                          (o.value !== Roles.MD ||
+                            currentUserRoles.includes(Roles.ADMIN) ||
+                            currentUserRoles.includes(Roles.MD))),
+                    ).map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
                   </select>
+                  {otherRoles.length > 0 && (
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Also has: <span className="font-bold">{otherRoles.join(', ')}</span> (kept
+                      when you change the role above).
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -359,30 +408,40 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                 </div>
 
                 <div className="col-span-1 md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
                     Accessible Companies
-                    <span className="text-[10px] text-slate-400 font-normal">
-                      (Leave empty to keep current access intact)
-                    </span>
                   </label>
-                  <select
-                    multiple
-                    value={accessibleCompanyIds}
-                    onChange={(e) => {
-                      const options = Array.from(
-                        e.target.selectedOptions,
-                        (option) => option.value,
+                  {/* Checkboxes instead of a Ctrl-click multi-select (unusable
+                      on a phone). Nothing ticked = home company only. */}
+                  <div className="flex flex-wrap gap-3">
+                    {COMPANY_OPTIONS.map((c) => {
+                      const checked = accessibleCompanyIds.includes(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm cursor-pointer ${
+                            checked
+                              ? 'border-navy-500 bg-navy-50 text-navy-900'
+                              : 'border-slate-300 text-slate-600'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setAccessibleCompanyIds((prev) =>
+                                checked ? prev.filter((x) => x !== c.id) : [...prev, c.id],
+                              )
+                            }
+                          />
+                          {c.name}
+                        </label>
                       );
-                      setAccessibleCompanyIds(options);
-                    }}
-                    className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500 min-h-[80px]"
-                  >
-                    <option value="1">Radha Real Homes</option>
-                    <option value="2">Sonthillu Constructions</option>
-                  </select>
+                    })}
+                  </div>
                   <p className="text-[10px] text-slate-500 mt-1">
-                    Hold Ctrl (Windows) or Cmd (Mac) to select multiple. Overwrites existing access
-                    if changed.
+                    Which companies' leads, projects and properties this person can see. Nothing
+                    ticked = only their home company.
                   </p>
                 </div>
               </div>
