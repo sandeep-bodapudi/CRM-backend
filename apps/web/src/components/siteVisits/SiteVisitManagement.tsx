@@ -796,7 +796,9 @@ export const SiteVisitManagement: React.FC = () => {
                   )}
 
                 <details className="text-[11px] text-slate-600 bg-slate-50 rounded-xl border border-slate-200 px-3 py-2">
-                  <summary className="cursor-pointer font-bold text-slate-700">Visit history</summary>
+                  <summary className="cursor-pointer font-bold text-slate-700">
+                    Visit history
+                  </summary>
                   <ul className="mt-2 space-y-1">
                     {visit.created_at && (
                       <li>
@@ -808,13 +810,17 @@ export const SiteVisitManagement: React.FC = () => {
                     {visit.escalation?.marketing_director_notified_at && (
                       <li>
                         Marketing Director alerted{' '}
-                        {new Date(visit.escalation.marketing_director_notified_at).toLocaleString('en-IN')}
+                        {new Date(visit.escalation.marketing_director_notified_at).toLocaleString(
+                          'en-IN',
+                        )}
                       </li>
                     )}
                     {visit.escalation?.managing_director_notified_at && (
                       <li>
                         MD alerted{' '}
-                        {new Date(visit.escalation.managing_director_notified_at).toLocaleString('en-IN')}
+                        {new Date(visit.escalation.managing_director_notified_at).toLocaleString(
+                          'en-IN',
+                        )}
                       </li>
                     )}
                     {(visit.reassignments || []).map((r) => (
@@ -826,9 +832,7 @@ export const SiteVisitManagement: React.FC = () => {
                       </li>
                     ))}
                     {visit.completed_at && (
-                      <li>
-                        Completed {new Date(visit.completed_at).toLocaleString('en-IN')}
-                      </li>
+                      <li>Completed {new Date(visit.completed_at).toLocaleString('en-IN')}</li>
                     )}
                     {visit.proof_photo_url && (
                       <li>
