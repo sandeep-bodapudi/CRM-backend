@@ -231,7 +231,9 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
         department: department || undefined,
         employment_type: employmentType || undefined,
         report_required: reportRequired,
-        reporting_manager_id: reportingManagerId || undefined,
+        // null (not undefined) for "No Manager": undefined was dropped from
+        // the request, so a manager could never be removed.
+        reporting_manager_id: reportingManagerId || null,
         date_of_joining: dateOfJoining || undefined,
         salary_ctc: monthlySalary || undefined,
         background_education: backgroundEducation || undefined,
