@@ -1,3 +1,4 @@
+import { getISTComponents } from '../../utils/time';
 import { prisma } from '../../lib/prisma';
 import { TokenPayload } from '../../utils/jwt';
 import { can } from '../../authz/authorization';
@@ -360,7 +361,7 @@ export async function updateLeadStatus(
         (a: any) => a.activity_type === 'CALL_LOGGED',
       );
       const distinctDays = new Set(
-        callLogs.map((a: any) => new Date(a.created_at).toISOString().split('T')[0]),
+        callLogs.map((a: any) => getISTComponents(new Date(a.created_at)).dateString),
       );
       if (distinctDays.size < 5) {
         throw new AppError(
