@@ -197,6 +197,9 @@ const KioskManagementPage = lazy(() =>
     default: m.KioskManagementPage,
   })),
 );
+const TeamTodayPage = lazy(() =>
+  import('./components/md/TeamTodayPage').then((m) => ({ default: m.TeamTodayPage })),
+);
 const ApprovalsInboxPage = lazy(() =>
   import('./components/md/ApprovalsInboxPage').then((m) => ({ default: m.ApprovalsInboxPage })),
 );
@@ -698,6 +701,12 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
       {/* System Control was folded into Super Admin (2026-09-15) — redirect any old bookmarks/links. */}
       <Route path="/system-control" element={<Navigate to="/super-admin" replace />} />
       <Route
+        path="/team-today"
+        element={
+          isMD || isTechAdmin || isHRManager ? <TeamTodayPage /> : <Navigate to="/" replace />
+        }
+      />
+      <Route
         path="/approvals-inbox"
         element={isMD || isTechAdmin ? <ApprovalsInboxPage /> : <Navigate to="/" replace />}
       />
@@ -755,6 +764,7 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     '/kiosk-management': 'Kiosk Management',
     '/access-control': 'Roles & Access',
     '/approvals-inbox': 'Approvals',
+    '/team-today': 'Team Today',
     '/finance': 'Payments & Refunds',
     '/action-center': 'Action Center',
     '/pm/approvals': 'PM Approvals',

@@ -1,6 +1,7 @@
 import React, { type ComponentType, useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
+  Activity,
   Inbox,
   KeyRound,
   Users,
@@ -231,6 +232,14 @@ type SidebarNavItem = {
 const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   // CORE APP (Un-grouped)
   { id: 'command-center', label: 'Dashboard', icon: Settings2, path: '/dashboard' },
+  {
+    // What each employee actually did today, from system records.
+    id: 'team-today',
+    label: 'Team Today',
+    icon: Activity,
+    path: '/team-today',
+    requiredAnyRole: [Roles.MD, Roles.ADMIN, Roles.HR_MANAGER],
+  },
   {
     // One inbox for everything waiting on the MD (badge = total count).
     id: 'approvals-inbox',

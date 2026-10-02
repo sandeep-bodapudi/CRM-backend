@@ -2,7 +2,8 @@ import { logger } from '../utils/logger';
 import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
-import { getAccessibleCompanyIds } from '../authz/dataScope';
+import { getAccessibleCompanyIds, buildEmployeeScope } from '../authz/dataScope';
+import { getISTComponents, getISTMidnightInstant } from '../utils/time';
 import { requireAuthz } from '../middleware/authz';
 import { Roles, Permissions } from '../shared';
 import { AnalyticsService } from '../services/analytics.service';
@@ -10,6 +11,169 @@ import { AnalyticsService } from '../services/analytics.service';
 const router = Router();
 
 const p = prisma;
+
+// GET /api/v1/md/team-today?date=YYYY-MM-DD — what each employee actually did
+// on a given IST day, built only from system records (attendance, CRM
+// actions, tasks, site visits), with their self-typed daily report next to
+// it. The MD's complaint was "employees are working but I don't know what
+// they did today; I can't trust the daily reports" — this is that answer.
+router.get(
+  '/team-today',
+  authenticateToken,
+  requireRole([Roles.MD, Roles.ADMIN, Roles.HR_MANAGER]),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const reqDate = typeof req.query.date === 'string' ? req.query.date.slice(0, 10) : '';
+      const dateString = /^\d{4}-\d{2}-\d{2}$/.test(reqDate)
+        ? reqDate
+        : getISTComponents(new Date()).dateString;
+      const start = getISTMidnightInstant(dateString);
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      const inDay = { gte: start, lt: end };
+
+      const scope = await buildEmployeeScope(req.user!);
+      const employees = await p.employee.findMany({
+        where: { ...scope, status: 'ACTIVE' },
+        select: {
+          id: true,
+          full_name: true,
+          employee_code: true,
+          attendance_required: true,
+          roles: { select: { role: { select: { name: true } } } },
+        },
+        orderBy: { full_name: 'asc' },
+      });
+      const ids = employees.map((e) => e.id);
+      if (ids.length === 0) return res.status(200).json({ date: dateString, employees: [] });
+
+      const [byType, firstLast, attendance, tasksDone, reports, visitsDone, leadsWorked] =
+        await Promise.all([
+          p.leadActivity.groupBy({
+            by: ['actor_id', 'activity_type'],
+            where: { actor_id: { in: ids }, created_at: inDay },
+            _count: { _all: true },
+          }),
+          p.leadActivity.groupBy({
+            by: ['actor_id'],
+            where: {
+              actor_id: { in: ids },
+              created_at: inDay,
+              activity_type: { notIn: ['LEAD_CREATED', 'ASSIGNED_TO_AGENT'] },
+            },
+            _min: { created_at: true },
+            _max: { created_at: true },
+          }),
+          p.attendanceLog.findMany({
+            where: { employee_id: { in: ids }, check_in_at: inDay },
+            select: {
+              employee_id: true,
+              check_in_at: true,
+              check_out_at: true,
+              status: true,
+              source: true,
+            },
+            orderBy: { check_in_at: 'asc' },
+          }),
+          p.task.groupBy({
+            by: ['assignee_id'],
+            where: { assignee_id: { in: ids }, status: 'COMPLETED', completed_at: inDay },
+            _count: { _all: true },
+          }),
+          p.dailyReport.findMany({
+            where: { employee_id: { in: ids }, submitted_at: inDay },
+            select: { employee_id: true, call_count: true, summary: true, submitted_at: true },
+          }),
+          p.siteVisitBooking.groupBy({
+            by: ['assigned_agent_id'],
+            where: { assigned_agent_id: { in: ids }, status: 'COMPLETED', completed_at: inDay },
+            _count: { _all: true },
+          }),
+          p.leadActivity.findMany({
+            where: {
+              actor_id: { in: ids },
+              created_at: inDay,
+              activity_type: { notIn: ['LEAD_CREATED', 'ASSIGNED_TO_AGENT'] },
+            },
+            select: { actor_id: true, lead_id: true },
+            distinct: ['actor_id', 'lead_id'],
+          }),
+        ]);
+
+      const count = (empId: number, types: string[]) =>
+        byType
+          .filter((r) => r.actor_id === empId && types.includes(r.activity_type))
+          .reduce((n, r) => n + r._count._all, 0);
+
+      const rows = employees.map((e) => {
+        const att = attendance.find((a) => a.employee_id === e.id);
+        const fl = firstLast.find((f) => f.actor_id === e.id);
+        const report = reports.find((r) => r.employee_id === e.id);
+        const calls = count(e.id, ['CALL_LOGGED']);
+        const leads = leadsWorked.filter((l) => l.actor_id === e.id).length;
+        const workActions = byType
+          .filter(
+            (r) =>
+              r.actor_id === e.id &&
+              !['LEAD_CREATED', 'ASSIGNED_TO_AGENT'].includes(r.activity_type),
+          )
+          .reduce((n, r) => n + r._count._all, 0);
+        const tasks = tasksDone.find((t) => t.assignee_id === e.id)?._count._all || 0;
+        const visits = visitsDone.find((v) => v.assigned_agent_id === e.id)?._count._all || 0;
+
+        const flags: string[] = [];
+        if (att && workActions === 0 && tasks === 0 && visits === 0) {
+          flags.push('Present, but no work recorded in the CRM');
+        }
+        if (report && report.call_count > calls + 5) {
+          flags.push(`Report claims ${report.call_count} calls; ${calls} logged`);
+        }
+        if (att && att.source !== 'QR_SCAN') flags.push('Attendance entered or edited by hand');
+
+        return {
+          id: e.id,
+          name: e.full_name || e.employee_code,
+          employee_code: e.employee_code,
+          roles: e.roles.map((r) => r.role.name),
+          attendance: att
+            ? {
+                check_in_at: att.check_in_at,
+                check_out_at: att.check_out_at,
+                status: att.status,
+                source: att.source,
+              }
+            : null,
+          attendance_required: e.attendance_required,
+          calls_logged: calls,
+          leads_worked: leads,
+          contacted: count(e.id, ['STATUS_CHANGED']),
+          qualified: count(e.id, ['QUALIFIED']),
+          dropped: count(e.id, ['LEAD_DROPPED']),
+          site_visit_actions: byType
+            .filter((r) => r.actor_id === e.id && r.activity_type.startsWith('SITE_VISIT'))
+            .reduce((n, r) => n + r._count._all, 0),
+          visits_completed: visits,
+          tasks_completed: tasks,
+          leads_imported: count(e.id, ['LEAD_CREATED']),
+          first_action: fl?._min.created_at || null,
+          last_action: fl?._max.created_at || null,
+          report: report
+            ? {
+                submitted_at: report.submitted_at,
+                reported_calls: report.call_count,
+                summary: (report.summary || '').slice(0, 200),
+              }
+            : null,
+          flags,
+        };
+      });
+
+      return res.status(200).json({ date: dateString, employees: rows });
+    } catch (error) {
+      logger.error('Team today error:', error);
+      return res.status(500).json({ error: "Failed to load the team's day" });
+    }
+  },
+);
 
 // GET /api/v1/md/approvals-inbox — everything waiting on the MD, in one place.
 // The MD's pending work used to be spread over six screens (Action Center,
