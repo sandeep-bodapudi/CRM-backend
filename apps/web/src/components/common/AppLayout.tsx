@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import React, { type ComponentType, useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
@@ -519,27 +520,22 @@ export type { SidebarNavItem };
 
 const SidebarNav: React.FC = () => {
   const { user, activeRole, fetchWithAuth } = useAuth();
-  // Total items waiting on the MD, shown as a badge on "Approvals".
-  const [approvalsCount, setApprovalsCount] = React.useState(0);
+  // Total items waiting on the MD, shown as a badge on "Approvals". Shares
+  // the Approvals page's query key, so opening that page doesn't fetch the
+  // same (14-query) inbox a second time.
   const showsApprovals = activeRole === Roles.MD || activeRole === Roles.ADMIN;
-  React.useEffect(() => {
-    if (!showsApprovals) return;
-    let cancelled = false;
-    const load = () =>
-      fetchWithAuth(`${API_BASE_URL}/md/approvals-inbox`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (!cancelled && d) setApprovalsCount(d.total || 0);
-        })
-        .catch(() => {});
-    load();
-    const t = setInterval(load, 5 * 60 * 1000);
-    return () => {
-      cancelled = true;
-      clearInterval(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showsApprovals]);
+  const { data: approvalsInbox } = useQuery({
+    queryKey: ['mdApprovalsInbox'],
+    queryFn: async () => {
+      const res = await fetchWithAuth(`${API_BASE_URL}/md/approvals-inbox`);
+      if (!res.ok) throw new Error('Failed to load approvals');
+      return res.json();
+    },
+    enabled: showsApprovals,
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
+  const approvalsCount: number = approvalsInbox?.total || 0;
   const badge = (id: string) =>
     id === 'approvals-inbox' && approvalsCount > 0 ? (
       <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">

@@ -11,6 +11,7 @@ import { validateRequestBody } from '../middleware/validate';
 import { loginRateLimiter, loginRateLimitKey, refreshRateLimiter } from '../middleware/rateLimiter';
 import { publicAssetUrl } from '../utils/media';
 import { decryptData } from '../utils/crypto';
+import { getEffectivePermissionNames } from '../utils/effectivePermissions';
 
 const router = Router();
 
@@ -291,36 +292,26 @@ router.post(
 // GET /api/v1/auth/me
 router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const employee = await p.employee.findUnique({
-      where: { id: req.user!.employeeId },
-      include: {
-        company: true,
-        branch: true,
-        roles: {
-          include: { role: { include: { permissions: { include: { permission: true } } } } },
+    // Profile and permissions in parallel; permissions come from a single
+    // joined query (see utils/effectivePermissions.ts) instead of a chain of
+    // per-relation queries.
+    const [employee, permissions] = await Promise.all([
+      p.employee.findUnique({
+        where: { id: req.user!.employeeId },
+        include: {
+          company: true,
+          branch: true,
+          roles: { include: { role: true } },
         },
-        permission_overrides: { include: { permission: true } },
-      },
-    });
+      }),
+      getEffectivePermissionNames(req.user!.employeeId),
+    ]);
 
     if (!employee) {
       return res.status(404).json({ error: 'User profile not found' });
     }
 
     const roleNames = employee.roles.map((r: any) => r.role.name);
-    const permissionsSet = new Set<string>();
-    employee.roles.forEach((r: any) => {
-      if (r.role.permissions) {
-        r.role.permissions.forEach((rp: any) => permissionsSet.add(rp.permission.name));
-      }
-    });
-    if (employee.permission_overrides) {
-      employee.permission_overrides.forEach((po: any) => {
-        if (po.is_granted) permissionsSet.add(po.permission.name);
-        else permissionsSet.delete(po.permission.name);
-      });
-    }
-    const permissions = Array.from(permissionsSet);
 
     return res.status(200).json({
       user: mapEmployeeToUser(employee, roleNames, permissions),
@@ -354,65 +345,56 @@ router.post(
 
       const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
-      // Find session inside transaction to prevent concurrent refresh races
-      const result = await p.$transaction(
-        async (tx: import('@prisma/client').Prisma.TransactionClient) => {
-          const session = await tx.authSession.findFirst({
-            where: { refresh_token_hash: refreshTokenHash },
-          });
+      // No interactive transaction: the conditional updateMany below is the
+      // atomic step (only one request can flip consumed false -> true), and
+      // the revocations are idempotent. The transaction only added BEGIN /
+      // COMMIT round trips to the request every page load waits on.
+      const revokeFamily = async (familyToken: string, employeeId: number) => {
+        await p.authSession.updateMany({
+          where: { family_token: familyToken },
+          data: { revoked: true, revocation_reason: 'REFRESH_TOKEN_REUSE_DETECTED' },
+        });
+        await p.auditEvent.create({
+          data: {
+            actor_id: employeeId,
+            action: 'SECURITY_ALERT',
+            entity_type: 'TOKEN_FAMILY_REVOKED',
+            entity_id: employeeId,
+            new_value: `Refresh token reuse detected`,
+          },
+        });
+      };
 
-          if (!session) return { error: 'Invalid session', status: 401 };
-          if (session.revoked) return { error: 'Session revoked', status: 401 };
+      const result = await (async (): Promise<
+        { error: string; status: number; session?: undefined } | { session: any; error?: undefined }
+      > => {
+        const session = await p.authSession.findFirst({
+          where: { refresh_token_hash: refreshTokenHash },
+        });
 
-          if (session.consumed) {
-            // Reuse detection!
-            await tx.authSession.updateMany({
-              where: { family_token: session.family_token },
-              data: { revoked: true, revocation_reason: 'REFRESH_TOKEN_REUSE_DETECTED' },
-            });
+        if (!session) return { error: 'Invalid session', status: 401 };
+        if (session.revoked) return { error: 'Session revoked', status: 401 };
 
-            await tx.auditEvent.create({
-              data: {
-                actor_id: session.employee_id,
-                action: 'SECURITY_ALERT',
-                entity_type: 'TOKEN_FAMILY_REVOKED',
-                entity_id: session.employee_id,
-                new_value: `Refresh token reuse detected`,
-              },
-            });
+        if (session.consumed) {
+          // Reuse detection!
+          await revokeFamily(session.family_token, session.employee_id);
+          return { error: 'Session compromised', status: 401 };
+        }
 
-            return { error: 'Session compromised', status: 401 };
-          }
+        // Mark old token as consumed ATOMICALLY
+        const updateResult = await p.authSession.updateMany({
+          where: { id: session.id, consumed: false },
+          data: { consumed: true },
+        });
 
-          // Mark old token as consumed ATOMICALLY
-          const updateResult = await tx.authSession.updateMany({
-            where: { id: session.id, consumed: false },
-            data: { consumed: true },
-          });
+        if (updateResult.count === 0) {
+          // Concurrent refresh race condition: another request just consumed it!
+          await revokeFamily(session.family_token, session.employee_id);
+          return { error: 'Session compromised', status: 401 };
+        }
 
-          if (updateResult.count === 0) {
-            // Concurrent refresh race condition: another request just consumed it!
-            await tx.authSession.updateMany({
-              where: { family_token: session.family_token },
-              data: { revoked: true, revocation_reason: 'REFRESH_TOKEN_REUSE_DETECTED' },
-            });
-
-            await tx.auditEvent.create({
-              data: {
-                actor_id: session.employee_id,
-                action: 'SECURITY_ALERT',
-                entity_type: 'TOKEN_FAMILY_REVOKED',
-                entity_id: session.employee_id,
-                new_value: `Refresh token reuse detected`,
-              },
-            });
-
-            return { error: 'Session compromised', status: 401 };
-          }
-
-          return { session };
-        },
-      );
+        return { session };
+      })();
 
       if (result.error) {
         res.clearCookie('refreshToken');
@@ -425,16 +407,14 @@ router.post(
         return res.status(401).json({ error: 'Invalid session data', code: 'UNAUTHORIZED' });
       }
 
-      // Fetch employee for fresh permissions
-      const employee = await p.employee.findUnique({
-        where: { id: session.employee_id },
-        include: {
-          roles: {
-            include: { role: { include: { permissions: { include: { permission: true } } } } },
-          },
-          permission_overrides: { include: { permission: true } },
-        },
-      });
+      // Fetch employee and fresh permissions (one joined query) in parallel
+      const [employee, freshPermissions] = await Promise.all([
+        p.employee.findUnique({
+          where: { id: session.employee_id },
+          include: { roles: { include: { role: true } } },
+        }),
+        getEffectivePermissionNames(session.employee_id),
+      ]);
 
       if (!employee || employee.status !== 'ACTIVE') {
         res.clearCookie('refreshToken');
@@ -442,18 +422,6 @@ router.post(
       }
 
       const roleNames = employee.roles.map((r: any) => r.role.name);
-      const permissionsSet = new Set<string>();
-      employee.roles.forEach((r: any) => {
-        if (r.role.permissions) {
-          r.role.permissions.forEach((rp: any) => permissionsSet.add(rp.permission.name));
-        }
-      });
-      if (employee.permission_overrides) {
-        employee.permission_overrides.forEach((po: any) => {
-          if (po.is_granted) permissionsSet.add(po.permission.name);
-          else permissionsSet.delete(po.permission.name);
-        });
-      }
 
       const tokenPayload = {
         employeeId: employee.id,
@@ -461,7 +429,7 @@ router.post(
         companyId: employee.company_id,
         branchId: employee.branch_id,
         roles: roleNames,
-        permissions: Array.from(permissionsSet),
+        permissions: freshPermissions,
         tokenVersion: employee.token_version,
       };
 
