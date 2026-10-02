@@ -89,7 +89,9 @@ export const ReportingSuggestionsCard: React.FC<{ onApplied?: () => void }> = ({
           <div>
             <div className="text-sm font-bold text-amber-900">
               {data.suggestions.length > 0
-                ? `${data.suggestions.length} employee${data.suggestions.length === 1 ? '' : 's'} need a reporting manager`
+                ? data.suggestions.length === 1
+                  ? '1 employee needs a reporting manager'
+                  : `${data.suggestions.length} employees need a reporting manager`
                 : 'Reporting structure'}
             </div>
             <div className="text-xs text-amber-800">
