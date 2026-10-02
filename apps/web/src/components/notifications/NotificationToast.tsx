@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { NotificationItem } from '../../types';
 
@@ -29,10 +30,14 @@ function getTypeIcon(type: string) {
 
 function getTypeGradient(type: string) {
   switch (type) {
-    case 'LEAVE_APPROVED': return 'from-emerald-500 to-teal-500';
-    case 'LEAVE_REJECTED': return 'from-red-500 to-rose-500';
-    case 'SYSTEM': return 'from-amber-500 to-orange-500';
-    default: return 'from-navy-600 to-blue-600';
+    case 'LEAVE_APPROVED':
+      return 'from-emerald-500 to-teal-500';
+    case 'LEAVE_REJECTED':
+      return 'from-red-500 to-rose-500';
+    case 'SYSTEM':
+      return 'from-amber-500 to-orange-500';
+    default:
+      return 'from-navy-600 to-blue-600';
   }
 }
 
@@ -40,6 +45,7 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
   notification,
   onDismiss,
 }) => {
+  const navigate = useNavigate();
   const [visible, setVisible] = useState(false);
   const [progress, setProgress] = useState(100);
 
@@ -73,7 +79,8 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
 
   const handleClick = () => {
     if (notification.link) {
-      window.location.href = notification.link;
+      if (notification.link.startsWith('/')) navigate(notification.link);
+      else window.location.href = notification.link;
     }
     dismiss();
   };
@@ -101,14 +108,19 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
             <div className="flex items-center justify-between gap-2">
               <p className="font-bold text-slate-900 text-sm truncate">{notification.title}</p>
               <button
-                onClick={(e) => { e.stopPropagation(); dismiss(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismiss();
+                }}
                 className="shrink-0 p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
             <p className="text-slate-600 text-xs mt-0.5 line-clamp-2">{notification.message}</p>
-            <p className="text-[10px] text-slate-400 mt-1.5 font-medium">RRH CRMS &bull; just now</p>
+            <p className="text-[10px] text-slate-400 mt-1.5 font-medium">
+              RRH CRMS &bull; just now
+            </p>
           </div>
         </div>
 

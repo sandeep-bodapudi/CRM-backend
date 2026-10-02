@@ -135,6 +135,7 @@ router.get(
         unitsAdded,
         propertiesAdded,
         workLogRows,
+        earlyExits,
       ] = await Promise.all([
         p.siteVisitBooking.groupBy({
           by: ['project_manager_id'],
@@ -187,6 +188,16 @@ router.get(
           where: { actor_id: { in: ids }, action: WORK_LOG_ACTION, created_at: inDay },
           select: { id: true, actor_id: true, new_value: true, created_at: true },
           orderBy: { created_at: 'asc' },
+        }),
+        // Emergency early logout is self-approved with no limit; show it.
+        p.attendanceProposal.findMany({
+          where: {
+            employee_id: { in: ids },
+            type: 'EARLY_CHECKOUT',
+            status: 'APPROVED',
+            target_date: inDay,
+          },
+          select: { employee_id: true, reason: true },
         }),
       ]);
       const countOf = (rows: any[], key: string, empId: number) =>
@@ -246,6 +257,10 @@ router.get(
               ? 'Present, but no work recorded in the CRM'
               : 'Present, but nothing recorded (CRM or work log)',
           );
+        }
+        const early = earlyExits.find((x) => x.employee_id === e.id);
+        if (early) {
+          flags.push(`Left early – emergency request: ${(early.reason || '').slice(0, 80)}`);
         }
         if (kind === 'SITE' && site.visits_awaiting_acceptance > 0) {
           flags.push(
@@ -396,10 +411,11 @@ router.get(
             created_at: true,
             employee_id: true,
           },
-          orderBy: { created_at: 'asc' },
-          take,
+          orderBy: [{ created_at: 'asc' }, { target_date: 'asc' }],
+          // All pending rows: a multi-day leave is one row per day and is
+          // grouped below so it counts (and shows) as one request.
         }),
-        p.attendanceProposal.count({ where: { status: 'PENDING', ...empCo } }),
+        Promise.resolve(0),
         // Visits nobody on the PM side has accepted yet, including ones whose
         // date has already gone by (production: every visit ever booked).
         p.siteVisitBooking.findMany({
@@ -423,6 +439,23 @@ router.get(
         }),
         p.complaint.count({ where: { ...co, status: { in: ['OPEN', 'REOPENED'] } } }),
       ]);
+
+      type ProposalRow = (typeof proposals)[number];
+      const proposalGroups: { first: ProposalRow; last: ProposalRow; days: number }[] = [];
+      const groupIndex = new Map<string, number>();
+      for (const x of proposals) {
+        const key =
+          x.type === 'LEAVE' ? `${x.employee_id}:${x.created_at.getTime()}` : `id:${x.id}`;
+        const at = groupIndex.get(key);
+        if (at === undefined) {
+          groupIndex.set(key, proposalGroups.length);
+          proposalGroups.push({ first: x, last: x, days: 1 });
+        } else {
+          proposalGroups[at].last = x;
+          proposalGroups[at].days++;
+        }
+      }
+      void proposalsN;
 
       const sections = [
         {
@@ -472,12 +505,15 @@ router.get(
           key: 'leave',
           label: 'Leave & attendance requests',
           link: '/approvals',
-          count: proposalsN,
-          items: proposals.map((x) => ({
-            id: x.id,
-            title: `${nameOf.get(x.employee_id) || ''} - ${x.type.replace(/_/g, ' ').toLowerCase()}`,
-            subtitle: `for ${getISTComponents(x.target_date).dateString}`,
-            since: x.created_at,
+          count: proposalGroups.length,
+          items: proposalGroups.slice(0, take).map((g) => ({
+            id: g.first.id,
+            title: `${nameOf.get(g.first.employee_id) || ''} - ${g.first.type.replace(/_/g, ' ').toLowerCase()}`,
+            subtitle:
+              g.days > 1
+                ? `${getISTComponents(g.first.target_date).dateString} to ${getISTComponents(g.last.target_date).dateString} (${g.days} days)`
+                : `for ${getISTComponents(g.first.target_date).dateString}`,
+            since: g.first.created_at,
           })),
         },
         {

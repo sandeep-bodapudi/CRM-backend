@@ -140,4 +140,31 @@ router.get('/my', authenticateToken, async (req: AuthenticatedRequest, res: Resp
   }
 });
 
+// DELETE /api/v1/work-log/:id -- remove one of your own entries, same IST
+// day only (to fix a mistake; past days stay as recorded).
+router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+    const { range } = dayRange(undefined);
+    const removed = await p.auditEvent.deleteMany({
+      where: {
+        id,
+        actor_id: req.user!.employeeId,
+        action: WORK_LOG_ACTION,
+        created_at: range,
+      },
+    });
+    if (removed.count === 0) {
+      return res
+        .status(404)
+        .json({ error: "Entry not found (only today's own entries can be removed)." });
+    }
+    return res.status(200).json({ removed: true });
+  } catch (error) {
+    logger.error('Work log delete error:', error);
+    return res.status(500).json({ error: 'Failed to remove entry' });
+  }
+});
+
 export default router;

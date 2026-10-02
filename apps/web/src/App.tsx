@@ -569,6 +569,7 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
 
       <Route path="/leads" element={<LeadManagement />} />
       <Route path="/leads-clients" element={<LeadManagement />} />
+      <Route path="/leads/:id" element={<LeadManagement />} />
       <Route path="/sales-pipeline" element={<SalesPipelineManagement />} />
       <Route
         path="/customers"

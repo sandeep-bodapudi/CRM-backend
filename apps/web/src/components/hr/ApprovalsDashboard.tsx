@@ -91,6 +91,15 @@ export const ApprovalsDashboard: React.FC = () => {
   const wfhs = queue.filter((q) => q.type === 'WORK_FROM_HOME');
   const fieldWorks = queue.filter((q) => q.type === 'FIELD_WORK');
 
+  // A multi-day leave arrives grouped, with end_date and days.
+  const targetLabel = (item: ProposalItem & { end_date?: string; days?: number }) => {
+    const fmt = (d: string) =>
+      new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+    return item.end_date && item.days && item.days > 1
+      ? `${fmt(item.target_date)} → ${fmt(item.end_date)} (${item.days} days)`
+      : fmt(item.target_date);
+  };
+
   const leaveTypeLabel = (leaveType?: string | null) => {
     if (leaveType === 'FIRST_HALF') return '1st Half';
     if (leaveType === 'SECOND_HALF') return '2nd Half';
@@ -124,7 +133,7 @@ export const ApprovalsDashboard: React.FC = () => {
                       {item.employee?.employee_code || '---'})
                     </span>
                     <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-mono">
-                      Target: {new Date(item.target_date).toLocaleDateString('en-IN')}
+                      Target: {targetLabel(item)}
                     </span>
                     {item.type === 'LEAVE' && (
                       <span className="text-xs bg-navy-50 text-navy-700 border border-navy-200 px-2 py-0.5 rounded-md font-semibold">
@@ -218,7 +227,7 @@ export const ApprovalsDashboard: React.FC = () => {
                       {item.employee?.employee_code || '---'})
                     </span>
                     <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-mono">
-                      Target: {new Date(item.target_date).toLocaleDateString('en-IN')}
+                      Target: {targetLabel(item)}
                     </span>
                     {item.type === 'LEAVE' && (
                       <span className="text-xs bg-navy-50 text-navy-700 border border-navy-200 px-2 py-0.5 rounded-md font-semibold">

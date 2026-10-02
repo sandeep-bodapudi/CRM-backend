@@ -81,6 +81,14 @@ export const WorkLogPage: React.FC = () => {
     }
   };
 
+  const remove = async (id: number) => {
+    if (!window.confirm('Remove this entry?')) return;
+    const res = await fetchWithAuth(`${API_BASE_URL}/work-log/${id}`, { method: 'DELETE' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) setMessage({ ok: false, text: body.error || 'Could not remove.' });
+    queryClient.invalidateQueries({ queryKey: ['myWorkLog'] });
+  };
+
   const entries = data?.entries || [];
 
   return (
@@ -209,7 +217,15 @@ export const WorkLogPage: React.FC = () => {
                     </a>
                   )}
                 </div>
-                <span className="text-[11px] text-slate-400 shrink-0">{t(w.at)}</span>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-[11px] text-slate-400">{t(w.at)}</span>
+                  <button
+                    onClick={() => remove(w.id)}
+                    className="text-[11px] font-bold text-red-500 hover:text-red-700"
+                  >
+                    Remove
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

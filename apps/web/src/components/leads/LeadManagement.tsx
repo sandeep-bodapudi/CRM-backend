@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { formatEmployeeLabel } from '../../utils/employeeLabel';
 import {
   Users,
@@ -256,6 +256,34 @@ export const LeadManagement: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
+  // /leads/:id -- notification links (follow-up reminders, stale leads,
+  // escalations) point here; open that lead's details directly. The route
+  // didn't exist, so tapping a reminder used to land on the dashboard.
+  const { id: routeLeadId } = useParams();
+  const navigate = useNavigate();
+  const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!routeLeadId) return;
+    let cancelled = false;
+    setDeepLinkError(null);
+    fetchWithAuth(`${API_BASE_URL}/leads/${encodeURIComponent(routeLeadId)}`)
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && body.lead) setSelectedLead(body.lead);
+        else setDeepLinkError(body.error || 'This lead could not be opened.');
+      })
+      .catch(() => !cancelled && setDeepLinkError('Network error, please try again.'));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeLeadId]);
+  const closeLead = () => {
+    setSelectedLead(null);
+    if (routeLeadId) navigate('/leads-clients', { replace: true });
+  };
   const [dropLeadId, setDropLeadId] = useState<number | null>(null);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -726,6 +754,20 @@ export const LeadManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {deepLinkError && (
+        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 flex items-center justify-between gap-3">
+          <span>{deepLinkError}</span>
+          <button
+            onClick={() => {
+              setDeepLinkError(null);
+              navigate('/leads-clients', { replace: true });
+            }}
+            className="text-xs font-bold text-amber-900"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-navy-900 via-navy-800 to-slate-900 rounded-3xl p-6 text-white shadow-xl flex flex-wrap items-center justify-between gap-4 border border-navy-700/30">
         <div>
@@ -982,7 +1024,7 @@ export const LeadManagement: React.FC = () => {
       {selectedLead && (
         <LeadDetailModal
           lead={selectedLead}
-          onClose={() => setSelectedLead(null)}
+          onClose={closeLead}
           onUpdateStatus={handleUpdateStatus}
           onRefreshLeads={fetchLeads}
           onDemoComplete={handleDemoCompletion}

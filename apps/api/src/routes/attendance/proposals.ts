@@ -2,7 +2,13 @@ import { logger } from '../../utils/logger';
 import { Router, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../../middleware/auth';
-import { calculateAttendanceStatus, getISTComponents } from '../../utils/time';
+import {
+  calculateAttendanceStatus,
+  getISTComponents,
+  getISTDayOfWeek,
+  getISTMidnightInstant,
+  toHolidayDateKey,
+} from '../../utils/time';
 import { Roles, LateProposalSchema, LeaveProposalSchema, EmptyBodySchema } from '../../shared';
 import { validateRequestBody } from '../../middleware/validate';
 import { notifyEmployee } from '../../utils/notifyEmployee';
@@ -19,6 +25,43 @@ const proposalEmployeeScope = async (req: AuthenticatedRequest) =>
   req.user!.roles.includes(Roles.ADMIN)
     ? {}
     : { company_id: { in: await getAccessibleCompanyIds(req.user!) } };
+
+// A multi-day leave is stored as one row per day sharing a created_at (see
+// /leave-proposal). Collapse them into one entry with the date range for
+// the HR/MD queue and history.
+const groupLeaveDays = <
+  T extends {
+    id: number;
+    type: string;
+    employee_id: number;
+    created_at: Date;
+    target_date: Date;
+    status: string;
+  },
+>(
+  rows: T[],
+) => {
+  const out: (T & { end_date?: Date; days?: number })[] = [];
+  const seen = new Map<string, T & { end_date?: Date; days?: number }>();
+  for (const r of rows) {
+    if (r.type !== 'LEAVE') {
+      out.push(r);
+      continue;
+    }
+    const key = `${r.employee_id}:${r.created_at.getTime()}:${r.status}`;
+    const g = seen.get(key);
+    if (!g) {
+      const entry = { ...r, end_date: r.target_date, days: 1 };
+      seen.set(key, entry);
+      out.push(entry);
+    } else {
+      g.days = (g.days || 1) + 1;
+      if (r.target_date < g.target_date) g.target_date = r.target_date;
+      if (!g.end_date || r.target_date > g.end_date) g.end_date = r.target_date;
+    }
+  }
+  return out;
+};
 
 const proposalLabel = (type: string) =>
   ({
@@ -106,16 +149,78 @@ router.post(
         });
       }
 
-      // Record proposal
-      const proposal = await p.attendanceProposal.create({
-        data: {
+      // A leave covers every working day from start_date to end_date. Only
+      // start_date used to be saved, so on a 3-day leave days 2-3 were
+      // marked UNINFORMED_ABSENT (performance penalty) and shown absent on
+      // the calendar. AttendanceProposal has one target_date, so one row per
+      // day is created; all share one created_at, which is how approve /
+      // reject / the HR queue treat them as a single request.
+      const startKey = String(start_date).slice(0, 10);
+      const endKey = end_date ? String(end_date).slice(0, 10) : startKey;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startKey) || !/^\d{4}-\d{2}-\d{2}$/.test(endKey)) {
+        return res.status(400).json({ error: 'Dates must be YYYY-MM-DD.' });
+      }
+      if (endKey < startKey) {
+        return res.status(400).json({ error: 'End date is before the start date.' });
+      }
+      if (leave_type !== 'FULL_DAY' && endKey !== startKey) {
+        return res.status(400).json({ error: 'A half-day leave is for a single day.' });
+      }
+      const first = getISTMidnightInstant(startKey);
+      const last = getISTMidnightInstant(endKey);
+      const totalDays = Math.round((last.getTime() - first.getTime()) / 86400000) + 1;
+      if (totalDays > 31) {
+        return res.status(400).json({ error: 'A single leave request can cover at most 31 days.' });
+      }
+      const holidays = await p.companyHoliday.findMany({
+        where: {
+          company_id: req.user!.companyId,
+          date: { gte: toHolidayDateKey(startKey), lte: toHolidayDateKey(endKey) },
+        },
+        select: { date: true },
+      });
+      const holidayKeys = new Set(holidays.map((h) => h.date.toISOString().slice(0, 10)));
+      const days: Date[] = [];
+      for (let i = 0; i < totalDays; i++) {
+        const day = new Date(first.getTime() + i * 86400000);
+        const key = getISTComponents(day).dateString;
+        if (getISTDayOfWeek(key) === 0 || holidayKeys.has(key)) continue;
+        days.push(day);
+      }
+      if (days.length === 0) {
+        return res
+          .status(400)
+          .json({ error: 'Those dates are all Sundays or holidays -- no leave needed.' });
+      }
+      const overlapping = await p.attendanceProposal.findFirst({
+        where: {
+          employee_id: req.user!.employeeId,
+          type: 'LEAVE',
+          status: { in: ['PENDING', 'APPROVED'] },
+          target_date: { in: days },
+        },
+      });
+      if (overlapping) {
+        return res.status(409).json({
+          error: `You already have a ${overlapping.status.toLowerCase()} leave on ${getISTComponents(overlapping.target_date).dateString}.`,
+        });
+      }
+
+      const createdAt = new Date();
+      await p.attendanceProposal.createMany({
+        data: days.map((day) => ({
           employee_id: req.user!.employeeId,
           type: 'LEAVE',
           leave_type,
-          target_date: new Date(`${start_date}T00:00:00+05:30`),
-          reason: reason,
+          target_date: day,
+          reason,
           status: 'PENDING',
-        },
+          created_at: createdAt,
+        })),
+      });
+      const proposal = await p.attendanceProposal.findFirst({
+        where: { employee_id: req.user!.employeeId, type: 'LEAVE', created_at: createdAt },
+        orderBy: { target_date: 'asc' },
       });
 
       // Write AuditEvent so the HR approval queue can surface it
@@ -124,20 +229,25 @@ router.post(
           actor_id: req.user!.employeeId,
           action: 'SUBMIT_LEAVE_PROPOSAL',
           entity_type: 'ATTENDANCE_PROPOSAL',
-          entity_id: proposal.id,
+          entity_id: proposal?.id ?? 0,
           new_value: JSON.stringify({
             type: 'LEAVE',
             leave_type,
-            target_date: proposal.target_date,
-            end_date,
+            start_date: startKey,
+            end_date: endKey,
+            working_days: days.length,
             reason,
           }),
         },
       });
 
       return res.status(201).json({
-        message: 'Leave proposal submitted successfully to HR queue',
-        proposalId: proposal.id,
+        message:
+          days.length === 1
+            ? 'Leave request sent for approval.'
+            : `Leave request for ${days.length} working days sent for approval.`,
+        proposalId: proposal?.id ?? null,
+        working_days: days.length,
       });
     } catch (error: any) {
       logger.error('Leave proposal error:', error);
@@ -157,6 +267,22 @@ router.post(
       const { date, reason } = req.body;
       if (!date || !reason) {
         return res.status(400).json({ error: 'Date and reason are required' });
+      }
+
+      // One field-work request per day (pending or approved).
+      const fwStart = new Date(`${String(date).slice(0, 10)}T00:00:00+05:30`);
+      const duplicate = await p.attendanceProposal.findFirst({
+        where: {
+          employee_id: req.user!.employeeId,
+          type: 'FIELD_WORK',
+          status: { in: ['PENDING', 'APPROVED'] },
+          target_date: { gte: fwStart, lt: new Date(fwStart.getTime() + 86400000) },
+        },
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          error: `You already have a ${duplicate.status.toLowerCase()} field-work request for that day.`,
+        });
       }
 
       // Record proposal in AttendanceProposal table
@@ -325,7 +451,7 @@ router.get(
         }
       }
 
-      const mappedProposals = proposals.map((proposal: any) => {
+      const mappedProposals = groupLeaveDays(proposals).map((proposal: any) => {
         const emp = companyEmployees.find((e: any) => e.id === proposal.employee_id);
         const monthlyStats = { ...(statsByEmployee[proposal.employee_id] || emptyStats()) };
 
@@ -371,7 +497,7 @@ router.get(
         take: 100, // Limit to recent 100 to avoid huge payloads
       });
 
-      const mappedProposals = proposals.map((proposal: any) => {
+      const mappedProposals = groupLeaveDays(proposals).map((proposal: any) => {
         const emp = companyEmployees.find((e: any) => e.id === proposal.employee_id);
         return {
           ...proposal,
@@ -419,6 +545,25 @@ router.post(
           reviewed_at: new Date(),
         },
       });
+      // The other days of the same multi-day leave go with it.
+      let leaveDays = 1;
+      if (updated.type === 'LEAVE') {
+        const siblings = await p.attendanceProposal.updateMany({
+          where: {
+            employee_id: updated.employee_id,
+            type: 'LEAVE',
+            status: 'PENDING',
+            created_at: updated.created_at,
+            id: { not: updated.id },
+          },
+          data: {
+            status: 'APPROVED',
+            reviewed_by: req.user!.employeeId,
+            reviewed_at: new Date(),
+          },
+        });
+        leaveDays += siblings.count;
+      }
 
       if (updated.type === 'LATE_CHECKIN') {
         const targetDate = new Date(updated.target_date);
@@ -494,9 +639,9 @@ router.post(
 
       notifyEmployee(proposal.employee_id, {
         title: 'Proposal Approved',
-        message: `Your ${proposalLabel(proposal.type)} request for ${new Date(proposal.target_date).toLocaleDateString()} has been approved.`,
+        message: `Your ${proposalLabel(proposal.type)} request for ${new Date(proposal.target_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}${leaveDays > 1 ? ` (${leaveDays} days)` : ''} has been approved.`,
         type: 'SYSTEM',
-        link: '/attendance',
+        link: '/requests',
       });
 
       return res.status(200).json({ message: 'Proposal approved', proposal: updated });
@@ -539,6 +684,25 @@ router.post(
           reviewed_at: new Date(),
         },
       });
+      // The other days of the same multi-day leave go with it.
+      let leaveDays = 1;
+      if (updated.type === 'LEAVE') {
+        const siblings = await p.attendanceProposal.updateMany({
+          where: {
+            employee_id: updated.employee_id,
+            type: 'LEAVE',
+            status: 'PENDING',
+            created_at: updated.created_at,
+            id: { not: updated.id },
+          },
+          data: {
+            status: 'REJECTED',
+            reviewed_by: req.user!.employeeId,
+            reviewed_at: new Date(),
+          },
+        });
+        leaveDays += siblings.count;
+      }
 
       // A rejected field-work request no longer touches attendance: it used
       // to mark the day ABSENT even over a real kiosk check-in. Days with no
@@ -546,9 +710,9 @@ router.post(
 
       notifyEmployee(proposal.employee_id, {
         title: 'Proposal Rejected',
-        message: `Your ${proposalLabel(proposal.type)} request for ${new Date(proposal.target_date).toLocaleDateString()} has been rejected.`,
+        message: `Your ${proposalLabel(proposal.type)} request for ${new Date(proposal.target_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}${leaveDays > 1 ? ` (${leaveDays} days)` : ''} has been rejected.`,
         type: 'SYSTEM',
-        link: '/attendance',
+        link: '/requests',
       });
 
       return res.status(200).json({ message: 'Proposal rejected', proposal: updated });

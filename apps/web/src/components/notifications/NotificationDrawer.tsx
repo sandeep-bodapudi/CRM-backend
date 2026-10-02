@@ -13,6 +13,7 @@
  *  - Mark all as read
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { NotificationItem } from '../../types';
 import { Bell, Check, X, CheckCheck, Info, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -54,6 +55,14 @@ export const NotificationDrawer: React.FC = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+  // In-app links navigate inside the app (no full reload / re-login delay);
+  // anything else (an external URL) still opens normally.
+  const openLink = (url: string) => {
+    setIsOpen(false);
+    if (url.startsWith('/')) navigate(url);
+    else window.location.href = url;
+  };
   const [toast, setToast] = useState<NotificationItem | null>(null);
   const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
   const [tab, setTab] = useState<'inbox' | 'history'>('inbox');
@@ -256,18 +265,17 @@ export const NotificationDrawer: React.FC = () => {
                           onClick={() => {
                             handleMarkRead(n.id);
                             if (n.link) {
-                              window.location.href = n.link;
+                              openLink(n.link);
                             } else if (n.entity_type && n.entity_id) {
                               let url = '';
-                              if (n.entity_type === 'LEAD')
-                                url = `/leads-clients?leadId=${n.entity_id}`;
+                              if (n.entity_type === 'LEAD') url = `/leads/${n.entity_id}`;
                               else if (n.entity_type === 'BOOKING')
-                                url = `/bookings?id=${n.entity_id}`;
+                                url = `/bookings/${n.entity_id}`;
                               else if (n.entity_type === 'APPROVAL')
                                 url = `/approvals?id=${n.entity_id}`;
 
                               if (url) {
-                                window.location.href = url;
+                                openLink(url);
                               } else {
                                 setSelectedNotification(n);
                               }
