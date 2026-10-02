@@ -8,7 +8,7 @@ import {
   authenticateKioskToken,
   KioskAuthenticatedRequest,
 } from '../../middleware/auth';
-import { generateQrHmac, verifyQrHmac } from '../../utils/qr';
+import { buildLiveQrPayload, verifyLiveQr, verifyQrHmac } from '../../utils/qr';
 import {
   calculateAttendanceStatus,
   getISTComponents,
@@ -26,36 +26,12 @@ const p = prisma;
 // Kiosk scanner type — not yet in @rrh-ems/shared; defined locally to avoid a circular dep.
 export type ScannerType = 'KIOSK' | 'EMPLOYEE_DEVICE';
 
-// GET /api/v1/attendance/my-qr - Generate personal HMAC QR payload
+// GET /api/v1/attendance/my-qr - live attendance QR for the logged-in employee.
+// The app re-fetches it every 30 s; each code is accepted for 2 minutes.
 router.get('/my-qr', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const employeeId = req.user!.employeeId;
-    const employeeCode = req.user!.employeeCode;
-    const version = 1;
-    const signedToken = generateQrHmac(employeeId, employeeCode, version);
-
-    // Get latest active QR record or create new
-    let qrRecord = await p.employeeQrCode.findFirst({
-      where: { employee_id: employeeId },
-      orderBy: { generated_at: 'desc' },
-    });
-
-    if (!qrRecord) {
-      qrRecord = await p.employeeQrCode.create({
-        data: {
-          employee_id: employeeId,
-          qr_token: signedToken,
-        },
-      });
-    }
-
-    return res.status(200).json({
-      employeeId,
-      employeeCode,
-      version,
-      signedToken,
-      qrData: JSON.stringify({ employeeId, employeeCode, version, signedToken }),
-    });
+    res.set('Cache-Control', 'no-store');
+    return res.status(200).json(buildLiveQrPayload(req.user!.employeeId, req.user!.employeeCode));
   } catch (error) {
     logger.error('QR fetch error:', error);
     return res.status(500).json({ error: 'Failed to generate QR token' });
@@ -75,32 +51,10 @@ router.get(
       const employee = await p.employee.findUnique({ where: { id: targetId } });
       if (!employee) return res.status(404).json({ error: 'Employee not found' });
 
-      const version = 1;
-      const signedToken = generateQrHmac(employee.id, employee.employee_code, version);
-
-      let qrRecord = await p.employeeQrCode.findFirst({
-        where: { employee_id: employee.id },
-        orderBy: { generated_at: 'desc' },
-      });
-
-      if (!qrRecord) {
-        qrRecord = await p.employeeQrCode.create({
-          data: { employee_id: employee.id, qr_token: signedToken },
-        });
-      }
-
-      return res.status(200).json({
-        employeeId: employee.id,
-        employeeCode: employee.employee_code,
-        version,
-        signedToken,
-        qrData: JSON.stringify({
-          employeeId: employee.id,
-          employeeCode: employee.employee_code,
-          version,
-          signedToken,
-        }),
-      });
+      // A live code (valid 2 minutes) for HR to show on screen. Printed
+      // permanent badges were the codes being shared, so none are issued.
+      res.set('Cache-Control', 'no-store');
+      return res.status(200).json(buildLiveQrPayload(employee.id, employee.employee_code));
     } catch (error) {
       logger.error('Admin QR fetch error:', error);
       return res.status(500).json({ error: 'Failed to generate QR token' });
@@ -174,8 +128,15 @@ const closeIfStaleOpenLog = async (
   return true;
 };
 
-// Helper to parse and verify payload
-const parseAndVerifyQR = (req: AuthenticatedRequest, qrPayload: any) => {
+// Old permanent badges (version 1) stop working unless
+// ALLOW_STATIC_ATTENDANCE_QR=true is set -- a temporary switch for the
+// changeover, not something to leave on.
+const allowStaticQr = () => process.env.ALLOW_STATIC_ATTENDANCE_QR === 'true';
+
+type QrCheck = { payload: any } | { error: string };
+
+// Parse and verify a scanned attendance QR.
+const parseAndVerifyQR = (_req: AuthenticatedRequest, qrPayload: any): QrCheck => {
   let payload = qrPayload;
   if (typeof qrPayload === 'string') {
     try {
@@ -183,7 +144,23 @@ const parseAndVerifyQR = (req: AuthenticatedRequest, qrPayload: any) => {
     } catch (e) {}
   }
 
-  if (!payload || !payload.employeeId) return null;
+  if (!payload || !payload.employeeId) return { error: 'Invalid QR Code.' };
+
+  if (Number(payload.version) === 2) {
+    const result = verifyLiveQr({
+      employeeId: Number(payload.employeeId),
+      employeeCode: String(payload.employeeCode),
+      issuedAt: Number(payload.issuedAt),
+      signedToken: payload.signedToken,
+    });
+    if (result === 'expired') {
+      return {
+        error:
+          'This QR code has expired. Open the CRM app on your own phone and show the live code.',
+      };
+    }
+    return result === 'ok' ? { payload } : { error: 'Invalid QR Code.' };
+  }
 
   const isValid = verifyQrHmac(
     payload.employeeId,
@@ -191,8 +168,14 @@ const parseAndVerifyQR = (req: AuthenticatedRequest, qrPayload: any) => {
     payload.version || 1,
     payload.signedToken || payload,
   );
-
-  return isValid ? payload : null;
+  if (!isValid) return { error: 'Invalid QR Code.' };
+  if (!allowStaticQr()) {
+    return {
+      error:
+        'Printed / saved QR badges are no longer accepted. Open the CRM app on your phone (Profile -> Attendance QR) and show the live code.',
+    };
+  }
+  return { payload };
 };
 
 // POST /api/v1/attendance/scan - Verify QR and Stamp Attendance (IST rules)
@@ -210,8 +193,9 @@ router.post(
 
     try {
       const rawPayload = req.body.qrPayload || req.body.qr_token || req.body.payload;
-      const payload = parseAndVerifyQR(req, rawPayload);
-      if (!payload) return res.status(400).json({ error: 'Invalid QR Code.' });
+      const check = parseAndVerifyQR(req, rawPayload);
+      if ('error' in check) return res.status(400).json({ error: check.error });
+      const payload = check.payload;
 
       const targetEmployeeId = payload.employeeId;
 
@@ -342,8 +326,9 @@ router.post(
 
     try {
       const rawPayload = req.body.qrPayload || req.body.qr_token || req.body.payload;
-      const payload = parseAndVerifyQR(req, rawPayload);
-      if (!payload) return res.status(400).json({ error: 'Invalid QR Code.' });
+      const check = parseAndVerifyQR(req, rawPayload);
+      if ('error' in check) return res.status(400).json({ error: check.error });
+      const payload = check.payload;
 
       const targetEmployeeId = payload.employeeId;
 

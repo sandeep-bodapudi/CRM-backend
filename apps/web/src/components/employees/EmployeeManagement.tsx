@@ -37,6 +37,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { Roles } from '../../shared';
 import { API_BASE_URL } from '../../config';
+import { useLiveAttendanceQr } from '../../hooks/useLiveAttendanceQr';
 import { QRCodeVisual } from '../common/QRCodeVisual';
 import { AddEmployeeWizard } from './AddEmployeeWizard';
 import { EditEmployeeModal, ROLE_OPTIONS } from './EditEmployeeModal';
@@ -117,7 +118,10 @@ export const EmployeeManagement: React.FC = () => {
   const [addStep, setAddStep] = useState<1 | 2 | 3 | 4>(1);
   const [dossierEmp, setDossierEmp] = useState<Employee | null>(null);
   const [qrBadgeEmp, setQrBadgeEmp] = useState<Employee | null>(null);
-  const [qrToken, setQrToken] = useState<string | null>(null);
+  // Live code (valid 2 minutes) -- permanent printed badges were what got shared.
+  const { token: qrToken, secondsLeft: qrSecondsLeft } = useLiveAttendanceQr(
+    qrBadgeEmp ? `/attendance/employee-qr/${qrBadgeEmp.id}` : null,
+  );
   const [resetPwdEmp, setResetPwdEmp] = useState<Employee | null>(null);
 
   // Employee lifecycle actions (resign / promote / convert employment type) --
@@ -137,19 +141,7 @@ export const EmployeeManagement: React.FC = () => {
     'FULL_TIME',
   );
 
-  const handleViewQr = async (emp: Employee) => {
-    setQrBadgeEmp(emp);
-    setQrToken(null);
-    try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/attendance/employee-qr/${emp.id}`);
-      const data = await res.json();
-      if (res.ok) {
-        setQrToken(data.qrData || data.signedToken || data.token);
-      }
-    } catch (error) {
-      console.error('Failed to load employee QR', error);
-    }
-  };
+  const handleViewQr = (emp: Employee) => setQrBadgeEmp(emp);
 
   // Employment Details
   // 20 Employment Form Fields State
@@ -1265,7 +1257,7 @@ export const EmployeeManagement: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-xl border border-slate-100 text-center animate-scaleUp">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <span className="font-bold text-slate-800 text-sm">Official Employee QR Badge</span>
+              <span className="font-bold text-slate-800 text-sm">Live Attendance QR</span>
               <button
                 onClick={() => setQrBadgeEmp(null)}
                 className="text-slate-400 hover:text-slate-600"
@@ -1286,16 +1278,10 @@ export const EmployeeManagement: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-500 font-medium mb-4">
-              Permanent 2D QR badge for {qrBadgeEmp.fullName} ({qrBadgeEmp.employeeCode})
+              Live attendance code for {qrBadgeEmp.fullName} ({qrBadgeEmp.employeeCode}) - changes
+              in {qrSecondsLeft}s and works for 2 minutes. Printed badges no longer work; the
+              employee shows the live code from Profile in their own app.
             </p>
-
-            <button
-              onClick={() => window.print()}
-              className="w-full py-3 bg-navy-700 hover:bg-navy-800 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print Official QR ID Badge</span>
-            </button>
           </div>
         </div>
       )}

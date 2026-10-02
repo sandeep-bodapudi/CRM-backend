@@ -19,6 +19,7 @@ import {
 
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 import { ProfileEditModal } from './ProfileEditModal';
+import { useLiveAttendanceQr } from '../../hooks/useLiveAttendanceQr';
 import { QRCodeVisual } from '../common/QRCodeVisual';
 import { API_BASE_URL } from '../../config';
 import { mediaUrl } from '../../utils/imageUtils';
@@ -51,16 +52,9 @@ export const UserProfile: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isEmergencyModalOpen, setIsEmergencyModalOpen] = useState(false);
   const [isQRFullscreen, setIsQRFullscreen] = useState(false);
-  const [qrToken, setQrToken] = useState<string | null>(null);
+  const { token: qrToken, secondsLeft: qrSecondsLeft } = useLiveAttendanceQr('/attendance/my-qr');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
-
-  useEffect(() => {
-    fetchWithAuth(`${API_BASE_URL}/attendance/my-qr`)
-      .then((res) => res.json())
-      .then((data) => setQrToken(data.qrData || data.signedToken || data.token))
-      .catch(() => console.error('Failed to load QR code'));
-  }, [fetchWithAuth]);
 
   // The `user` object in AuthContext is only refreshed on login and on the
   // background token-refresh cycle (see AuthContext.tsx's initAuth) — not on
@@ -350,7 +344,8 @@ export const UserProfile: React.FC = () => {
             <>
               <QRCodeVisual value={qrToken} size={180} label={user.employeeCode} />
               <p className="text-xs text-slate-500 mt-4 text-center">
-                Scan this code at the Kiosk terminal to mark your daily attendance.
+                Scan this code at the Kiosk terminal to mark your daily attendance. It is a live
+                code: it changes in {qrSecondsLeft}s, and screenshots stop working after 2 minutes.
               </p>
               <div className="mt-4 pt-4 border-t border-slate-100 w-full text-center">
                 <button
@@ -412,6 +407,9 @@ export const UserProfile: React.FC = () => {
           >
             {/* The QR is deliberately large to ensure it can be scanned easily from a distance */}
             <QRCodeVisual value={qrToken} size={300} />
+            <p className="mt-3 text-xs font-bold text-slate-500">
+              Live code - refreshes in {qrSecondsLeft}s
+            </p>
             <div className="mt-8 text-center">
               <h2 className="text-2xl font-bold text-navy-900 mb-2">{user.fullName}</h2>
               <div className="inline-block bg-slate-100 px-4 py-1.5 rounded-full font-mono text-sm font-bold text-slate-600">

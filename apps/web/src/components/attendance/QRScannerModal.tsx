@@ -1,17 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { QrCode, CheckCircle2, Clock, ShieldCheck, AlertCircle, ArrowRight, Sun, Coffee, Camera } from 'lucide-react';
+import {
+  QrCode,
+  CheckCircle2,
+  Clock,
+  ShieldCheck,
+  AlertCircle,
+  ArrowRight,
+  Sun,
+  Coffee,
+  Camera,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { Roles } from '../../shared';
+import { useLiveAttendanceQr } from '../../hooks/useLiveAttendanceQr';
 import { QRCodeVisual } from '../common/QRCodeVisual';
 import { CameraQRScanner } from '../common/CameraQRScanner';
 import { ScanResult } from '../../types';
 
 export const QRScannerModal: React.FC = () => {
   const { user, fetchWithAuth, setAttendanceStamped, activeRole } = useAuth();
-  const [qrData, setQrData] = useState<any | null>(null);
   const [stampResult, setStampResult] = useState<ScanResult | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -23,7 +32,9 @@ export const QRScannerModal: React.FC = () => {
 
   useEffect(() => {
     // Attendance Exemption Guard (MD, HR Manager, Admin, Marketing Director or attendanceRequired = false)
-    const isManagementRole = ([Roles.MD, Roles.HR_MANAGER, Roles.ADMIN, Roles.MARKETING_DIRECTOR] as string[]).includes(activeRole);
+    const isManagementRole = (
+      [Roles.MD, Roles.HR_MANAGER, Roles.ADMIN, Roles.MARKETING_DIRECTOR] as string[]
+    ).includes(activeRole);
     if (user?.attendanceRequired === false || isManagementRole) {
       setAttendanceStamped(true);
       return;
@@ -49,15 +60,13 @@ export const QRScannerModal: React.FC = () => {
     else if (currentHour >= 15) {
       setIsAfterHours(true);
     }
-
-    // Fetch today's QR Token
-    fetchWithAuth(`${API_BASE_URL}/attendance/my-qr`)
-      .then((res) => res.json())
-      .then((data) => setQrData(data))
-      .catch(() => console.error('Failed to load QR code'))
-      .finally(() => setIsLoading(false));
   }, [user]);
-  const activeToken = qrData?.qrData || qrData?.signedToken || qrData?.token;
+  // Live code, refreshed every 30 s; fetched only while 'My QR' is open.
+  const {
+    token: activeToken,
+    isLoading,
+    secondsLeft,
+  } = useLiveAttendanceQr(scanMode === 'MY_QR' ? '/attendance/my-qr' : null);
 
   const handleScanAndVerify = async () => {
     setIsScanning(true);
@@ -103,7 +112,8 @@ export const QRScannerModal: React.FC = () => {
 
           <h2 className="text-xl font-bold text-slate-800">Early Login Purpose</h2>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-            Official office check-in window opens at <strong>9:00 AM IST</strong>. Please select your purpose for logging in now:
+            Official office check-in window opens at <strong>9:00 AM IST</strong>. Please select
+            your purpose for logging in now:
           </p>
 
           <div className="mt-6 space-y-3">
@@ -138,7 +148,8 @@ export const QRScannerModal: React.FC = () => {
           </div>
           <h2 className="text-xl font-bold text-slate-800">After-Hours Access</h2>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-            Official office check-in window was <strong>9:00 AM – 3:00 PM IST</strong>. You are logging in after official hours.
+            Official office check-in window was <strong>9:00 AM – 3:00 PM IST</strong>. You are
+            logging in after official hours.
           </p>
 
           <button
@@ -168,7 +179,10 @@ export const QRScannerModal: React.FC = () => {
             <div className="flex justify-between">
               <span className="text-slate-500">Recorded Time:</span>
               <span className="font-mono font-bold text-slate-800">
-                {stampResult.check_in_at ? new Date(stampResult.check_in_at).toLocaleTimeString() : 'N/A'} IST
+                {stampResult.check_in_at
+                  ? new Date(stampResult.check_in_at).toLocaleTimeString()
+                  : 'N/A'}{' '}
+                IST
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -178,8 +192,8 @@ export const QRScannerModal: React.FC = () => {
                   stampResult.status === 'PRESENT'
                     ? 'bg-emerald-100 text-emerald-800'
                     : stampResult.status === 'LATE'
-                    ? 'bg-amber-100 text-amber-800'
-                    : 'bg-purple-100 text-purple-800'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-purple-100 text-purple-800'
                 }`}
               >
                 {stampResult.status}
@@ -240,7 +254,12 @@ export const QRScannerModal: React.FC = () => {
               {isLoading ? (
                 <div className="w-8 h-8 border-2 border-navy-600 border-t-transparent rounded-full animate-spin mx-auto py-8" />
               ) : activeToken ? (
-                <QRCodeVisual value={activeToken} size={190} label={user?.employeeCode} />
+                <>
+                  <QRCodeVisual value={activeToken} size={190} label={user?.employeeCode} />
+                  <p className="mt-2 text-center text-[11px] font-bold text-slate-500">
+                    Live code - refreshes in {secondsLeft}s
+                  </p>
+                </>
               ) : (
                 <span className="text-xs text-slate-400">Failed to load QR code</span>
               )}
