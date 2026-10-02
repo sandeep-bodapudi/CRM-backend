@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CalendarDays, PhoneCall, Users } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Home, PhoneCall, Users, X } from 'lucide-react';
+import { Roles } from '../../shared';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 
@@ -43,6 +44,149 @@ const t = (iso: string | null | undefined) =>
 const todayIST = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
 
+/** MD sets work-from-home for a group of people over a date range. */
+const GrantWfhModal: React.FC<{ rows: Row[]; onClose: () => void }> = ({ rows, onClose }) => {
+  const { fetchWithAuth } = useAuth();
+  const [selected, setSelected] = useState<number[]>([]);
+  const [start, setStart] = useState(todayIST());
+  const [end, setEnd] = useState(todayIST());
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const roles = [...new Set(rows.flatMap((r) => r.roles))].sort();
+  const toggle = (id: number) =>
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  const submit = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/attendance/wfh/grant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_ids: selected, start_date: start, end_date: end }),
+      });
+      const body = await res.json().catch(() => ({}));
+      setMsg({
+        ok: res.ok,
+        text: res.ok
+          ? `Done - ${body.days_created} work-from-home day(s) set. Sundays and holidays skipped.`
+          : body.error || 'Failed',
+      });
+    } catch {
+      setMsg({ ok: false, text: 'Network error, please try again.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-100">
+          <h2 className="font-extrabold text-slate-900 flex items-center gap-2">
+            <Home className="w-4 h-4" /> Set work from home
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-3 overflow-y-auto">
+          <p className="text-xs text-slate-500">
+            On these days the selected people check in and out from their own app instead of the
+            kiosk. Their real work shows here on Team Today.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-xs font-bold text-slate-600">
+              From
+              <input
+                type="date"
+                value={start}
+                min={todayIST()}
+                onChange={(e) => setStart(e.target.value)}
+                className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-xl text-sm"
+              />
+            </label>
+            <label className="text-xs font-bold text-slate-600">
+              To
+              <input
+                type="date"
+                value={end}
+                min={start}
+                onChange={(e) => setEnd(e.target.value)}
+                className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-xl text-sm"
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {roles.map((role) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() =>
+                  setSelected((s) => [
+                    ...new Set([
+                      ...s,
+                      ...rows.filter((r) => r.roles.includes(role)).map((r) => r.id),
+                    ]),
+                  ])
+                }
+                className="px-2.5 py-1 rounded-full border border-slate-200 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+              >
+                + all {role}
+              </button>
+            ))}
+            {selected.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelected([])}
+                className="px-2.5 py-1 text-[11px] font-bold text-red-600"
+              >
+                clear
+              </button>
+            )}
+          </div>
+          <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-64 overflow-y-auto">
+            {rows.map((r) => (
+              <label
+                key={r.id}
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(r.id)}
+                  onChange={() => toggle(r.id)}
+                />
+                <span className="font-bold text-slate-800 truncate">{r.name}</span>
+                <span className="text-[11px] text-slate-400 truncate">{r.roles.join(', ')}</span>
+              </label>
+            ))}
+          </div>
+          {msg && (
+            <p className={`text-xs font-bold ${msg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+              {msg.text}
+            </p>
+          )}
+        </div>
+        <div className="p-4 border-t border-slate-100">
+          <button
+            disabled={busy || selected.length === 0 || !start || !end}
+            onClick={submit}
+            className="w-full py-3 bg-navy-700 hover:bg-navy-800 disabled:bg-slate-300 text-white font-bold text-sm rounded-xl"
+          >
+            Set work from home for {selected.length} {selected.length === 1 ? 'person' : 'people'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Stat: React.FC<{ label: string; value: number | string; strong?: boolean }> = ({
   label,
   value,
@@ -62,7 +206,9 @@ const Stat: React.FC<{ label: string; value: number | string; strong?: boolean }
  * their typed daily report shown alongside so the two can be compared.
  */
 export const TeamTodayPage: React.FC = () => {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, user } = useAuth();
+  const canGrantWfh = !!user?.roles?.some((r: string) => r === Roles.MD || r === Roles.ADMIN);
+  const [showWfh, setShowWfh] = useState(false);
   const [date, setDate] = useState(todayIST());
   const [filter, setFilter] = useState<'all' | 'flagged' | 'present'>('all');
 
@@ -104,17 +250,28 @@ export const TeamTodayPage: React.FC = () => {
             What each person actually did — from attendance and CRM records, not self-reports.
           </p>
         </div>
-        <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-          <CalendarDays className="w-4 h-4" />
-          <input
-            type="date"
-            value={date}
-            max={todayIST()}
-            onChange={(e) => setDate(e.target.value || todayIST())}
-            className="px-3 py-2 border border-slate-300 rounded-xl text-sm"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          {canGrantWfh && (
+            <button
+              onClick={() => setShowWfh(true)}
+              className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 flex items-center gap-1.5 hover:bg-slate-50"
+            >
+              <Home className="w-4 h-4" /> Work from home
+            </button>
+          )}
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
+            <CalendarDays className="w-4 h-4" />
+            <input
+              type="date"
+              value={date}
+              max={todayIST()}
+              onChange={(e) => setDate(e.target.value || todayIST())}
+              className="px-3 py-2 border border-slate-300 rounded-xl text-sm"
+            />
+          </label>
+        </div>
       </div>
+      {showWfh && <GrantWfhModal rows={rows} onClose={() => setShowWfh(false)} />}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[

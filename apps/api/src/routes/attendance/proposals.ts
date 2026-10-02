@@ -11,6 +11,14 @@ const router = Router();
 
 const p = prisma;
 
+const proposalLabel = (type: string) =>
+  ({
+    LEAVE: 'leave',
+    FIELD_WORK: 'field work',
+    WORK_FROM_HOME: 'work-from-home',
+    EARLY_CHECKOUT: 'early logout',
+  })[type] || 'late';
+
 // POST /api/v1/attendance/late-proposal - Submit late proposal (< 09:30 AM IST)
 router.post(
   '/late-proposal',
@@ -458,7 +466,7 @@ router.post(
 
       notifyEmployee(proposal.employee_id, {
         title: 'Proposal Approved',
-        message: `Your ${proposal.type === 'LEAVE' ? 'leave' : proposal.type === 'FIELD_WORK' ? 'field work' : 'late'} request for ${new Date(proposal.target_date).toLocaleDateString()} has been approved.`,
+        message: `Your ${proposalLabel(proposal.type)} request for ${new Date(proposal.target_date).toLocaleDateString()} has been approved.`,
         type: 'SYSTEM',
         link: '/attendance',
       });
@@ -528,7 +536,7 @@ router.post(
 
       notifyEmployee(proposal.employee_id, {
         title: 'Proposal Rejected',
-        message: `Your ${proposal.type === 'LEAVE' ? 'leave' : proposal.type === 'FIELD_WORK' ? 'field work' : 'late'} request for ${new Date(proposal.target_date).toLocaleDateString()} has been rejected.`,
+        message: `Your ${proposalLabel(proposal.type)} request for ${new Date(proposal.target_date).toLocaleDateString()} has been rejected.`,
         type: 'SYSTEM',
         link: '/attendance',
       });

@@ -10,6 +10,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { LateLeaveProposals } from './LateLeaveProposals';
+import { WfhTodayCard } from './WfhTodayCard';
 import { EmergencyLogoutModal } from '../profile/EmergencyLogoutModal';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
@@ -82,6 +83,8 @@ export const MyAttendancePage: React.FC = () => {
           <p className="text-sm text-slate-500">Track your daily attendance records and history</p>
         </div>
       </div>
+
+      <WfhTodayCard />
 
       {/* Calendar Component (no employeeId passed so it fetches current user) */}
       <MonthlyAttendanceCalendar />

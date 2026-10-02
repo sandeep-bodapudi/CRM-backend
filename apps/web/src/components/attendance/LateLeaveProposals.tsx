@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Calendar, Send, AlertCircle } from 'lucide-react';
+import { Clock, Calendar, Send, AlertCircle, Home } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { Roles } from '../../shared';
@@ -12,7 +12,7 @@ interface LateLeaveProposalsProps {
 export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOnly = false }) => {
   const { user, fetchWithAuth, activeRole } = useAuth();
   const [activeTab, setActiveTab] = useState<'submit' | 'queue'>(hrViewOnly ? 'queue' : 'submit');
-  const [proposalType, setProposalType] = useState<'late' | 'leave' | 'field_work'>('late');
+  const [proposalType, setProposalType] = useState<'late' | 'leave' | 'field_work' | 'wfh'>('late');
 
   // Form states
   const [date, setDate] = useState('');
@@ -126,6 +126,30 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
     }
   };
 
+  const handleSubmitWfh = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage(null);
+    setIsLoading(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/attendance/wfh-proposal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: startDate, reason }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Work-from-home request sent for approval.' });
+        setReason('');
+      } else {
+        setMessage({ type: 'error', text: body.error || 'Failed to submit.' });
+      }
+    } catch (e) {
+      setMessage({ type: 'error', text: 'An unexpected error occurred.' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmitFieldWork = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
@@ -209,7 +233,7 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
       {activeTab === 'submit' && !hrViewOnly ? (
         <div>
           {/* Proposal Type Toggle */}
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             <button
               type="button"
               onClick={() => setProposalType('late')}
@@ -256,6 +280,22 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
                 <span>Field Work</span>
               </div>
               <p className="text-[11px] text-slate-500 font-normal mt-1">Client visits/Meetings</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setProposalType('wfh')}
+              className={`p-3 rounded-xl border text-left transition-all ${
+                proposalType === 'wfh'
+                  ? 'border-navy-600 bg-navy-50/50 text-navy-900 font-bold'
+                  : 'border-slate-200 text-slate-600'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-sm">
+                <Home className="w-4 h-4 text-navy-700" />
+                <span>Work from Home</span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-normal mt-1">Check in from the app</p>
             </button>
           </div>
 
@@ -444,6 +484,41 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
               >
                 <Send className="w-4 h-4" />
                 <span>Submit Field Work Request</span>
+              </button>
+            </form>
+          ) : proposalType === 'wfh' ? (
+            <form onSubmit={handleSubmitWfh} className="space-y-4 max-w-lg">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  required
+                  className="w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Reason</label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  required
+                  minLength={5}
+                  rows={3}
+                  className="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Once approved, check in and out from My Attendance on that day instead of the kiosk.
+              </p>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="px-5 py-2.5 bg-navy-700 hover:bg-navy-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium rounded-xl text-sm transition-all flex items-center gap-2"
+              >
+                <Send className="w-4 h-4" />
+                <span>Request Work from Home</span>
               </button>
             </form>
           ) : null}
