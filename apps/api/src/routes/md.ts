@@ -197,9 +197,9 @@ router.get(
       // AttendanceProposal has no employee relation -- filter by employee ids.
       const companyEmployees = await p.employee.findMany({
         where: isAdmin ? {} : { company_id: { in: companyIds } },
-        select: { id: true, full_name: true },
+        select: { id: true, full_name: true, employee_code: true },
       });
-      const nameOf = new Map(companyEmployees.map((e) => [e.id, e.full_name]));
+      const nameOf = new Map(companyEmployees.map((e) => [e.id, e.full_name || e.employee_code]));
       const empCo = isAdmin ? {} : { employee_id: { in: companyEmployees.map((e) => e.id) } };
       const leadCo = isAdmin ? {} : { lead: { company_id: { in: companyIds } } };
       const now = new Date();
@@ -345,7 +345,7 @@ router.get(
           items: proposals.map((x) => ({
             id: x.id,
             title: `${nameOf.get(x.employee_id) || ''} - ${x.type.replace(/_/g, ' ').toLowerCase()}`,
-            subtitle: `for ${x.target_date.toISOString().slice(0, 10)}`,
+            subtitle: `for ${getISTComponents(x.target_date).dateString}`,
             since: x.created_at,
           })),
         },
