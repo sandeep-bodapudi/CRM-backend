@@ -19,6 +19,8 @@ import {
   ChevronRight,
   Map,
   FileText,
+  FilePlus,
+  NotebookPen,
   Menu,
   Clock,
   Calendar,
@@ -343,6 +345,11 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   // WORK
   { id: 'group-work', label: 'WORK', group: true, icon: undefined },
   { id: 'my-attendance', label: 'My Attendance', icon: CalendarCheck, path: '/my-attendance' },
+  // Leave / late / field work / WFH requests, previously only reachable via
+  // My Attendance -> "Leave / Late Request".
+  { id: 'requests', label: 'Requests', icon: FilePlus, path: '/requests' },
+  // Work done outside the CRM (posts, reels, meetings) -- shown on Team Today.
+  { id: 'work-log', label: 'Work Log', icon: NotebookPen, path: '/work-log' },
   { id: 'my-performance', label: 'My Performance', icon: TrendingUp, path: '/my-performance' },
   { id: 'achievements', label: 'Achievements', icon: Trophy, path: '/achievements' },
   {

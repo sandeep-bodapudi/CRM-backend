@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { getAccessibleCompanyIds, buildEmployeeScope } from '../authz/dataScope';
 import { getISTComponents, getISTMidnightInstant } from '../utils/time';
+import { WORK_LOG_ACTION, parseWorkLog, WorkLogEntry } from './workLog';
 import { requireAuthz } from '../middleware/authz';
 import { Roles, Permissions } from '../shared';
 import { AnalyticsService } from '../services/analytics.service';
@@ -11,6 +12,28 @@ import { AnalyticsService } from '../services/analytics.service';
 const router = Router();
 
 const p = prisma;
+
+// Which kind of work a role does, for Team Today's per-role view.
+const workKind = (roleNames: string[]): 'CALLING' | 'SITE' | 'DIGITAL' | 'PARTNER' | 'GENERAL' => {
+  if (
+    roleNames.some((r) => [Roles.TELECALLER, Roles.SALES_MANAGER, Roles.AGENT].includes(r as any))
+  )
+    return 'CALLING';
+  if (roleNames.some((r) => [Roles.PROJECT_MANAGER, Roles.INVENTORY_EXECUTIVE].includes(r as any)))
+    return 'SITE';
+  if (
+    roleNames.some((r) =>
+      [
+        Roles.DIGITAL_MARKETING_EXECUTIVE,
+        Roles.DIGITAL_LEAD_OPERATOR,
+        Roles.DIGITAL_MARKETING_HEAD,
+      ].includes(r as any),
+    )
+  )
+    return 'DIGITAL';
+  if (roleNames.includes(Roles.CHANNEL_PARTNER_MANAGER)) return 'PARTNER';
+  return 'GENERAL';
+};
 
 // GET /api/v1/md/team-today?date=YYYY-MM-DD — what each employee actually did
 // on a given IST day, built only from system records (attendance, CRM
@@ -99,6 +122,76 @@ router.get(
           }),
         ]);
 
+      // Role-specific records. Project managers rarely call -- their day is
+      // site visits and inventory upkeep; the digital team's posts/reels
+      // live outside the CRM and only show up through the work log.
+      const [
+        pmVisitsToday,
+        pmVisitsCompleted,
+        pmPending,
+        verifications,
+        mediaUploads,
+        docUploads,
+        unitsAdded,
+        propertiesAdded,
+        workLogRows,
+      ] = await Promise.all([
+        p.siteVisitBooking.groupBy({
+          by: ['project_manager_id'],
+          where: {
+            project_manager_id: { in: ids },
+            scheduled_date: inDay,
+            status: { not: 'CANCELLED' },
+          },
+          _count: { _all: true },
+        }),
+        p.siteVisitBooking.groupBy({
+          by: ['project_manager_id'],
+          where: { project_manager_id: { in: ids }, status: 'COMPLETED', completed_at: inDay },
+          _count: { _all: true },
+        }),
+        p.siteVisitBooking.groupBy({
+          by: ['project_manager_id'],
+          where: {
+            project_manager_id: { in: ids },
+            status: { in: ['REQUESTED', 'PENDING_ACCEPTANCE', 'REASSIGNED'] },
+          },
+          _count: { _all: true },
+        }),
+        p.propertyVerificationLog.groupBy({
+          by: ['actor_id'],
+          where: { actor_id: { in: ids }, created_at: inDay },
+          _count: { _all: true },
+        }),
+        p.projectMedia.groupBy({
+          by: ['uploaded_by_id'],
+          where: { uploaded_by_id: { in: ids }, created_at: inDay },
+          _count: { _all: true },
+        }),
+        p.projectDocument.groupBy({
+          by: ['uploaded_by_id'],
+          where: { uploaded_by_id: { in: ids }, created_at: inDay },
+          _count: { _all: true },
+        }),
+        p.projectUnit.groupBy({
+          by: ['created_by_id'],
+          where: { created_by_id: { in: ids }, created_at: inDay },
+          _count: { _all: true },
+        }),
+        p.property.groupBy({
+          by: ['created_by_id'],
+          where: { created_by_id: { in: ids }, created_at: inDay },
+          _count: { _all: true },
+        }),
+        p.auditEvent.findMany({
+          where: { actor_id: { in: ids }, action: WORK_LOG_ACTION, created_at: inDay },
+          select: { id: true, actor_id: true, new_value: true, created_at: true },
+          orderBy: { created_at: 'asc' },
+        }),
+      ]);
+      const countOf = (rows: any[], key: string, empId: number) =>
+        rows.find((r) => r[key] === empId)?._count._all || 0;
+
       const count = (empId: number, types: string[]) =>
         byType
           .filter((r) => r.actor_id === empId && types.includes(r.activity_type))
@@ -120,11 +213,46 @@ router.get(
         const tasks = tasksDone.find((t) => t.assignee_id === e.id)?._count._all || 0;
         const visits = visitsDone.find((v) => v.assigned_agent_id === e.id)?._count._all || 0;
 
+        const roleNames = e.roles.map((r) => r.role.name);
+        const kind = workKind(roleNames);
+        const workLog = workLogRows
+          .filter((w) => w.actor_id === e.id)
+          .map(parseWorkLog)
+          .filter((w): w is WorkLogEntry => !!w);
+        const site = {
+          visits_today: countOf(pmVisitsToday, 'project_manager_id', e.id),
+          visits_completed: countOf(pmVisitsCompleted, 'project_manager_id', e.id),
+          visits_awaiting_acceptance: countOf(pmPending, 'project_manager_id', e.id),
+          inventory_updates:
+            countOf(verifications, 'actor_id', e.id) +
+            countOf(mediaUploads, 'uploaded_by_id', e.id) +
+            countOf(docUploads, 'uploaded_by_id', e.id) +
+            countOf(unitsAdded, 'created_by_id', e.id) +
+            countOf(propertiesAdded, 'created_by_id', e.id),
+        };
+        const anyWork =
+          workActions > 0 ||
+          tasks > 0 ||
+          visits > 0 ||
+          workLog.length > 0 ||
+          site.visits_completed > 0 ||
+          site.inventory_updates > 0 ||
+          count(e.id, ['LEAD_CREATED']) > 0;
+
         const flags: string[] = [];
-        if (att && workActions === 0 && tasks === 0 && visits === 0) {
-          flags.push('Present, but no work recorded in the CRM');
+        if (att && !anyWork) {
+          flags.push(
+            kind === 'CALLING'
+              ? 'Present, but no work recorded in the CRM'
+              : 'Present, but nothing recorded (CRM or work log)',
+          );
         }
-        if (report && report.call_count > calls + 5) {
+        if (kind === 'SITE' && site.visits_awaiting_acceptance > 0) {
+          flags.push(
+            `${site.visits_awaiting_acceptance} site visit${site.visits_awaiting_acceptance === 1 ? '' : 's'} waiting for acceptance`,
+          );
+        }
+        if (kind === 'CALLING' && report && report.call_count > calls + 5) {
           flags.push(`Report claims ${report.call_count} calls; ${calls} logged`);
         }
         // REMOTE = approved work-from-home check-in from the app; PROPOSAL =
@@ -137,7 +265,10 @@ router.get(
           id: e.id,
           name: e.full_name || e.employee_code,
           employee_code: e.employee_code,
-          roles: e.roles.map((r) => r.role.name),
+          roles: roleNames,
+          kind,
+          site,
+          work_log: workLog,
           attendance: att
             ? {
                 check_in_at: att.check_in_at,

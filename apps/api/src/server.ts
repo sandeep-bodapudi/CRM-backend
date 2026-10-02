@@ -23,6 +23,7 @@ import healthRoutes from './routes/health';
 import authRoutes from './routes/auth';
 import attendanceRoutes from './routes/attendance';
 import mdRoutes from './routes/md';
+import workLogRoutes from './routes/workLog';
 import reportRoutes from './routes/reports';
 import taskRoutes from './routes/tasks';
 import performanceRoutes from './routes/performance';
@@ -242,6 +243,7 @@ if (mountInternal) {
   app.use('/api/v1/kiosk-credentials', kioskAuthRoutes);
   app.use('/api/v1/attendance', attendanceRoutes);
   app.use('/api/v1/md', mdRoutes);
+  app.use('/api/v1/work-log', workLogRoutes);
   app.use('/api/v1/reports', reportRoutes);
   app.use('/api/v1/tasks', taskRoutes);
   app.use('/api/v1/performance', performanceRoutes);

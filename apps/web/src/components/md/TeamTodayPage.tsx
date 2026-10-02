@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CalendarDays, Home, PhoneCall, Users, X } from 'lucide-react';
 import { Roles } from '../../shared';
+import { workLogKindLabel } from '../worklog/workLogKinds';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 
@@ -30,7 +31,91 @@ interface Row {
   last_action: string | null;
   report: { submitted_at: string; reported_calls: number; summary: string } | null;
   flags: string[];
+  kind: 'CALLING' | 'SITE' | 'DIGITAL' | 'PARTNER' | 'GENERAL';
+  site: {
+    visits_today: number;
+    visits_completed: number;
+    visits_awaiting_acceptance: number;
+    inventory_updates: number;
+  };
+  work_log: {
+    id: number;
+    kind: string;
+    note: string;
+    link: string | null;
+    count: number;
+    at: string;
+  }[];
 }
+
+const KIND_LABEL: Record<Row['kind'], string> = {
+  CALLING: 'Calling team',
+  SITE: 'Site & inventory',
+  DIGITAL: 'Digital team',
+  PARTNER: 'Channel partners',
+  GENERAL: 'Other',
+};
+
+const logTotal = (r: Row) => (r.work_log || []).reduce((n, w) => n + (w.count || 1), 0);
+
+/** The numbers that describe each kind of job -- PMs don't make calls. */
+const RoleStats: React.FC<{ r: Row }> = ({ r }) => {
+  const s = r.site || {
+    visits_today: 0,
+    visits_completed: 0,
+    visits_awaiting_acceptance: 0,
+    inventory_updates: 0,
+  };
+  const cells: [string, number, boolean?][] =
+    r.kind === 'SITE'
+      ? [
+          ['Visits today', s.visits_today, true],
+          ['Completed', s.visits_completed + r.visits_completed, true],
+          ['To accept', s.visits_awaiting_acceptance],
+          ['Inventory updates', s.inventory_updates],
+          ['Tasks', r.tasks_completed],
+          ['Work log', logTotal(r)],
+        ]
+      : r.kind === 'DIGITAL'
+        ? [
+            ['Work logged', logTotal(r), true],
+            ['Leads added', r.leads_imported, true],
+            ['Leads worked', r.leads_worked],
+            ['Tasks', r.tasks_completed],
+          ]
+        : r.kind === 'PARTNER'
+          ? [
+              ['Leads added', r.leads_imported, true],
+              ['Leads worked', r.leads_worked, true],
+              ['Work log', logTotal(r)],
+              ['Tasks', r.tasks_completed],
+            ]
+          : r.kind === 'CALLING'
+            ? [
+                ['Calls', r.calls_logged, true],
+                ['Leads', r.leads_worked, true],
+                ['Contacted', r.contacted],
+                ['Qualified', r.qualified],
+                ['Dropped', r.dropped],
+                ['Visits', r.visits_completed],
+                ['Tasks', r.tasks_completed],
+              ]
+            : [
+                ['Tasks', r.tasks_completed, true],
+                ['Leads worked', r.leads_worked],
+                ['Work log', logTotal(r)],
+              ];
+  return (
+    <div
+      className="grid gap-2 bg-slate-50 rounded-xl p-2"
+      style={{ gridTemplateColumns: `repeat(${Math.min(cells.length, 4)}, minmax(0, 1fr))` }}
+    >
+      {cells.map(([label, value, strong]) => (
+        <Stat key={label} label={label} value={value} strong={strong} />
+      ))}
+    </div>
+  );
+};
 
 const t = (iso: string | null | undefined) =>
   iso
@@ -325,7 +410,7 @@ export const TeamTodayPage: React.FC = () => {
               <div className="min-w-0">
                 <div className="font-extrabold text-slate-900 truncate">{r.name}</div>
                 <div className="text-[11px] text-slate-500 truncate">
-                  {r.employee_code} · {r.roles.join(', ')}
+                  {r.employee_code} · {r.roles.join(', ')} · {KIND_LABEL[r.kind] || ''}
                 </div>
               </div>
               <div className="text-right text-[11px] shrink-0">
@@ -349,15 +434,34 @@ export const TeamTodayPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 bg-slate-50 rounded-xl p-2">
-              <Stat label="Calls" value={r.calls_logged} strong />
-              <Stat label="Leads" value={r.leads_worked} strong />
-              <Stat label="Contacted" value={r.contacted} />
-              <Stat label="Qualified" value={r.qualified} />
-              <Stat label="Dropped" value={r.dropped} />
-              <Stat label="Visits" value={r.visits_completed} />
-              <Stat label="Tasks" value={r.tasks_completed} />
-            </div>
+            <RoleStats r={r} />
+
+            {(r.work_log || []).length > 0 && (
+              <ul className="text-[11px] space-y-1">
+                {r.work_log.map((w) => (
+                  <li key={w.id} className="flex gap-2">
+                    <span className="text-slate-400 shrink-0">{t(w.at)}</span>
+                    <span className="min-w-0">
+                      <b className="text-slate-700">
+                        {workLogKindLabel(w.kind)}
+                        {w.count > 1 ? ` × ${w.count}` : ''}
+                      </b>{' '}
+                      <span className="text-slate-500">{w.note}</span>{' '}
+                      {w.link && (
+                        <a
+                          href={w.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-navy-600 font-semibold"
+                        >
+                          open
+                        </a>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
               <span>
@@ -370,8 +474,8 @@ export const TeamTodayPage: React.FC = () => {
               {r.report ? (
                 <>
                   <div className="font-bold text-slate-700 flex items-center gap-1">
-                    <PhoneCall className="w-3 h-3" /> Daily report ({t(r.report.submitted_at)}):
-                    claimed {r.report.reported_calls} calls
+                    <PhoneCall className="w-3 h-3" /> Daily report ({t(r.report.submitted_at)})
+                    {r.kind === 'CALLING' ? `: claimed ${r.report.reported_calls} calls` : ''}
                   </div>
                   <div className="text-slate-500 line-clamp-2">{r.report.summary}</div>
                 </>

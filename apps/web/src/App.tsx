@@ -158,6 +158,12 @@ const HRAttendanceDashboard = lazy(() =>
     default: m.HRAttendanceDashboard,
   })),
 );
+const RequestsPage = lazy(() =>
+  import('./components/attendance/RequestsPage').then((m) => ({ default: m.RequestsPage })),
+);
+const WorkLogPage = lazy(() =>
+  import('./components/worklog/WorkLogPage').then((m) => ({ default: m.WorkLogPage })),
+);
 const MyAttendancePage = lazy(() =>
   import('./components/attendance/MyAttendancePage').then((m) => ({ default: m.MyAttendancePage })),
 );
@@ -596,6 +602,8 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
       />
       <Route path="/profile" element={<UserProfile />} />
       <Route path="/my-attendance" element={<MyAttendancePage />} />
+      <Route path="/requests" element={<RequestsPage />} />
+      <Route path="/work-log" element={<WorkLogPage />} />
       <Route path="/my-performance" element={<MyPerformanceDashboard />} />
       <Route
         path="/achievements"
@@ -765,6 +773,8 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     '/access-control': 'Roles & Access',
     '/approvals-inbox': 'Approvals',
     '/team-today': 'Team Today',
+    '/requests': 'Requests',
+    '/work-log': 'Work Log',
     '/finance': 'Payments & Refunds',
     '/action-center': 'Action Center',
     '/pm/approvals': 'PM Approvals',

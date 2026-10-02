@@ -16,7 +16,7 @@ import { proposalTypeLabel } from './proposalLabels';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 
-const MyLeaveRequestsWidget: React.FC = () => {
+export const MyLeaveRequestsWidget: React.FC = () => {
   const { fetchWithAuth } = useAuth();
   const [proposals, setProposals] = useState<any[]>([]);
 
