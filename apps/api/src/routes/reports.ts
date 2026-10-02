@@ -5,6 +5,7 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 import { validateRequestBody } from '../middleware/validate';
 import { DailyReportSchema, Roles } from '../shared';
 import { getISTComponents } from '../utils/time';
+import { WORK_LOG_ACTION, parseWorkLog, countByKind, WorkLogEntry } from './workLog';
 
 const router = Router();
 
@@ -24,7 +25,7 @@ function istTodayRange(now = new Date()) {
  */
 async function verifiedActivityToday(employeeId: number) {
   const { start, end } = istTodayRange();
-  const [calls, leadsWorked] = await Promise.all([
+  const [loggedCalls, leadsWorked, workLogRows] = await Promise.all([
     p.leadActivity.count({
       where: {
         actor_id: employeeId,
@@ -41,8 +42,15 @@ async function verifiedActivityToday(employeeId: number) {
       select: { lead_id: true },
       distinct: ['lead_id'],
     }),
+    p.auditEvent.findMany({
+      where: { actor_id: employeeId, action: WORK_LOG_ACTION, created_at: { gte: start, lt: end } },
+      select: { id: true, new_value: true, created_at: true },
+    }),
   ]);
-  return { calls, leads_worked: leadsWorked.length };
+  const workLog = countByKind(workLogRows.map(parseWorkLog).filter((e): e is WorkLogEntry => !!e));
+  // Calls to associates (Channel Partner Managers) are calls too.
+  const calls = loggedCalls + (workLog.ASSOCIATE_CALL || 0) + (workLog.ASSOCIATE_NEW_CALL || 0);
+  return { calls, leads_worked: leadsWorked.length, work_log: workLog };
 }
 
 // GET /api/v1/reports/today-activity - what the system recorded for me today

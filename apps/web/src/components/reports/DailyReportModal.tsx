@@ -23,6 +23,19 @@ interface DailyReportProps {
   mode?: 'modal' | 'inline';
 }
 
+// Channel Partner Manager report fields (apps/api targets.ts preset) and the
+// work-log kinds that count towards each.
+const CPM_FIELD_SOURCES: Record<string, string[]> = {
+  existingProspectsFollowup: ['ASSOCIATE_CALL'],
+  newCalls: ['ASSOCIATE_NEW_CALL'],
+  totalCalls: ['ASSOCIATE_CALL', 'ASSOCIATE_NEW_CALL'],
+  newProspects: ['ASSOCIATE_PROSPECT'],
+  associateOfficeVisits: ['ASSOCIATE_OFFICE_VISIT'],
+  enrollments: ['ASSOCIATE_ENROLLMENT'],
+  associateSiteVisits: ['ASSOCIATE_SITE_VISIT'],
+  bookings: ['ASSOCIATE_BOOKING'],
+};
+
 export const DailyReportModal: React.FC<DailyReportProps> = ({
   isOpen = true,
   onClose,
@@ -51,7 +64,14 @@ export const DailyReportModal: React.FC<DailyReportProps> = ({
   const [todayActivity, setTodayActivity] = useState<{
     calls: number;
     leads_worked: number;
+    work_log?: Record<string, number>;
   } | null>(null);
+  // Work-log count behind each Channel Partner Manager report field.
+  const recordedFor = (fieldId: string): number | null => {
+    const kinds = CPM_FIELD_SOURCES[fieldId];
+    if (!kinds || !todayActivity?.work_log) return null;
+    return kinds.reduce((n, k) => n + (todayActivity.work_log?.[k] || 0), 0);
+  };
 
   // Speech Recognition State
   const [isListening, setIsListening] = useState(false);
@@ -383,15 +403,31 @@ export const DailyReportModal: React.FC<DailyReportProps> = ({
                   )}
 
                   {field.type === 'COUNT' && (
-                    <input
-                      type="number"
-                      min="0"
-                      value={String(formResponses[field.id] ?? '')}
-                      onChange={(e) => handleResponseChange(field.id, e.target.value)}
-                      required={field.required}
-                      className="w-32 p-3 text-lg font-mono text-center bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-navy-600"
-                      placeholder="0"
-                    />
+                    <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        type="number"
+                        min="0"
+                        value={String(formResponses[field.id] ?? '')}
+                        onChange={(e) => handleResponseChange(field.id, e.target.value)}
+                        required={field.required}
+                        className="w-32 p-3 text-lg font-mono text-center bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-navy-600"
+                        placeholder="0"
+                      />
+                      {recordedFor(field.id) !== null && (
+                        <span className="text-xs text-slate-500">
+                          Recorded in Work Log today: <b>{recordedFor(field.id)}</b>{' '}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleResponseChange(field.id, String(recordedFor(field.id)))
+                            }
+                            className="ml-1 font-bold text-navy-600 hover:text-navy-800"
+                          >
+                            Use this number
+                          </button>
+                        </span>
+                      )}
+                    </div>
                   )}
 
                   {field.type === 'CHECKLIST' && (

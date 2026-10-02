@@ -79,14 +79,32 @@ const ROLE_PRESETS: Record<
     targets_json: { invoicesProcessed: 10, paymentAudits: 1 },
     form_schema_json: generateBasicSchema(['invoicesProcessed', 'paymentAudits']),
   },
+  // The fields Channel Partner Managers already report (from their daily
+  // reports in production); the report form shows the work-log count for
+  // each next to it (apps/web DailyReportModal, CPM_FIELD_SOURCES).
   [Roles.CHANNEL_PARTNER_MANAGER]: {
     target_type: 'COUNT',
-    targets_json: { referralLeadsGenerated: 10, siteVisitsCoordinated: 5, partnerMeetings: 3 },
-    form_schema_json: generateBasicSchema([
-      'referralLeadsGenerated',
-      'siteVisitsCoordinated',
-      'partnerMeetings',
-    ]),
+    targets_json: { newProspects: 10, associateSiteVisits: 5, associateOfficeVisits: 3 },
+    form_schema_json: [
+      ...[
+        ['existingProspectsFollowup', 'Existing prospects followed up'],
+        ['newCalls', 'New calls (new associates)'],
+        ['totalCalls', 'Total calls made'],
+        ['newProspects', 'New prospects'],
+        ['associateOfficeVisits', "Associates' office visits"],
+        ['enrollments', 'Enrollments'],
+        ['associateSiteVisits', 'Associate site visits'],
+        ['bookings', 'Bookings'],
+      ].map(([id, label]) => ({
+        id,
+        label,
+        type: 'COUNT',
+        required: true,
+        targetValue:
+          ({ newProspects: 10, associateSiteVisits: 5, associateOfficeVisits: 3 } as any)[id] || 0,
+      })),
+      { id: 'feedback', label: 'Daily Feedback & Notes', type: 'LONG_TEXT', required: false },
+    ],
   },
 };
 

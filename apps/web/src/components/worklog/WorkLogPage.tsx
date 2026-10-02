@@ -3,7 +3,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, NotebookPen, Send } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
-import { WORK_LOG_KINDS, workLogKindLabel, workLogEntryLabel } from './workLogKinds';
+import {
+  WORK_LOG_GROUPS,
+  workLogKindLabel,
+  workLogEntryLabel,
+  isAssociateKind,
+  AssociateRef,
+} from './workLogKinds';
+import { Roles } from '../../shared';
 
 export interface WorkLogEntry {
   id: number;
@@ -12,6 +19,8 @@ export interface WorkLogEntry {
   link: string | null;
   count: number;
   title?: string | null;
+  associate_name?: string | null;
+  associate_id?: string | null;
   at: string;
 }
 
@@ -27,9 +36,12 @@ const t = (iso: string) =>
  * meetings, site trips) so it shows on Team Today next to CRM activity.
  */
 export const WorkLogPage: React.FC = () => {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, activeRole } = useAuth();
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState<string>('INSTAGRAM_POST');
+  const isCpm = activeRole === Roles.CHANNEL_PARTNER_MANAGER;
+  const [kind, setKind] = useState<string>(isCpm ? 'ASSOCIATE_CALL' : 'INSTAGRAM_POST');
+  const [associateName, setAssociateName] = useState('');
+  const [associateId, setAssociateId] = useState('');
   const [count, setCount] = useState(1);
   const [link, setLink] = useState('');
   const [note, setNote] = useState('');
@@ -46,6 +58,24 @@ export const WorkLogPage: React.FC = () => {
     },
   });
 
+  // Associates used before (work log + leads) -- suggestions until the
+  // associates portal is connected.
+  const { data: associatesData } = useQuery({
+    queryKey: ['myAssociates'],
+    queryFn: async () => {
+      const res = await fetchWithAuth(`${API_BASE_URL}/work-log/associates`);
+      if (!res.ok) return { associates: [] as AssociateRef[] };
+      return (await res.json()) as { associates: AssociateRef[] };
+    },
+    enabled: isAssociateKind(kind),
+  });
+  const associates = associatesData?.associates || [];
+  const pickAssociate = (name: string) => {
+    setAssociateName(name);
+    const hit = associates.find((a) => a.name.toLowerCase() === name.trim().toLowerCase());
+    if (hit?.associate_id) setAssociateId(hit.associate_id);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -60,6 +90,9 @@ export const WorkLogPage: React.FC = () => {
           link: link.trim(),
           count,
           ...(kind === 'OTHER' ? { title: title.trim() } : {}),
+          ...(isAssociateKind(kind)
+            ? { associate_name: associateName.trim(), associate_id: associateId.trim() }
+            : {}),
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -67,6 +100,9 @@ export const WorkLogPage: React.FC = () => {
         setMessage({ ok: true, text: 'Saved to your work log.' });
         setNote('');
         setTitle('');
+        setAssociateName('');
+        setAssociateId('');
+        queryClient.invalidateQueries({ queryKey: ['myAssociates'] });
         setLink('');
         setCount(1);
         queryClient.invalidateQueries({ queryKey: ['myWorkLog'] });
@@ -100,8 +136,8 @@ export const WorkLogPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Work Log</h1>
           <p className="text-sm text-slate-500">
-            Log work done outside the CRM — posts, reels, campaigns, meetings, site trips. Your
-            manager sees it on Team Today.
+            Log work done outside the CRM — associate calls and visits, posts, reels, campaigns,
+            meetings. Your manager sees it on Team Today.
           </p>
         </div>
       </div>
@@ -118,11 +154,17 @@ export const WorkLogPage: React.FC = () => {
               onChange={(e) => setKind(e.target.value)}
               className="mt-1 w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl"
             >
-              {WORK_LOG_KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {workLogKindLabel(k)}
-                </option>
-              ))}
+              {(isCpm ? WORK_LOG_GROUPS : [...WORK_LOG_GROUPS.slice(1), WORK_LOG_GROUPS[0]]).map(
+                (g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.kinds.map((k) => (
+                      <option key={k} value={k}>
+                        {workLogKindLabel(k)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ),
+              )}
             </select>
           </label>
           <label className="text-xs font-semibold text-slate-700">
@@ -137,6 +179,41 @@ export const WorkLogPage: React.FC = () => {
             />
           </label>
         </div>
+        {isAssociateKind(kind) && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="sm:col-span-2 text-xs font-semibold text-slate-700">
+              Associate name{kind === 'ASSOCIATE_NEW_CALL' ? ' (if known)' : ''}
+              <input
+                list="associate-suggestions"
+                value={associateName}
+                onChange={(e) => pickAssociate(e.target.value)}
+                required={kind !== 'ASSOCIATE_NEW_CALL'}
+                maxLength={120}
+                placeholder="e.g. Ravi Kumar (Sri Sai Realty)"
+                className="mt-1 w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl"
+              />
+              <datalist id="associate-suggestions">
+                {associates.map((a) => (
+                  <option key={(a.associate_id || '') + a.name} value={a.name}>
+                    {a.associate_id
+                      ? `${a.associate_id}${a.company ? ' · ' + a.company : ''}`
+                      : a.company || ''}
+                  </option>
+                ))}
+              </datalist>
+            </label>
+            <label className="text-xs font-semibold text-slate-700">
+              Associate ID (from the associates app)
+              <input
+                value={associateId}
+                onChange={(e) => setAssociateId(e.target.value)}
+                maxLength={60}
+                placeholder="optional"
+                className="mt-1 w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl"
+              />
+            </label>
+          </div>
+        )}
         {kind === 'OTHER' && (
           <label className="block text-xs font-semibold text-slate-700">
             What did you do?
@@ -205,6 +282,12 @@ export const WorkLogPage: React.FC = () => {
                     {workLogEntryLabel(w)}
                     {w.count > 1 ? ` × ${w.count}` : ''}
                   </div>
+                  {w.associate_name && (
+                    <div className="text-xs font-semibold text-navy-700">
+                      {w.associate_name}
+                      {w.associate_id ? ` · ${w.associate_id}` : ''}
+                    </div>
+                  )}
                   <div className="text-xs text-slate-500 break-words">{w.note}</div>
                   {w.link && (
                     <a

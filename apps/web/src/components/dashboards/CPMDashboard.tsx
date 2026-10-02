@@ -7,6 +7,7 @@ import { API_BASE_URL } from '../../config';
 import { LeadListItem } from '../../types';
 import { PerformanceScoreWidget } from '../performance/PerformanceScoreWidget';
 import { TaskManager } from '../tasks/TaskManager';
+import { CPMAssociatePanel } from './CPMAssociatePanel';
 import { StatCard, ListWidget, StatusPill, ListItem } from '../ui';
 import { Button } from '../common/ui/Button';
 import { QualificationFormModal, QualificationData } from '../leads/QualificationFormModal';
@@ -267,18 +268,9 @@ export const CPMDashboard: React.FC = () => {
         />
       )}
 
-      {/* Primary KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Leads Assigned" value={leadsAssigned} icon={Users} link="/leads" />
-        <StatCard label="Contacted Today" value={contactedToday} icon={PhoneCall} link="/leads" />
-        <StatCard label="Uncontacted Leads" value={uncontactedLeads} icon={Clock} link="/leads" />
-        <StatCard
-          label="WhatsApp Follow-ups"
-          value={whatsappFollowUps}
-          icon={MessageCircle}
-          link="/tasks"
-        />
-      </div>
+      {/* Associate work (calls, visits, enrollments) -- what a CPM's day is
+          actually made of; replaces the telecaller lead counts. */}
+      <CPMAssociatePanel />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">

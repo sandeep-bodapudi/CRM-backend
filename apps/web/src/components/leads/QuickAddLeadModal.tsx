@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, Phone, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { useToast } from '../../context/ToastContext';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
+import { Roles } from '../../shared';
+import type { AssociateRef } from '../worklog/workLogKinds';
 
 interface QuickAddLeadModalProps {
   onClose: () => void;
@@ -11,7 +13,32 @@ interface QuickAddLeadModalProps {
 }
 
 export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, onSuccess }) => {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, activeRole } = useAuth();
+  // Channel Partner Managers' leads come from an associate (external agent);
+  // the server requires these details and always keeps the lead with them.
+  const isCpm = activeRole === Roles.CHANNEL_PARTNER_MANAGER;
+  const [agentName, setAgentName] = useState('');
+  const [agentPhone, setAgentPhone] = useState('');
+  const [agentId, setAgentId] = useState('');
+  const [agentCompany, setAgentCompany] = useState('');
+  const [associates, setAssociates] = useState<AssociateRef[]>([]);
+  useEffect(() => {
+    if (!isCpm) return;
+    fetchWithAuth(`${API_BASE_URL}/work-log/associates`)
+      .then((r) => (r.ok ? r.json() : { associates: [] }))
+      .then((d) => setAssociates(d.associates || []))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCpm]);
+  const pickAgent = (name: string) => {
+    setAgentName(name);
+    const hit = associates.find((a) => a.name.toLowerCase() === name.trim().toLowerCase());
+    if (hit) {
+      if (hit.associate_id) setAgentId(hit.associate_id);
+      if (hit.phone) setAgentPhone(hit.phone);
+      if (hit.company) setAgentCompany(hit.company);
+    }
+  };
   const { showToast, showError } = useToast();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -26,6 +53,10 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
       showError({ message: 'Name and Phone are required' });
       return;
     }
+    if (isCpm && (!agentName.trim() || !agentPhone.trim() || !agentId.trim())) {
+      showError({ message: "Enter the associate's name, phone and associate ID" });
+      return;
+    }
 
     setIsLoading(true);
 
@@ -37,7 +68,16 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
           customer_name: customerName,
           phone,
           source,
-          ownership_type: ownershipType,
+          ownership_type: isCpm ? 'DIRECT' : ownershipType,
+          ...(isCpm
+            ? {
+                source: 'REFERRAL',
+                external_agent_name: agentName.trim(),
+                external_agent_phone: agentPhone.trim(),
+                external_agent_associate_id: agentId.trim(),
+                external_agent_company: agentCompany.trim() || null,
+              }
+            : {}),
         }),
       });
 
@@ -120,35 +160,80 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Assign this lead to</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setOwnershipType('DIRECT')}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  ownershipType === 'DIRECT'
-                    ? 'border-navy-600 bg-navy-50/50 text-navy-900 font-bold'
-                    : 'border-slate-200 text-slate-600'
-                }`}
-              >
-                <div className="text-sm">Me</div>
-                <p className="text-[11px] text-slate-500 font-normal mt-1">Keep this lead.</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setOwnershipType('POOL')}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  ownershipType === 'POOL'
-                    ? 'border-navy-600 bg-navy-50/50 text-navy-900 font-bold'
-                    : 'border-slate-200 text-slate-600'
-                }`}
-              >
-                <div className="text-sm">Pool</div>
-                <p className="text-[11px] text-slate-500 font-normal mt-1">Auto-distribute.</p>
-              </button>
+          {isCpm ? (
+            <div className="space-y-3 p-4 rounded-xl border border-navy-100 bg-navy-50/40">
+              <div className="text-sm font-bold text-navy-900">
+                Associate who referred this customer
+              </div>
+              <input
+                list="lead-associate-suggestions"
+                value={agentName}
+                onChange={(e) => pickAgent(e.target.value)}
+                placeholder="Associate name *"
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm"
+              />
+              <datalist id="lead-associate-suggestions">
+                {associates.map((a) => (
+                  <option key={(a.associate_id || '') + a.name} value={a.name}>
+                    {a.associate_id || ''}
+                  </option>
+                ))}
+              </datalist>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  value={agentPhone}
+                  onChange={(e) => setAgentPhone(e.target.value.replace(/\D/g, '').slice(0, 15))}
+                  placeholder="Associate phone *"
+                  className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm"
+                />
+                <input
+                  value={agentId}
+                  onChange={(e) => setAgentId(e.target.value)}
+                  placeholder="Associate ID *"
+                  className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+              <input
+                value={agentCompany}
+                onChange={(e) => setAgentCompany(e.target.value)}
+                placeholder="Associate's company (optional)"
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm"
+              />
+              <p className="text-[11px] text-slate-500">
+                The lead stays with you. Associates you've used before are suggested.
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Assign this lead to</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOwnershipType('DIRECT')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    ownershipType === 'DIRECT'
+                      ? 'border-navy-600 bg-navy-50/50 text-navy-900 font-bold'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  <div className="text-sm">Me</div>
+                  <p className="text-[11px] text-slate-500 font-normal mt-1">Keep this lead.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOwnershipType('POOL')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    ownershipType === 'POOL'
+                      ? 'border-navy-600 bg-navy-50/50 text-navy-900 font-bold'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  <div className="text-sm">Pool</div>
+                  <p className="text-[11px] text-slate-500 font-normal mt-1">Auto-distribute.</p>
+                </button>
+              </div>
+            </div>
+          )}
         </form>
 
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">

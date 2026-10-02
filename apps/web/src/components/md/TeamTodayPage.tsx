@@ -41,6 +41,8 @@ interface Row {
   work_log: {
     id: number;
     kind: string;
+    title?: string | null;
+    associate_name?: string | null;
     note: string;
     link: string | null;
     count: number;
@@ -55,6 +57,10 @@ const KIND_LABEL: Record<Row['kind'], string> = {
   PARTNER: 'Channel partners',
   GENERAL: 'Other',
 };
+
+// Count of one work-log kind (Channel Partner Managers' associate work).
+const logOf = (r: Row, kind: string) =>
+  (r.work_log || []).filter((w) => w.kind === kind).reduce((n, w) => n + (w.count || 1), 0);
 
 const logTotal = (r: Row) => (r.work_log || []).reduce((n, w) => n + (w.count || 1), 0);
 
@@ -85,9 +91,16 @@ const RoleStats: React.FC<{ r: Row }> = ({ r }) => {
           ]
         : r.kind === 'PARTNER'
           ? [
-              ['Leads added', r.leads_imported, true],
-              ['Leads worked', r.leads_worked, true],
-              ['Work log', logTotal(r)],
+              [
+                'Associate calls',
+                logOf(r, 'ASSOCIATE_CALL') + logOf(r, 'ASSOCIATE_NEW_CALL'),
+                true,
+              ],
+              ['Office visits', logOf(r, 'ASSOCIATE_OFFICE_VISIT'), true],
+              ['Enrollments', logOf(r, 'ASSOCIATE_ENROLLMENT')],
+              ['Site visits', logOf(r, 'ASSOCIATE_SITE_VISIT')],
+              ['Prospects', logOf(r, 'ASSOCIATE_PROSPECT') + r.leads_imported],
+              ['Bookings', logOf(r, 'ASSOCIATE_BOOKING')],
               ['Tasks', r.tasks_completed],
             ]
           : r.kind === 'CALLING'
@@ -446,6 +459,9 @@ export const TeamTodayPage: React.FC = () => {
                         {workLogEntryLabel(w)}
                         {w.count > 1 ? ` × ${w.count}` : ''}
                       </b>{' '}
+                      {w.associate_name && (
+                        <span className="text-navy-700 font-semibold">{w.associate_name} · </span>
+                      )}
                       <span className="text-slate-500">{w.note}</span>{' '}
                       {w.link && (
                         <a
