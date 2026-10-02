@@ -110,6 +110,49 @@ router.get(
   },
 );
 
+// GET /api/v1/tasks/assignees - who the caller can assign a task to.
+// The New Task form used to fill its dropdown from GET /employees, which is
+// limited to the caller's own reporting team -- a Project Manager with no
+// direct reports (reported by a PM in production) saw an empty list, though
+// POST /tasks below accepts any active employee of the caller's company.
+// Same rule here, picker fields only (no contact/KYC data).
+router.get(
+  '/assignees',
+  authenticateToken,
+  requireAuthz(Permissions.TASKS_CREATE),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employees = await p.employee.findMany({
+        where: {
+          company_id: req.user!.companyId,
+          status: 'ACTIVE',
+          deleted_at: null,
+          id: { not: req.user!.employeeId },
+          roles: { none: { role: { is_invisible: true } } },
+        },
+        select: {
+          id: true,
+          full_name: true,
+          employee_code: true,
+          roles: { select: { role: { select: { name: true } } } },
+        },
+        orderBy: { full_name: 'asc' },
+      });
+      return res.status(200).json({
+        employees: employees.map((e) => ({
+          id: e.id,
+          fullName: e.full_name,
+          employeeCode: e.employee_code,
+          roles: e.roles.map((r) => r.role.name),
+        })),
+      });
+    } catch (error) {
+      logger.error('Fetch task assignees error:', error);
+      return res.status(500).json({ error: 'Failed to load assignees' });
+    }
+  },
+);
+
 // POST /api/v1/tasks - Create new task
 router.post(
   '/',

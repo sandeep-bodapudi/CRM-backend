@@ -96,7 +96,9 @@ export const TaskManager: React.FC = () => {
   const fetchEmployees = async () => {
     if (!canCreateTask) return;
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/employees`);
+      // Everyone the caller may assign to (whole company), not just their
+      // reporting team -- a PM with no direct reports saw an empty list.
+      const res = await fetchWithAuth(`${API_BASE_URL}/tasks/assignees`);
       const data = await res.json();
       if (res.ok) {
         setEmployees(data.employees || []);
