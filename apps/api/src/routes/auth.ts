@@ -11,7 +11,7 @@ import { validateRequestBody } from '../middleware/validate';
 import { loginRateLimiter, loginRateLimitKey, refreshRateLimiter } from '../middleware/rateLimiter';
 import { publicAssetUrl } from '../utils/media';
 import { decryptData } from '../utils/crypto';
-import { getEffectivePermissionNames } from '../utils/effectivePermissions';
+import { getEffectivePermissionNames, getRoleNames } from '../utils/effectivePermissions';
 
 const router = Router();
 
@@ -295,23 +295,18 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
     // Profile and permissions in parallel; permissions come from a single
     // joined query (see utils/effectivePermissions.ts) instead of a chain of
     // per-relation queries.
-    const [employee, permissions] = await Promise.all([
+    const [employee, roleNames, permissions] = await Promise.all([
       p.employee.findUnique({
         where: { id: req.user!.employeeId },
-        include: {
-          company: true,
-          branch: true,
-          roles: { include: { role: true } },
-        },
+        include: { company: true, branch: true },
       }),
+      getRoleNames(req.user!.employeeId),
       getEffectivePermissionNames(req.user!.employeeId),
     ]);
 
     if (!employee) {
       return res.status(404).json({ error: 'User profile not found' });
     }
-
-    const roleNames = employee.roles.map((r: any) => r.role.name);
 
     return res.status(200).json({
       user: mapEmployeeToUser(employee, roleNames, permissions),
@@ -335,8 +330,9 @@ router.post(
         return res.status(401).json({ error: 'Refresh token required', code: 'UNAUTHORIZED' });
       }
 
+      let refreshPayload: any;
       try {
-        jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET as string);
+        refreshPayload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET as string);
       } catch (err) {
         return res
           .status(401)
@@ -344,11 +340,8 @@ router.post(
       }
 
       const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+      const tokenEmployeeId = Number(refreshPayload?.employeeId);
 
-      // No interactive transaction: the conditional updateMany below is the
-      // atomic step (only one request can flip consumed false -> true), and
-      // the revocations are idempotent. The transaction only added BEGIN /
-      // COMMIT round trips to the request every page load waits on.
       const revokeFamily = async (familyToken: string, employeeId: number) => {
         await p.authSession.updateMany({
           where: { family_token: familyToken },
@@ -365,63 +358,46 @@ router.post(
         });
       };
 
-      const result = await (async (): Promise<
-        { error: string; status: number; session?: undefined } | { session: any; error?: undefined }
-      > => {
-        const session = await p.authSession.findFirst({
-          where: { refresh_token_hash: refreshTokenHash },
-        });
-
-        if (!session) return { error: 'Invalid session', status: 401 };
-        if (session.revoked) return { error: 'Session revoked', status: 401 };
-
-        if (session.consumed) {
-          // Reuse detection!
-          await revokeFamily(session.family_token, session.employee_id);
-          return { error: 'Session compromised', status: 401 };
-        }
-
-        // Mark old token as consumed ATOMICALLY
-        const updateResult = await p.authSession.updateMany({
-          where: { id: session.id, consumed: false },
+      // Every page load waits on this request, and with the database in
+      // another region each sequential query is a full round trip. So the
+      // reads and the consume step run together in one round:
+      //  - the conditional updateMany is the atomic "use this token once"
+      //    step: only one request can flip consumed false -> true;
+      //  - the session row is read alongside to explain a failed consume
+      //    (unknown / revoked / reused) and to get the token family;
+      //  - employee, roles and permissions load by the id inside the
+      //    (signature-verified) refresh token.
+      const [consumed, session, employee, roleNames, freshPermissions] = await Promise.all([
+        p.authSession.updateMany({
+          where: { refresh_token_hash: refreshTokenHash, consumed: false, revoked: false },
           data: { consumed: true },
-        });
-
-        if (updateResult.count === 0) {
-          // Concurrent refresh race condition: another request just consumed it!
-          await revokeFamily(session.family_token, session.employee_id);
-          return { error: 'Session compromised', status: 401 };
-        }
-
-        return { session };
-      })();
-
-      if (result.error) {
-        res.clearCookie('refreshToken');
-        return res.status(result.status).json({ error: result.error, code: 'UNAUTHORIZED' });
-      }
-
-      const session = result.session;
-      if (!session) {
-        res.clearCookie('refreshToken');
-        return res.status(401).json({ error: 'Invalid session data', code: 'UNAUTHORIZED' });
-      }
-
-      // Fetch employee and fresh permissions (one joined query) in parallel
-      const [employee, freshPermissions] = await Promise.all([
-        p.employee.findUnique({
-          where: { id: session.employee_id },
-          include: { roles: { include: { role: true } } },
         }),
-        getEffectivePermissionNames(session.employee_id),
+        p.authSession.findFirst({ where: { refresh_token_hash: refreshTokenHash } }),
+        Number.isInteger(tokenEmployeeId)
+          ? p.employee.findUnique({ where: { id: tokenEmployeeId } })
+          : Promise.resolve(null),
+        Number.isInteger(tokenEmployeeId) ? getRoleNames(tokenEmployeeId) : Promise.resolve([]),
+        Number.isInteger(tokenEmployeeId)
+          ? getEffectivePermissionNames(tokenEmployeeId)
+          : Promise.resolve([]),
       ]);
 
-      if (!employee || employee.status !== 'ACTIVE') {
+      const fail = (error: string) => {
         res.clearCookie('refreshToken');
-        return res.status(401).json({ error: 'Account inactive', code: 'UNAUTHORIZED' });
-      }
+        return res.status(401).json({ error, code: 'UNAUTHORIZED' });
+      };
 
-      const roleNames = employee.roles.map((r: any) => r.role.name);
+      if (!session) return fail('Invalid session');
+      if (consumed.count === 0) {
+        if (session.revoked) return fail('Session revoked');
+        // Already consumed: reuse of an old refresh token, or two refreshes
+        // racing with the same one. Either way revoke the whole family.
+        await revokeFamily(session.family_token, session.employee_id);
+        return fail('Session compromised');
+      }
+      if (!employee || employee.id !== session.employee_id || employee.status !== 'ACTIVE') {
+        return fail('Account inactive');
+      }
 
       const tokenPayload = {
         employeeId: employee.id,

@@ -32,3 +32,13 @@ export async function getEffectivePermissionNames(employeeId: number): Promise<s
   }
   return Array.from(permissions);
 }
+
+/** An employee's role names in one query (no per-relation round trips). */
+export async function getRoleNames(employeeId: number): Promise<string[]> {
+  const rows = await prisma.$queryRaw<{ name: string }[]>`
+    SELECT r.name AS name
+      FROM EmployeeRole er
+      JOIN Role r ON r.id = er.role_id
+     WHERE er.employee_id = ${employeeId}`;
+  return rows.map((r) => r.name);
+}
