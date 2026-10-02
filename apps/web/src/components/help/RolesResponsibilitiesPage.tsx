@@ -90,6 +90,19 @@ const ROLES: RoleEntry[] = [
     ],
   },
   {
+    key: Roles.DATA_ENTRY_OPERATOR,
+    role: 'Data Entry Operator',
+    tagline:
+      'Keeps the CRM complete and correct: projects, properties, leads, customers and bookings.',
+    icon: Building2,
+    responsibilities: [
+      'Adds and edits Projects and Properties for the whole company (details, units, pricing, photos, documents) from what the Project Manager provides; new entries still go to the PM for verification.',
+      'Enters leads by hand or bulk-uploads Excel lists, fixes lead details, and assigns leads to telecallers.',
+      'Updates customer details and KYC documents, and fills booking paperwork (including entering old bookings).',
+      'Cannot delete anything, approve or verify anything, or record payments and refunds.',
+    ],
+  },
+  {
     key: Roles.SALES_MANAGER,
     role: 'Sales Manager',
     tagline: 'Runs the sales team — lead distribution and site-visit assignment.',

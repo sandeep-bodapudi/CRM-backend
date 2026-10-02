@@ -58,7 +58,11 @@ export class PropertyPolicy {
     }
     // Inventory Executive edits every project/property in the company on
     // the PMs' behalf (no delete -- they don't hold the delete permission).
-    if (user.roles.includes(Roles.INVENTORY_EXECUTIVE)) return true;
+    if (
+      user.roles.includes(Roles.INVENTORY_EXECUTIVE) ||
+      user.roles.includes(Roles.DATA_ENTRY_OPERATOR)
+    )
+      return true;
 
     if (user.roles.includes(Roles.PROJECT_MANAGER)) {
       return this.isOwningPm(user, property);

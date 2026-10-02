@@ -57,7 +57,8 @@ export async function buildLeadScope(user: TokenPayload): Promise<Prisma.LeadWhe
 
   // 3. MANAGEMENT
   const isManagement = user.roles.some((r) => MANAGEMENT_ROLES.includes(r as any));
-  if (isManagement) {
+  // Data Entry Operator maintains every lead's details company-wide.
+  if (isManagement || user.roles.includes(Roles.DATA_ENTRY_OPERATOR)) {
     return baseScope; // All companies this employee has been granted access to
   }
 
@@ -120,7 +121,10 @@ export async function buildPropertyScope(user: TokenPayload): Promise<Prisma.Pro
 
   // Inventory Executive enters and maintains data for every PM, so sees
   // every property in their company(ies), at any verification stage.
-  if (user.roles.includes(Roles.INVENTORY_EXECUTIVE)) {
+  if (
+    user.roles.includes(Roles.INVENTORY_EXECUTIVE) ||
+    user.roles.includes(Roles.DATA_ENTRY_OPERATOR)
+  ) {
     return propertyBaseScope;
   }
 
@@ -199,7 +203,11 @@ export async function buildProjectScope(user: TokenPayload): Promise<Prisma.Proj
   // 2. MD — sees all projects in their company (any verification_status).
   // Inventory Executive likewise: they enter/maintain every PM's projects,
   // including drafts they didn't create themselves.
-  if (user.roles.includes(Roles.MD) || user.roles.includes(Roles.INVENTORY_EXECUTIVE)) {
+  if (
+    user.roles.includes(Roles.MD) ||
+    user.roles.includes(Roles.INVENTORY_EXECUTIVE) ||
+    user.roles.includes(Roles.DATA_ENTRY_OPERATOR)
+  ) {
     return baseScope;
   }
 
@@ -295,7 +303,7 @@ export async function buildCustomerScope(user: TokenPayload): Promise<Prisma.Cus
   }
 
   const isProjectManager = user.roles.includes(Roles.PROJECT_MANAGER);
-  if (isProjectManager) {
+  if (isProjectManager || user.roles.includes(Roles.DATA_ENTRY_OPERATOR)) {
     return baseScope;
   }
 

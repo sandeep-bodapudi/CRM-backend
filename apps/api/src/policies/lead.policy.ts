@@ -19,6 +19,8 @@ export class LeadPolicy {
         Roles.MARKETING_DIRECTOR,
         Roles.DIGITAL_LEAD_OPERATOR,
         Roles.SALES_MANAGER,
+        // Maintains lead details company-wide (no delete: no LEADS_DELETE).
+        Roles.DATA_ENTRY_OPERATOR,
       ].includes(r as any),
     );
   }

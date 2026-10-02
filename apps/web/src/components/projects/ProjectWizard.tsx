@@ -224,7 +224,8 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
   // Inventory Executive enters projects on a PM's behalf and must name that
   // PM (they review and submit it); they get a PM-only lookup since their
   // own employee scope doesn't include the PMs.
-  const isInventoryExecutive = activeRole === Roles.INVENTORY_EXECUTIVE;
+  const isInventoryExecutive =
+    activeRole === Roles.INVENTORY_EXECUTIVE || activeRole === Roles.DATA_ENTRY_OPERATOR;
 
   useEffect(() => {
     if (isInventoryExecutive) {

@@ -17,20 +17,27 @@ export class ExpenseRefundPolicy {
 
     let statusFilter: any;
     if (hasMDApprove && hasReview) {
-      statusFilter = { status: { in: [ExpenseRefundStatus.PENDING, ExpenseRefundStatus.ACCOUNTANT_APPROVED, ExpenseRefundStatus.MD_APPROVED] } };
+      statusFilter = {
+        status: {
+          in: [
+            ExpenseRefundStatus.PENDING,
+            ExpenseRefundStatus.ACCOUNTANT_APPROVED,
+            ExpenseRefundStatus.MD_APPROVED,
+          ],
+        },
+      };
     } else if (hasMDApprove) {
       statusFilter = { status: ExpenseRefundStatus.ACCOUNTANT_APPROVED };
     } else if (hasReview) {
-      statusFilter = { status: { in: [ExpenseRefundStatus.PENDING, ExpenseRefundStatus.MD_APPROVED] } };
+      statusFilter = {
+        status: { in: [ExpenseRefundStatus.PENDING, ExpenseRefundStatus.MD_APPROVED] },
+      };
     } else {
       statusFilter = { status: 'INVALID_NO_PERMISSION' };
     }
 
     return {
-      AND: [
-        { company_id: user.companyId },
-        statusFilter,
-      ],
+      AND: [{ company_id: user.companyId }, statusFilter],
     };
   }
 

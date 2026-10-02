@@ -50,7 +50,8 @@ router.get(
       // team scope.
       const isPmPickerLookup =
         resolvedRoleName === Roles.PROJECT_MANAGER &&
-        req.user!.roles.includes(Roles.INVENTORY_EXECUTIVE);
+        (req.user!.roles.includes(Roles.INVENTORY_EXECUTIVE) ||
+          req.user!.roles.includes(Roles.DATA_ENTRY_OPERATOR));
 
       const whereClause: any = isPmPickerLookup
         ? {

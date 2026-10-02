@@ -7,12 +7,7 @@ interface CustomerLike {
 
 // KYC-authorized tier (Phase 11). Note: KYC status is now owned by
 // by the customer portal and surfaces back via IntegrationService.processKycCallback.
-const KYC_AUTHORIZED_ROLES = [
-  Roles.MD,
-  Roles.ADMIN,
-  Roles.HR_MANAGER,
-  Roles.FINANCE,
-];
+const KYC_AUTHORIZED_ROLES = [Roles.MD, Roles.ADMIN, Roles.HR_MANAGER, Roles.FINANCE];
 
 /**
  * Phase 11 Packet 3C - Customer KYC Resource Scope Policy.

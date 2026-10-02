@@ -20,7 +20,7 @@ export class PaymentPolicy {
         Roles.MARKETING_DIRECTOR,
         Roles.DIGITAL_LEAD_OPERATOR,
         Roles.PROJECT_MANAGER,
-      ].includes(r as any)
+      ].includes(r as any),
     );
   }
 

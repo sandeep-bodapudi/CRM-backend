@@ -525,6 +525,7 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
       Roles.MARKETING_DIRECTOR,
       Roles.FINANCE,
       Roles.CHANNEL_PARTNER_MANAGER,
+      Roles.DATA_ENTRY_OPERATOR,
     ] as string[]
   ).includes(activeRole);
 

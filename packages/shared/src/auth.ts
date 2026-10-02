@@ -29,6 +29,7 @@ export const Roles = {
   CHANNEL_PARTNER_MANAGER: 'Channel partner manager',
   STAFF: 'Staff',
   INVENTORY_EXECUTIVE: 'Inventory Executive',
+  DATA_ENTRY_OPERATOR: 'Data Entry Operator',
 } as const;
 
 export type RoleName = (typeof Roles)[keyof typeof Roles];
@@ -51,6 +52,7 @@ export const DepartmentCodes: Record<string, string> = {
   [Roles.CHANNEL_PARTNER_MANAGER]: 'CP',
   [Roles.STAFF]: 'ST',
   [Roles.INVENTORY_EXECUTIVE]: 'OP',
+  [Roles.DATA_ENTRY_OPERATOR]: 'OP',
 };
 
 // Canonical Permissions Model (Phase 1 - Stage 2 Blueprint Section 7)
@@ -539,6 +541,46 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.PROPERTIES_CREATE,
     Permissions.PROPERTIES_READ,
     Permissions.PROPERTIES_UPDATE,
+    Permissions.DOCUMENTS_CREATE,
+    Permissions.DOCUMENTS_READ,
+    // Lets the project wizard list Project Managers to assign.
+    Permissions.EMPLOYEES_READ,
+    Permissions.TASKS_READ,
+    Permissions.TASKS_UPDATE,
+    Permissions.REPORTS_READ_OWN,
+    Permissions.PERFORMANCE_READ_OWN,
+    Permissions.ATTENDANCE_READ_OWN,
+    Permissions.ATTENDANCE_SCAN,
+    Permissions.ATTENDANCE_LATE_PROPOSAL,
+    Permissions.ATTENDANCE_LEAVE_PROPOSAL,
+    Permissions.EXPENSES_CREATE,
+    Permissions.EXPENSES_READ_OWN,
+    Permissions.COMPLAINTS_CREATE,
+  ],
+
+  // Data Entry Operator (2026-10-02): enters and maintains projects,
+  // properties, leads, customers and booking paperwork company-wide. No
+  // deleting, no approvals/verification, no payments or refunds.
+  [Roles.DATA_ENTRY_OPERATOR]: [
+    Permissions.PROJECTS_CREATE,
+    Permissions.PROJECTS_READ,
+    Permissions.PROJECTS_UPDATE,
+    Permissions.PROPERTIES_CREATE,
+    Permissions.PROPERTIES_READ,
+    Permissions.PROPERTIES_UPDATE,
+    Permissions.LEADS_CREATE,
+    Permissions.LEADS_READ,
+    Permissions.LEADS_UPDATE,
+    Permissions.LEADS_ASSIGN,
+    Permissions.LEADS_BULK_UPLOAD,
+    Permissions.CUSTOMERS_CREATE,
+    Permissions.CUSTOMERS_READ,
+    Permissions.CUSTOMERS_UPDATE,
+    Permissions.CUSTOMERS_KYC_WRITE,
+    Permissions.BOOKINGS_READ,
+    Permissions.BOOKINGS_UPDATE,
+    Permissions.BOOKINGS_FORM_SUBMIT,
+    Permissions.BOOKINGS_LEGACY_CREATE,
     Permissions.DOCUMENTS_CREATE,
     Permissions.DOCUMENTS_READ,
     // Lets the project wizard list Project Managers to assign.

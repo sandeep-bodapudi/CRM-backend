@@ -181,7 +181,10 @@ export class ProjectService {
       // Auto-assign to the creator if they are a Project Manager
       if (user.roles.includes(Roles.PROJECT_MANAGER)) {
         finalPmId = user.employeeId;
-      } else if (user.roles.includes(Roles.INVENTORY_EXECUTIVE)) {
+      } else if (
+        user.roles.includes(Roles.INVENTORY_EXECUTIVE) ||
+        user.roles.includes(Roles.DATA_ENTRY_OPERATOR)
+      ) {
         // The Inventory Executive enters data on a PM's behalf; that PM
         // reviews it and submits it for approval. With no PM set, nobody
         // would ever pick the project up.

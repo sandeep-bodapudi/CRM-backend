@@ -31,7 +31,7 @@ interface Row {
   last_action: string | null;
   report: { submitted_at: string; reported_calls: number; summary: string } | null;
   flags: string[];
-  kind: 'CALLING' | 'SITE' | 'DIGITAL' | 'PARTNER' | 'GENERAL';
+  kind: 'CALLING' | 'SITE' | 'DIGITAL' | 'PARTNER' | 'DATA' | 'GENERAL';
   site: {
     visits_today: number;
     visits_completed: number;
@@ -55,6 +55,7 @@ const KIND_LABEL: Record<Row['kind'], string> = {
   SITE: 'Site & inventory',
   DIGITAL: 'Digital team',
   PARTNER: 'Channel partners',
+  DATA: 'Data entry',
   GENERAL: 'Other',
 };
 
@@ -89,35 +90,43 @@ const RoleStats: React.FC<{ r: Row }> = ({ r }) => {
             ['Leads worked', r.leads_worked],
             ['Tasks', r.tasks_completed],
           ]
-        : r.kind === 'PARTNER'
+        : r.kind === 'DATA'
           ? [
-              [
-                'Associate calls',
-                logOf(r, 'ASSOCIATE_CALL') + logOf(r, 'ASSOCIATE_NEW_CALL'),
-                true,
-              ],
-              ['Office visits', logOf(r, 'ASSOCIATE_OFFICE_VISIT'), true],
-              ['Enrollments', logOf(r, 'ASSOCIATE_ENROLLMENT')],
-              ['Site visits', logOf(r, 'ASSOCIATE_SITE_VISIT')],
-              ['Prospects', logOf(r, 'ASSOCIATE_PROSPECT') + r.leads_imported],
-              ['Bookings', logOf(r, 'ASSOCIATE_BOOKING')],
+              ['Leads added', r.leads_imported, true],
+              ['Inventory updates', r.site?.inventory_updates || 0, true],
+              ['Leads updated', r.leads_worked],
               ['Tasks', r.tasks_completed],
+              ['Work log', logTotal(r)],
             ]
-          : r.kind === 'CALLING'
+          : r.kind === 'PARTNER'
             ? [
-                ['Calls', r.calls_logged, true],
-                ['Leads', r.leads_worked, true],
-                ['Contacted', r.contacted],
-                ['Qualified', r.qualified],
-                ['Dropped', r.dropped],
-                ['Visits', r.visits_completed],
+                [
+                  'Associate calls',
+                  logOf(r, 'ASSOCIATE_CALL') + logOf(r, 'ASSOCIATE_NEW_CALL'),
+                  true,
+                ],
+                ['Office visits', logOf(r, 'ASSOCIATE_OFFICE_VISIT'), true],
+                ['Enrollments', logOf(r, 'ASSOCIATE_ENROLLMENT')],
+                ['Site visits', logOf(r, 'ASSOCIATE_SITE_VISIT')],
+                ['Prospects', logOf(r, 'ASSOCIATE_PROSPECT') + r.leads_imported],
+                ['Bookings', logOf(r, 'ASSOCIATE_BOOKING')],
                 ['Tasks', r.tasks_completed],
               ]
-            : [
-                ['Tasks', r.tasks_completed, true],
-                ['Leads worked', r.leads_worked],
-                ['Work log', logTotal(r)],
-              ];
+            : r.kind === 'CALLING'
+              ? [
+                  ['Calls', r.calls_logged, true],
+                  ['Leads', r.leads_worked, true],
+                  ['Contacted', r.contacted],
+                  ['Qualified', r.qualified],
+                  ['Dropped', r.dropped],
+                  ['Visits', r.visits_completed],
+                  ['Tasks', r.tasks_completed],
+                ]
+              : [
+                  ['Tasks', r.tasks_completed, true],
+                  ['Leads worked', r.leads_worked],
+                  ['Work log', logTotal(r)],
+                ];
   return (
     <div
       className="grid gap-2 bg-slate-50 rounded-xl p-2"

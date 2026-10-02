@@ -18,7 +18,7 @@ export class OpportunityPolicy {
         Roles.HR_MANAGER,
         Roles.MARKETING_DIRECTOR,
         Roles.PROJECT_MANAGER,
-      ].includes(r as any)
+      ].includes(r as any),
     );
   }
 
@@ -30,15 +30,13 @@ export class OpportunityPolicy {
 
     // Unconditional tenant isolation via explicit AND
     const whereCondition: any = {
-      AND: [
-        { company_id: user.companyId }
-      ]
+      AND: [{ company_id: user.companyId }],
     };
 
     if (!isManagement) {
       // Non-management restricted to their owned opportunities
       whereCondition.AND.push({
-        owner_id: user.employeeId
+        owner_id: user.employeeId,
       });
     }
 

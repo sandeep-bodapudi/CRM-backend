@@ -14,7 +14,10 @@ const router = Router();
 const p = prisma;
 
 // Which kind of work a role does, for Team Today's per-role view.
-const workKind = (roleNames: string[]): 'CALLING' | 'SITE' | 'DIGITAL' | 'PARTNER' | 'GENERAL' => {
+const workKind = (
+  roleNames: string[],
+): 'CALLING' | 'SITE' | 'DIGITAL' | 'PARTNER' | 'DATA' | 'GENERAL' => {
+  if (roleNames.includes(Roles.DATA_ENTRY_OPERATOR)) return 'DATA';
   if (
     roleNames.some((r) => [Roles.TELECALLER, Roles.SALES_MANAGER, Roles.AGENT].includes(r as any))
   )

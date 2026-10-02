@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ROLE_OPTIONS } from './EditEmployeeModal';
 import {
   Building2,
   User,
@@ -288,22 +289,14 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
                   onChange={(e) => setAddRole(e.target.value)}
                   className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500"
                 >
-                  <option value="telecallers">telecallers</option>
-                  <option value="Agent">Agent</option>
-                  <option value="Sales manager">Sales manager</option>
-                  <option value="digital marketing executive">digital marketing executive</option>
-                  <option value="Digital lead operator">Digital lead operator</option>
-                  <option value="Digital Marketing head(manager)">
-                    Digital Marketing head(manager)
-                  </option>
-                  <option value="marketing director">marketing director</option>
-                  <option value="project managers">project managers</option>
-                  <option value="Channel partner manager">Channel partner manager</option>
-                  <option value="HR">HR</option>
-                  <option value="accountant">accountant</option>
-                  <option value="Managing director">Managing director (MD)</option>
-                  <option value="Admin (Technical)">System Admin</option>
-                  <option value="Staff">Staff</option>
+                  {/* Every role (shared list), so new roles such as Inventory
+                      Executive / Data Entry Operator can be chosen here too --
+                      this list used to be hard-coded and missed them. */}
+                  {ROLE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 

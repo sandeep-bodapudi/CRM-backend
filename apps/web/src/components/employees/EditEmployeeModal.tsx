@@ -37,6 +37,7 @@ const ROLE_LABELS: Record<string, string> = {
   [Roles.MARKETING_DIRECTOR]: 'Marketing Director',
   [Roles.PROJECT_MANAGER]: 'Project Manager',
   [Roles.INVENTORY_EXECUTIVE]: 'Inventory Executive',
+  [Roles.DATA_ENTRY_OPERATOR]: 'Data Entry Operator',
   [Roles.CHANNEL_PARTNER_MANAGER]: 'Channel Partner Manager',
   [Roles.HR_MANAGER]: 'HR',
   [Roles.FINANCE]: 'Accountant',
