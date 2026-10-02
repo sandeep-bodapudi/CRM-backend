@@ -31,17 +31,24 @@ export const WORK_LOG_KINDS = [
   'OTHER',
 ] as const;
 
-const WorkLogSchema = z.object({
-  kind: z.enum(WORK_LOG_KINDS),
-  note: z.string().trim().min(3, 'Add a short note').max(500),
-  link: z
-    .string()
-    .trim()
-    .max(500)
-    .refine((v) => v === '' || /^https?:\/\/\S+$/i.test(v), 'Link must start with http(s)://')
-    .optional(),
-  count: z.number().int().min(1).max(100).optional(),
-});
+const WorkLogSchema = z
+  .object({
+    kind: z.enum(WORK_LOG_KINDS),
+    note: z.string().trim().min(3, 'Add a short note').max(500),
+    link: z
+      .string()
+      .trim()
+      .max(500)
+      .refine((v) => v === '' || /^https?:\/\/\S+$/i.test(v), 'Link must start with http(s)://')
+      .optional(),
+    count: z.number().int().min(1).max(100).optional(),
+    // Free-text name of the activity when none of the listed kinds fits.
+    title: z.string().trim().max(80).optional(),
+  })
+  .refine((v) => v.kind !== 'OTHER' || (v.title && v.title.length >= 3), {
+    message: 'Say what you did (at least 3 characters)',
+    path: ['title'],
+  });
 
 export type WorkLogEntry = {
   id: number;
@@ -49,6 +56,7 @@ export type WorkLogEntry = {
   note: string;
   link: string | null;
   count: number;
+  title: string | null;
   at: Date;
 };
 
@@ -65,6 +73,7 @@ export const parseWorkLog = (row: {
       note: String(v.note || ''),
       link: v.link ? String(v.link) : null,
       count: Number(v.count) || 1,
+      title: v.title ? String(v.title) : null,
       at: row.created_at,
     };
   } catch {
@@ -88,14 +97,20 @@ router.post(
   validateRequestBody(WorkLogSchema),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { kind, note, link, count } = req.body as z.infer<typeof WorkLogSchema>;
+      const { kind, note, link, count, title } = req.body as z.infer<typeof WorkLogSchema>;
       const row = await p.auditEvent.create({
         data: {
           actor_id: req.user!.employeeId,
           action: WORK_LOG_ACTION,
           entity_type: 'WORK_LOG',
           entity_id: req.user!.employeeId,
-          new_value: JSON.stringify({ kind, note, link: link || null, count: count || 1 }),
+          new_value: JSON.stringify({
+            kind,
+            note,
+            link: link || null,
+            count: count || 1,
+            title: kind === 'OTHER' ? title : null,
+          }),
         },
       });
       return res.status(201).json({ entry: parseWorkLog(row) });

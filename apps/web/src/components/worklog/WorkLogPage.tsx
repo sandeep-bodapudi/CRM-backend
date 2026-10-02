@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, NotebookPen, Send } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
-import { WORK_LOG_KINDS, workLogKindLabel } from './workLogKinds';
+import { WORK_LOG_KINDS, workLogKindLabel, workLogEntryLabel } from './workLogKinds';
 
 export interface WorkLogEntry {
   id: number;
@@ -11,6 +11,7 @@ export interface WorkLogEntry {
   note: string;
   link: string | null;
   count: number;
+  title?: string | null;
   at: string;
 }
 
@@ -32,6 +33,7 @@ export const WorkLogPage: React.FC = () => {
   const [count, setCount] = useState(1);
   const [link, setLink] = useState('');
   const [note, setNote] = useState('');
+  const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -52,12 +54,19 @@ export const WorkLogPage: React.FC = () => {
       const res = await fetchWithAuth(`${API_BASE_URL}/work-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, note, link: link.trim(), count }),
+        body: JSON.stringify({
+          kind,
+          note,
+          link: link.trim(),
+          count,
+          ...(kind === 'OTHER' ? { title: title.trim() } : {}),
+        }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
         setMessage({ ok: true, text: 'Saved to your work log.' });
         setNote('');
+        setTitle('');
         setLink('');
         setCount(1);
         queryClient.invalidateQueries({ queryKey: ['myWorkLog'] });
@@ -120,6 +129,20 @@ export const WorkLogPage: React.FC = () => {
             />
           </label>
         </div>
+        {kind === 'OTHER' && (
+          <label className="block text-xs font-semibold text-slate-700">
+            What did you do?
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              minLength={3}
+              maxLength={80}
+              placeholder="e.g. Brochure printing follow-up, LinkedIn post"
+              className="mt-1 w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl"
+            />
+          </label>
+        )}
         <label className="block text-xs font-semibold text-slate-700">
           Link (optional) — post, reel or campaign URL
           <input
@@ -171,7 +194,7 @@ export const WorkLogPage: React.FC = () => {
               <li key={w.id} className="py-2.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-bold text-slate-800">
-                    {workLogKindLabel(w.kind)}
+                    {workLogEntryLabel(w)}
                     {w.count > 1 ? ` × ${w.count}` : ''}
                   </div>
                   <div className="text-xs text-slate-500 break-words">{w.note}</div>

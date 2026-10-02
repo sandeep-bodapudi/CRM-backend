@@ -28,7 +28,11 @@ const LABELS: Record<string, string> = {
   SITE_VISIT: 'Site visit (outside CRM booking)',
   PROPERTY_INSPECTION: 'Property / project inspection',
   PARTNER_MEETING: 'Channel partner meeting',
-  OTHER: 'Other',
+  OTHER: 'Other — type what you did',
 };
 
 export const workLogKindLabel = (kind: string) => LABELS[kind] || kind;
+
+/** What to call a logged entry: the typed name for "Other", else the kind. */
+export const workLogEntryLabel = (w: { kind: string; title?: string | null }) =>
+  w.kind === 'OTHER' && w.title ? w.title : w.kind === 'OTHER' ? 'Other' : workLogKindLabel(w.kind);

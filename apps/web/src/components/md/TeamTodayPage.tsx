@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CalendarDays, Home, PhoneCall, Users, X } from 'lucide-react';
 import { Roles } from '../../shared';
-import { workLogKindLabel } from '../worklog/workLogKinds';
+import { workLogEntryLabel } from '../worklog/workLogKinds';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 
@@ -443,7 +443,7 @@ export const TeamTodayPage: React.FC = () => {
                     <span className="text-slate-400 shrink-0">{t(w.at)}</span>
                     <span className="min-w-0">
                       <b className="text-slate-700">
-                        {workLogKindLabel(w.kind)}
+                        {workLogEntryLabel(w)}
                         {w.count > 1 ? ` × ${w.count}` : ''}
                       </b>{' '}
                       <span className="text-slate-500">{w.note}</span>{' '}
