@@ -1,6 +1,7 @@
 import React, { type ComponentType, useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
+  Inbox,
   KeyRound,
   Users,
   Building2,
@@ -33,6 +34,7 @@ import {
 } from 'lucide-react';
 import { Roles, Permissions } from '../../shared';
 import { useAuth } from '../../context/AuthContext';
+import { API_BASE_URL } from '../../config';
 import { useLogoutGate } from '../../hooks/useLogoutGate';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
 import { ProductTour } from '../onboarding/ProductTour';
@@ -229,6 +231,14 @@ type SidebarNavItem = {
 const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   // CORE APP (Un-grouped)
   { id: 'command-center', label: 'Dashboard', icon: Settings2, path: '/dashboard' },
+  {
+    // One inbox for everything waiting on the MD (badge = total count).
+    id: 'approvals-inbox',
+    label: 'Approvals',
+    icon: Inbox,
+    path: '/approvals-inbox',
+    requiredAnyRole: [Roles.MD, Roles.ADMIN],
+  },
   {
     id: 'leads-clients',
     label: 'Leads',
@@ -499,7 +509,34 @@ export { SIDEBAR_NAV_ITEMS };
 export type { SidebarNavItem };
 
 const SidebarNav: React.FC = () => {
-  const { user, activeRole } = useAuth();
+  const { user, activeRole, fetchWithAuth } = useAuth();
+  // Total items waiting on the MD, shown as a badge on "Approvals".
+  const [approvalsCount, setApprovalsCount] = React.useState(0);
+  const showsApprovals = activeRole === Roles.MD || activeRole === Roles.ADMIN;
+  React.useEffect(() => {
+    if (!showsApprovals) return;
+    let cancelled = false;
+    const load = () =>
+      fetchWithAuth(`${API_BASE_URL}/md/approvals-inbox`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!cancelled && d) setApprovalsCount(d.total || 0);
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showsApprovals]);
+  const badge = (id: string) =>
+    id === 'approvals-inbox' && approvalsCount > 0 ? (
+      <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">
+        {approvalsCount > 99 ? '99+' : approvalsCount}
+      </span>
+    ) : null;
   const location = useLocation();
   const userPermissions = user?.permissions ?? [];
   const isVisible = (item: SidebarNavItem): boolean => {
@@ -621,6 +658,7 @@ const SidebarNav: React.FC = () => {
                 {item.icon && <item.icon className="w-4 h-4" />}
               </div>
               <span className="truncate">{item.label}</span>
+              {badge(item.id)}
             </NavLink>
           );
         }
@@ -665,6 +703,7 @@ const SidebarNav: React.FC = () => {
                       {item.icon && <item.icon className="w-4 h-4" />}
                     </div>
                     <span className="truncate">{item.label}</span>
+                    {badge(item.id)}
                   </NavLink>
                 ))}
               </div>

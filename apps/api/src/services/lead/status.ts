@@ -346,11 +346,15 @@ export async function updateLeadStatus(
   if (isDrop && (lead.status === 'ASSIGNED' || lead.status === 'CONTACTED')) {
     const exitReason = guardFields?.exit_reason;
     const lowerNotes = (notes || '').toLowerCase();
+    // UNRESPONSIVE is the dedicated reason for exactly this case and was not
+    // covered, so the rule was bypassed by picking it (48 leads in
+    // production were dropped as UNRESPONSIVE with no call ever logged).
     if (
-      exitReason === 'OTHER' &&
-      (lowerNotes.includes('unreachable') ||
-        lowerNotes.includes('not answering') ||
-        lowerNotes.includes('no response'))
+      exitReason === 'UNRESPONSIVE' ||
+      (exitReason === 'OTHER' &&
+        (lowerNotes.includes('unreachable') ||
+          lowerNotes.includes('not answering') ||
+          lowerNotes.includes('no response')))
     ) {
       const callLogs = (entityContext.activities || []).filter(
         (a: any) => a.activity_type === 'CALL_LOGGED',
@@ -361,7 +365,7 @@ export async function updateLeadStatus(
       if (distinctDays.size < 5) {
         throw new AppError(
           400,
-          'Cannot drop lead as unreachable without at least 5 days of CALL_LOGGED attempts.',
+          `Log at least 5 days of call attempts before dropping a lead as unresponsive (logged so far on ${distinctDays.size} day${distinctDays.size === 1 ? '' : 's'}). Use "Log call" each time you try.`,
         );
       }
     }

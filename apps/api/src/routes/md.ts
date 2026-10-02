@@ -1,7 +1,8 @@
 import { logger } from '../utils/logger';
 import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
-import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
+import { getAccessibleCompanyIds } from '../authz/dataScope';
 import { requireAuthz } from '../middleware/authz';
 import { Roles, Permissions } from '../shared';
 import { AnalyticsService } from '../services/analytics.service';
@@ -9,6 +10,209 @@ import { AnalyticsService } from '../services/analytics.service';
 const router = Router();
 
 const p = prisma;
+
+// GET /api/v1/md/approvals-inbox — everything waiting on the MD, in one place.
+// The MD's pending work used to be spread over six screens (Action Center,
+// Payments & Refunds, PM Approvals, HR Approvals, Complaints, dashboard
+// escalations) with no counts, so he had to open each one to find out if
+// anything was waiting. Each section returns a count, its 5 oldest items,
+// and the screen where it's acted on.
+router.get(
+  '/approvals-inbox',
+  authenticateToken,
+  requireRole([Roles.MD, Roles.ADMIN]),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const isAdmin = req.user!.roles.includes(Roles.ADMIN);
+      const companyIds = await getAccessibleCompanyIds(req.user!);
+      const co = isAdmin ? {} : { company_id: { in: companyIds } };
+      // AttendanceProposal has no employee relation -- filter by employee ids.
+      const companyEmployees = await p.employee.findMany({
+        where: isAdmin ? {} : { company_id: { in: companyIds } },
+        select: { id: true, full_name: true },
+      });
+      const nameOf = new Map(companyEmployees.map((e) => [e.id, e.full_name]));
+      const empCo = isAdmin ? {} : { employee_id: { in: companyEmployees.map((e) => e.id) } };
+      const leadCo = isAdmin ? {} : { lead: { company_id: { in: companyIds } } };
+      const now = new Date();
+      const take = 5;
+      const visitWhere = { status: { in: ['REQUESTED', 'PENDING_ACCEPTANCE'] as any }, ...leadCo };
+
+      const [
+        properties,
+        propertiesN,
+        projects,
+        projectsN,
+        bookings,
+        bookingsN,
+        refunds,
+        refundsN,
+        proposals,
+        proposalsN,
+        visits,
+        visitsN,
+        complaints,
+        complaintsN,
+      ] = await Promise.all([
+        p.property.findMany({
+          where: { ...co, status: 'PENDING_MD_APPROVAL' },
+          select: { id: true, title: true, property_code: true, updated_at: true },
+          orderBy: { updated_at: 'asc' },
+          take,
+        }),
+        p.property.count({ where: { ...co, status: 'PENDING_MD_APPROVAL' } }),
+        p.project.findMany({
+          where: { ...co, verification_status: 'PENDING_MD_APPROVAL' },
+          select: { id: true, name: true, project_code: true, updated_at: true },
+          orderBy: { updated_at: 'asc' },
+          take,
+        }),
+        p.project.count({ where: { ...co, verification_status: 'PENDING_MD_APPROVAL' } }),
+        p.booking.findMany({
+          where: { ...co, form_status: 'SUBMITTED' },
+          select: { id: true, booking_code: true, updated_at: true },
+          orderBy: { updated_at: 'asc' },
+          take,
+        }),
+        p.booking.count({ where: { ...co, form_status: 'SUBMITTED' } }),
+        p.expenseRefund.findMany({
+          where: { ...co, status: 'ACCOUNTANT_APPROVED' },
+          select: {
+            id: true,
+            amount: true,
+            purpose: true,
+            created_at: true,
+            employee: { select: { full_name: true } },
+          },
+          orderBy: { created_at: 'asc' },
+          take,
+        }),
+        p.expenseRefund.count({ where: { ...co, status: 'ACCOUNTANT_APPROVED' } }),
+        p.attendanceProposal.findMany({
+          where: { status: 'PENDING', ...empCo },
+          select: {
+            id: true,
+            type: true,
+            target_date: true,
+            created_at: true,
+            employee_id: true,
+          },
+          orderBy: { created_at: 'asc' },
+          take,
+        }),
+        p.attendanceProposal.count({ where: { status: 'PENDING', ...empCo } }),
+        // Visits nobody on the PM side has accepted yet, including ones whose
+        // date has already gone by (production: every visit ever booked).
+        p.siteVisitBooking.findMany({
+          where: visitWhere,
+          select: {
+            id: true,
+            booking_code: true,
+            scheduled_date: true,
+            lead: { select: { customer_name: true } },
+            project_manager: { select: { full_name: true } },
+          },
+          orderBy: { scheduled_date: 'asc' },
+          take,
+        }),
+        p.siteVisitBooking.count({ where: visitWhere }),
+        p.complaint.findMany({
+          where: { ...co, status: { in: ['OPEN', 'REOPENED'] } },
+          select: { id: true, title: true, created_at: true },
+          orderBy: { created_at: 'asc' },
+          take,
+        }),
+        p.complaint.count({ where: { ...co, status: { in: ['OPEN', 'REOPENED'] } } }),
+      ]);
+
+      const sections = [
+        {
+          key: 'properties',
+          label: 'Properties to approve',
+          link: '/action-center',
+          count: propertiesN,
+          items: properties.map((x) => ({
+            id: x.id,
+            title: x.title,
+            subtitle: x.property_code,
+            since: x.updated_at,
+          })),
+        },
+        {
+          key: 'projects',
+          label: 'Projects to approve',
+          link: '/action-center',
+          count: projectsN,
+          items: projects.map((x) => ({
+            id: x.id,
+            title: x.name,
+            subtitle: x.project_code,
+            since: x.updated_at,
+          })),
+        },
+        {
+          key: 'bookings',
+          label: 'Booking forms to approve',
+          link: '/action-center',
+          count: bookingsN,
+          items: bookings.map((x) => ({ id: x.id, title: x.booking_code, since: x.updated_at })),
+        },
+        {
+          key: 'refunds',
+          label: 'Expense refunds (checked by accountant)',
+          link: '/finance',
+          count: refundsN,
+          items: refunds.map((x) => ({
+            id: x.id,
+            title: `Rs ${x.amount.toLocaleString('en-IN')} - ${x.employee?.full_name || ''}`,
+            subtitle: x.purpose,
+            since: x.created_at,
+          })),
+        },
+        {
+          key: 'leave',
+          label: 'Leave & attendance requests',
+          link: '/approvals',
+          count: proposalsN,
+          items: proposals.map((x) => ({
+            id: x.id,
+            title: `${nameOf.get(x.employee_id) || ''} - ${x.type.replace(/_/g, ' ').toLowerCase()}`,
+            subtitle: `for ${x.target_date.toISOString().slice(0, 10)}`,
+            since: x.created_at,
+          })),
+        },
+        {
+          key: 'site_visits',
+          label: 'Site visits not accepted by PM',
+          link: '/site-visits',
+          count: visitsN,
+          items: visits.map((x) => ({
+            id: x.id,
+            title: `${x.booking_code} - ${x.lead?.customer_name || ''}`,
+            subtitle: `PM: ${x.project_manager?.full_name || 'none'}`,
+            since: x.scheduled_date,
+            overdue: x.scheduled_date < now,
+          })),
+        },
+        {
+          key: 'complaints',
+          label: 'Open complaints',
+          link: '/complaints',
+          count: complaintsN,
+          items: complaints.map((x) => ({ id: x.id, title: x.title, since: x.created_at })),
+        },
+      ];
+
+      return res.status(200).json({
+        total: sections.reduce((n, sec) => n + sec.count, 0),
+        sections,
+      });
+    } catch (error) {
+      logger.error('Approvals inbox error:', error);
+      return res.status(500).json({ error: 'Failed to load approvals' });
+    }
+  },
+);
 
 // GET /api/v1/md/employees - List employees for MD Control (Admin filtered out)
 router.get(
