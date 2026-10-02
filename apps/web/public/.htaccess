@@ -16,6 +16,16 @@
 # assets/* files are safe to cache forever since a new build always gets a
 # new filename, never reuses one.
 <IfModule mod_headers.c>
+  # Basic hardening (the CRM sent none of these): no framing by other sites
+  # (clickjacking against logged-in staff), no MIME sniffing, HTTPS only,
+  # and no full URLs leaked to other origins. Camera stays allowed for this
+  # site itself -- the kiosk and QR scanning need it.
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set Permissions-Policy "camera=(self), microphone=(self), geolocation=(self)"
+
   # Order matters: mod_headers applies "Header set" directives in the order
   # Apache encounters them, and the last match for a given header wins.
   # Since sw.js matches both patterns below, the no-cache rule for

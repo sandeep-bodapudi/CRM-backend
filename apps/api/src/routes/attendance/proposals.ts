@@ -398,6 +398,18 @@ router.post(
       const id = parseInt(req.params.id, 10);
       const proposal = await p.attendanceProposal.findUnique({ where: { id } });
       if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+      // Only the reviewer's own companies, and only undecided requests:
+      // re-deciding used to re-run the attendance side effects (a rejected
+      // field-work day flipped back to PRESENT, or vice versa).
+      const inScope = await p.employee.count({
+        where: { id: proposal.employee_id, ...(await proposalEmployeeScope(req)) },
+      });
+      if (!inScope) return res.status(404).json({ error: 'Proposal not found' });
+      if (proposal.status !== 'PENDING') {
+        return res
+          .status(409)
+          .json({ error: `This request was already ${proposal.status.toLowerCase()}.` });
+      }
 
       const updated = await p.attendanceProposal.update({
         where: { id },
@@ -499,6 +511,18 @@ router.post(
       const id = parseInt(req.params.id, 10);
       const proposal = await p.attendanceProposal.findUnique({ where: { id } });
       if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+      // Only the reviewer's own companies, and only undecided requests:
+      // re-deciding used to re-run the attendance side effects (a rejected
+      // field-work day flipped back to PRESENT, or vice versa).
+      const inScope = await p.employee.count({
+        where: { id: proposal.employee_id, ...(await proposalEmployeeScope(req)) },
+      });
+      if (!inScope) return res.status(404).json({ error: 'Proposal not found' });
+      if (proposal.status !== 'PENDING') {
+        return res
+          .status(409)
+          .json({ error: `This request was already ${proposal.status.toLowerCase()}.` });
+      }
 
       const updated = await p.attendanceProposal.update({
         where: { id },

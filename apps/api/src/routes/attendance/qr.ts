@@ -18,6 +18,7 @@ import {
 } from '../../utils/time';
 import { Roles, AttendanceQRPayloadSchema } from '../../shared';
 import { validateRequestBody } from '../../middleware/validate';
+import { getAccessibleCompanyIds } from '../../authz/dataScope';
 
 const router = Router();
 
@@ -50,6 +51,14 @@ router.get(
 
       const employee = await p.employee.findUnique({ where: { id: targetId } });
       if (!employee) return res.status(404).json({ error: 'Employee not found' });
+      // A live code checks this person in at a kiosk -- only for employees
+      // of the companies the HR/MD user actually manages.
+      if (
+        !req.user!.roles.includes(Roles.ADMIN) &&
+        !(await getAccessibleCompanyIds(req.user!)).includes(employee.company_id)
+      ) {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
 
       // A live code (valid 2 minutes) for HR to show on screen. Printed
       // permanent badges were the codes being shared, so none are issued.
