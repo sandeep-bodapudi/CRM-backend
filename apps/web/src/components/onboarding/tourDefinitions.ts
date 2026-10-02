@@ -257,6 +257,41 @@ export const TOUR_DEFINITIONS: Record<string, TourStep[]> = {
       placement: 'right',
     },
   ],
+  [Roles.DATA_ENTRY_OPERATOR]: [
+    ...COMMON_STEPS,
+    {
+      target: '[data-tour="sidebar-leads"]',
+      title: 'Leads',
+      description:
+        'Add leads by hand or bulk-upload an Excel list, correct lead details, and assign leads to telecallers.',
+      route: '/leads-clients',
+      placement: 'right',
+    },
+    {
+      target: '[data-tour="sidebar-projects"]',
+      title: 'Projects',
+      description:
+        'Add and update projects. Pick the Project Manager who gave you the data — they review and submit it.',
+      route: '/projects',
+      placement: 'right',
+    },
+    {
+      target: '[data-tour="sidebar-properties"]',
+      title: 'Properties',
+      description:
+        'Add and update property listings, photos and pricing. New listings go to the assigned PM for verification.',
+      route: '/properties',
+      placement: 'right',
+    },
+    {
+      target: '[data-tour="sidebar-customers"]',
+      title: 'Customers & bookings',
+      description:
+        'Update customer details and KYC documents, and fill booking paperwork. Payments and approvals stay with Accounts and the MD.',
+      route: '/customers',
+      placement: 'right',
+    },
+  ],
   [Roles.HR_MANAGER]: [
     ...COMMON_STEPS,
     {
@@ -330,6 +365,7 @@ export const getRoleTour = (roles: string[]): TourStep[] => {
     'Sales manager',
     Roles.PROJECT_MANAGER,
     Roles.INVENTORY_EXECUTIVE,
+    Roles.DATA_ENTRY_OPERATOR,
     Roles.HR_MANAGER,
     Roles.FINANCE,
     Roles.DIGITAL_MARKETING_HEAD,

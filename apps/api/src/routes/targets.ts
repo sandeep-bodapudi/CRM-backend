@@ -82,6 +82,23 @@ const ROLE_PRESETS: Record<
   // The fields Channel Partner Managers already report (from their daily
   // reports in production); the report form shows the work-log count for
   // each next to it (apps/web DailyReportModal, CPM_FIELD_SOURCES).
+  // Daily report fields for data-entry roles: what they entered/updated.
+  [Roles.INVENTORY_EXECUTIVE]: {
+    target_type: 'COUNT',
+    targets_json: {},
+    form_schema_json: generateBasicSchema(['projectsUpdated', 'propertiesUpdated', 'unitsAdded']),
+  },
+  [Roles.DATA_ENTRY_OPERATOR]: {
+    target_type: 'COUNT',
+    targets_json: {},
+    form_schema_json: generateBasicSchema([
+      'leadsEntered',
+      'leadsCorrected',
+      'propertiesUpdated',
+      'customersUpdated',
+      'bookingsUpdated',
+    ]),
+  },
   [Roles.CHANNEL_PARTNER_MANAGER]: {
     target_type: 'COUNT',
     targets_json: { newProspects: 10, associateSiteVisits: 5, associateOfficeVisits: 3 },

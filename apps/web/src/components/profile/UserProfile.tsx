@@ -43,6 +43,10 @@ const roleCopy: Record<string, string> = {
   [Roles.DIGITAL_MARKETING_HEAD]: 'Lead digital marketing strategy and campaigns.',
   [Roles.DIGITAL_MARKETING_EXECUTIVE]: 'Execute digital marketing campaigns and SEO/SEM.',
   [Roles.DIGITAL_LEAD_OPERATOR]: 'Operate and distribute leads from digital channels.',
+  [Roles.INVENTORY_EXECUTIVE]:
+    'Enter and maintain project and property data for the Project Managers.',
+  [Roles.DATA_ENTRY_OPERATOR]:
+    'Keep CRM data complete: projects, properties, leads, customers and booking paperwork.',
   [Roles.STAFF]: 'Standard employee access.',
 };
 
