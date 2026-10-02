@@ -74,14 +74,38 @@ export const useSwUpdate = () => {
     };
   }, []);
 
-  const appliedRef = useRef(false);
-  const applyUpdate = () => {
-    if (appliedRef.current) return;
-    appliedRef.current = true;
+  // Activate whichever new version is actually waiting, then reload.
+  // updateServiceWorker(true) alone was not reliable: if a second deploy
+  // landed while one update was already waiting, it could message a stale
+  // worker and nothing happened; and a one-shot guard meant that after one
+  // silent failure (e.g. an automatic attempt when the tab was hidden) the
+  // "Update Now" button did nothing at all. Both seen on staging.
+  const applyUpdate = async () => {
+    let reloaded = false;
+    const reload = () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    };
+    try {
+      const reg =
+        registrationRef.current || (await navigator.serviceWorker?.getRegistration()) || null;
+      const waiting = reg?.waiting;
+      if (waiting) {
+        navigator.serviceWorker.addEventListener('controllerchange', reload, { once: true });
+        waiting.postMessage({ type: 'SKIP_WAITING' });
+        // Safety net if controllerchange never fires.
+        setTimeout(reload, 4000);
+        return;
+      }
+    } catch {
+      // fall through to the plugin's own path
+    }
     updateServiceWorker(true);
+    setTimeout(reload, 4000);
   };
   const autoApplyIfSafe = () => {
-    if (!hasUnsavedInput()) applyUpdate();
+    if (!hasUnsavedInput()) void applyUpdate();
   };
 
   // Once an update is waiting: apply it at the first safe moment --
