@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Calendar, Send, AlertCircle, Home } from 'lucide-react';
+import { proposalTypeLabel } from './proposalLabels';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { Roles } from '../../shared';
@@ -543,7 +544,7 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
                       {item.employee?.employee_code || '---'})
                     </span>
                     <span className="ml-2 text-slate-500 font-mono">
-                      {item.type}
+                      {proposalTypeLabel(item.type)}
                       {item.type === 'LEAVE' && item.leave_type && item.leave_type !== 'FULL_DAY'
                         ? ` (${item.leave_type === 'FIRST_HALF' ? '1st Half' : '2nd Half'})`
                         : ''}{' '}

@@ -12,6 +12,7 @@ import {
 import { LateLeaveProposals } from './LateLeaveProposals';
 import { WfhTodayCard } from './WfhTodayCard';
 import { EmergencyLogoutModal } from '../profile/EmergencyLogoutModal';
+import { proposalTypeLabel } from './proposalLabels';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 
@@ -39,7 +40,7 @@ const MyLeaveRequestsWidget: React.FC = () => {
         {proposals.map((p) => (
           <div key={p.id} className="py-3 flex items-center justify-between">
             <div>
-              <div className="font-bold text-slate-800 text-sm">{p.type}</div>
+              <div className="font-bold text-slate-800 text-sm">{proposalTypeLabel(p.type)}</div>
               <div className="text-slate-500 text-xs mt-0.5">
                 {new Date(p.target_date).toLocaleDateString('en-IN')} &middot; {p.reason}
               </div>
