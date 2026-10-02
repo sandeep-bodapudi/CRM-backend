@@ -45,94 +45,109 @@ async function computeMonthScore(
   endOfMonth: Date,
   tierBasisScore?: number,
 ) {
-  const taskEvents = await p.task.count({
-    where: {
-      assignee_id: employeeId,
-      status: 'COMPLETED',
-      updated_at: { gte: startOfMonth, lte: endOfMonth },
-      created_by: { not: employeeId },
-    },
-  });
-  const reportEvents = await p.dailyReport.count({
-    where: { employee_id: employeeId, submitted_at: { gte: startOfMonth, lte: endOfMonth } },
-  });
-  const belowTargetEvents = await p.auditEvent.count({
-    where: {
-      actor_id: employeeId,
-      action: 'DAILY_REPORT_BELOW_TARGET',
-      created_at: { gte: startOfMonth, lte: endOfMonth },
-    },
-  });
-  const targetExceededEvents = await p.auditEvent.count({
-    where: {
-      actor_id: employeeId,
-      action: 'DAILY_REPORT_TARGET_EXCEEDED',
-      created_at: { gte: startOfMonth, lte: endOfMonth },
-    },
-  });
-  const overdueTasksCount = await p.task.count({
-    where: {
-      assignee_id: employeeId,
-      status: 'OVERDUE',
-      updated_at: { gte: startOfMonth, lte: endOfMonth },
-    },
-  });
-
   // The dailyAttendanceRollupJob cron runs at 05:30 AM IST (Midnight UTC) on the morning *after*
   // the day it evaluates. To correctly group these overnight events into the calendar month they
   // actually belong to (e.g. August 31st's absence runs on Sept 1st 05:30), we shift the bounds by 6 hours.
   const cronStart = new Date(startOfMonth.getTime() + 6 * 60 * 60 * 1000);
   const cronEnd = new Date(endOfMonth.getTime() + 6 * 60 * 60 * 1000);
 
-  const uninformedAbsentEvents = await p.auditEvent.count({
-    where: {
-      actor_id: employeeId,
-      action: 'UNINFORMED_ABSENT',
-      created_at: { gte: cronStart, lte: cronEnd },
-    },
-  });
-  const midnightAutoCheckoutEvents = await p.auditEvent.count({
-    where: {
-      actor_id: employeeId,
-      action: 'ATTENDANCE_AUTO_CHECKOUT_MIDNIGHT',
-      created_at: { gte: cronStart, lte: cronEnd },
-    },
-  });
-  const missingDailyReportEvents = await p.auditEvent.count({
-    where: {
-      actor_id: employeeId,
-      action: 'MISSING_DAILY_REPORT',
-      created_at: { gte: cronStart, lte: cronEnd },
-    },
-  });
-  const completedAllWorkEvents = await p.auditEvent.count({
-    where: {
-      actor_id: employeeId,
-      action: 'COMPLETED_ALL_WORK',
-      created_at: { gte: cronStart, lte: cronEnd },
-    },
-  });
-  const propertyBookingContributions = await p.auditEvent.count({
-    where: {
-      actor_id: employeeId,
-      action: 'PROPERTY_BOOKED_CONTRIBUTION',
-      created_at: { gte: startOfMonth, lte: endOfMonth },
-    },
-  });
-
-  const manualAdjustments = await p.performanceAdjustment.findMany({
-    where: {
-      employee_id: employeeId,
-      created_at: { gte: startOfMonth, lte: endOfMonth },
-    },
-  });
+  // These queries are independent; they ran one after another (24 round
+  // trips per /my-score with last month included -- 10 s on staging). Run
+  // them together.
+  const [
+    taskEvents,
+    reportEvents,
+    belowTargetEvents,
+    targetExceededEvents,
+    overdueTasksCount,
+    uninformedAbsentEvents,
+    midnightAutoCheckoutEvents,
+    missingDailyReportEvents,
+    completedAllWorkEvents,
+    propertyBookingContributions,
+    manualAdjustments,
+    attendanceLogs,
+  ] = await Promise.all([
+    p.task.count({
+      where: {
+        assignee_id: employeeId,
+        status: 'COMPLETED',
+        updated_at: { gte: startOfMonth, lte: endOfMonth },
+        created_by: { not: employeeId },
+      },
+    }),
+    p.dailyReport.count({
+      where: { employee_id: employeeId, submitted_at: { gte: startOfMonth, lte: endOfMonth } },
+    }),
+    p.auditEvent.count({
+      where: {
+        actor_id: employeeId,
+        action: 'DAILY_REPORT_BELOW_TARGET',
+        created_at: { gte: startOfMonth, lte: endOfMonth },
+      },
+    }),
+    p.auditEvent.count({
+      where: {
+        actor_id: employeeId,
+        action: 'DAILY_REPORT_TARGET_EXCEEDED',
+        created_at: { gte: startOfMonth, lte: endOfMonth },
+      },
+    }),
+    p.task.count({
+      where: {
+        assignee_id: employeeId,
+        status: 'OVERDUE',
+        updated_at: { gte: startOfMonth, lte: endOfMonth },
+      },
+    }),
+    p.auditEvent.count({
+      where: {
+        actor_id: employeeId,
+        action: 'UNINFORMED_ABSENT',
+        created_at: { gte: cronStart, lte: cronEnd },
+      },
+    }),
+    p.auditEvent.count({
+      where: {
+        actor_id: employeeId,
+        action: 'ATTENDANCE_AUTO_CHECKOUT_MIDNIGHT',
+        created_at: { gte: cronStart, lte: cronEnd },
+      },
+    }),
+    p.auditEvent.count({
+      where: {
+        actor_id: employeeId,
+        action: 'MISSING_DAILY_REPORT',
+        created_at: { gte: cronStart, lte: cronEnd },
+      },
+    }),
+    p.auditEvent.count({
+      where: {
+        actor_id: employeeId,
+        action: 'COMPLETED_ALL_WORK',
+        created_at: { gte: cronStart, lte: cronEnd },
+      },
+    }),
+    p.auditEvent.count({
+      where: {
+        actor_id: employeeId,
+        action: 'PROPERTY_BOOKED_CONTRIBUTION',
+        created_at: { gte: startOfMonth, lte: endOfMonth },
+      },
+    }),
+    p.performanceAdjustment.findMany({
+      where: {
+        employee_id: employeeId,
+        created_at: { gte: startOfMonth, lte: endOfMonth },
+      },
+    }),
+    p.attendanceLog.findMany({
+      where: { employee_id: employeeId, check_in_at: { gte: startOfMonth, lte: endOfMonth } },
+      include: { employee: { select: { employment_type: true } } },
+    }),
+  ]);
   const manualAdjustmentsTotal = manualAdjustments.reduce((sum, adj) => sum + adj.points, 0);
   const manualAdjustmentsCount = manualAdjustments.length;
-
-  const attendanceLogs = await p.attendanceLog.findMany({
-    where: { employee_id: employeeId, check_in_at: { gte: startOfMonth, lte: endOfMonth } },
-    include: { employee: { select: { employment_type: true } } },
-  });
 
   let presentCount = 0;
   let lateCount = 0;
@@ -216,17 +231,9 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
     const cronEnd = new Date(endOfMonth.getTime() + 6 * 60 * 60 * 1000);
     const events: any[] = [];
 
-    events.push({
-      id: 'base-50',
-      action: 'INITIAL_BASE_SCORE',
-      title: 'Initial Base Performance Index',
-      points: 50.0,
-      type: 'BOOST',
-      description: 'Default starting performance index for all team members',
-      timestamp: startOfMonth,
-    });
-
-    const completedTasks = await p.task.findMany({
+    // The six reads below are independent; they used to run one after
+    // another (6 s on staging). Start them all now, await each where used.
+    const completedTasksQuery = p.task.findMany({
       where: {
         assignee_id: employeeId,
         status: 'COMPLETED',
@@ -237,19 +244,7 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
       },
       orderBy: { completed_at: 'desc' },
     });
-    for (const t of completedTasks) {
-      events.push({
-        id: `task-${t.id}`,
-        action: 'TASK_COMPLETED',
-        title: 'Task Completed',
-        points: +2.0,
-        type: 'BOOST',
-        description: `Completed task: "${t.title}"`,
-        timestamp: t.completed_at || t.updated_at,
-      });
-    }
-
-    const overdueTasks = await p.task.findMany({
+    const overdueTasksQuery = p.task.findMany({
       where: {
         assignee_id: employeeId,
         status: 'OVERDUE',
@@ -257,35 +252,11 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
       },
       orderBy: { updated_at: 'desc' },
     });
-    for (const t of overdueTasks) {
-      events.push({
-        id: `task-od-${t.id}`,
-        action: 'TASK_OVERDUE',
-        title: 'Task Overdue',
-        points: -1.0,
-        type: 'PENALTY',
-        description: `Overdue task: "${t.title}"`,
-        timestamp: t.updated_at,
-      });
-    }
-
-    const dailyReports = await p.dailyReport.findMany({
+    const dailyReportsQuery = p.dailyReport.findMany({
       where: { employee_id: employeeId, submitted_at: { gte: startOfMonth, lte: endOfMonth } },
       orderBy: { submitted_at: 'desc' },
     });
-    for (const r of dailyReports) {
-      events.push({
-        id: `report-${r.id}`,
-        action: 'DAILY_REPORT_SUBMIT',
-        title: 'Daily Report Submitted',
-        points: +0.5,
-        type: 'BOOST',
-        description: 'Submitted EOD report',
-        timestamp: r.submitted_at,
-      });
-    }
-
-    const auditEvents = await p.auditEvent.findMany({
+    const auditEventsQuery = p.auditEvent.findMany({
       where: {
         actor_id: employeeId,
         OR: [
@@ -315,6 +286,68 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
       },
       orderBy: { created_at: 'desc' },
     });
+    const attendanceLogsQuery = p.attendanceLog.findMany({
+      where: { employee_id: employeeId, check_in_at: { gte: startOfMonth, lte: endOfMonth } },
+      include: { employee: { select: { employment_type: true } } },
+    });
+    const manualAdjustmentsQuery = p.performanceAdjustment.findMany({
+      where: {
+        employee_id: employeeId,
+        created_at: { gte: startOfMonth, lte: endOfMonth },
+      },
+      include: { adjuster: { select: { full_name: true, employee_code: true } } },
+    });
+
+    events.push({
+      id: 'base-50',
+      action: 'INITIAL_BASE_SCORE',
+      title: 'Initial Base Performance Index',
+      points: 50.0,
+      type: 'BOOST',
+      description: 'Default starting performance index for all team members',
+      timestamp: startOfMonth,
+    });
+
+    const completedTasks = await completedTasksQuery;
+    for (const t of completedTasks) {
+      events.push({
+        id: `task-${t.id}`,
+        action: 'TASK_COMPLETED',
+        title: 'Task Completed',
+        points: +2.0,
+        type: 'BOOST',
+        description: `Completed task: "${t.title}"`,
+        timestamp: t.completed_at || t.updated_at,
+      });
+    }
+
+    const overdueTasks = await overdueTasksQuery;
+    for (const t of overdueTasks) {
+      events.push({
+        id: `task-od-${t.id}`,
+        action: 'TASK_OVERDUE',
+        title: 'Task Overdue',
+        points: -1.0,
+        type: 'PENALTY',
+        description: `Overdue task: "${t.title}"`,
+        timestamp: t.updated_at,
+      });
+    }
+
+    const dailyReports = await dailyReportsQuery;
+    for (const r of dailyReports) {
+      events.push({
+        id: `report-${r.id}`,
+        action: 'DAILY_REPORT_SUBMIT',
+        title: 'Daily Report Submitted',
+        points: +0.5,
+        type: 'BOOST',
+        description: 'Submitted EOD report',
+        timestamp: r.submitted_at,
+      });
+    }
+
+    const auditEvents = await auditEventsQuery;
     for (const b of auditEvents) {
       if (b.action === 'DAILY_REPORT_BELOW_TARGET') {
         events.push({
@@ -359,10 +392,7 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
       }
     }
 
-    const attendanceLogs = await p.attendanceLog.findMany({
-      where: { employee_id: employeeId, check_in_at: { gte: startOfMonth, lte: endOfMonth } },
-      include: { employee: { select: { employment_type: true } } },
-    });
+    const attendanceLogs = await attendanceLogsQuery;
     for (const log of attendanceLogs) {
       const ts = log.check_in_at || new Date();
       if (log.status === 'LATE') {
@@ -431,13 +461,7 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
       }
     }
 
-    const manualAdjustments = await p.performanceAdjustment.findMany({
-      where: {
-        employee_id: employeeId,
-        created_at: { gte: startOfMonth, lte: endOfMonth },
-      },
-      include: { adjuster: { select: { full_name: true, employee_code: true } } },
-    });
+    const manualAdjustments = await manualAdjustmentsQuery;
 
     for (const adj of manualAdjustments) {
       events.push({

@@ -189,7 +189,19 @@ app.use('/uploads/properties', express.static(propertiesDir));
 app.use('/uploads/profiles', express.static(profilesDir));
 app.use('/uploads/projects-layout', express.static(projectsLayoutDir));
 app.use('/uploads/projects-media', express.static(projectsMediaDir));
-app.use('/uploads/projects-documents', express.static(projectsDocumentsDir));
+// Documents are downloads, never pages: anything that isn't a PDF or an
+// image is sent as an attachment so a browser won't render it on this
+// origin (defence in depth for files uploaded before the type allowlist).
+app.use(
+  '/uploads/projects-documents',
+  express.static(projectsDocumentsDir, {
+    setHeaders: (res, filePath) => {
+      if (!/\.(pdf|jpe?g|png|webp)$/i.test(filePath)) {
+        res.setHeader('Content-Disposition', 'attachment');
+      }
+    },
+  }),
+);
 app.use('/uploads/offers', express.static(offersDir));
 // expense-proofs is intentionally NOT served statically — these are private
 // financial documents. They're only served via the authenticated,

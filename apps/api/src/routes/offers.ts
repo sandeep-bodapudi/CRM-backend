@@ -30,6 +30,11 @@ router.post('/upload-image', async (req: AuthenticatedRequest, res: Response) =>
       if (!file) {
         return res.status(400).json({ error: 'No image file provided.' });
       }
+      // Stored with its original extension and served from the API origin,
+      // so only real image types are accepted (no .html/.svg).
+      if (!/\.(jpe?g|png|webp|gif)$/i.test(file.originalname || '')) {
+        return res.status(400).json({ error: 'Upload a JPG, PNG, WebP or GIF image.' });
+      }
       const storageService = getStorageService('offers');
       const imageUrl = await storageService.upload(file.buffer, file.originalname, file.mimetype);
       return res.status(201).json({ image_url: imageUrl });

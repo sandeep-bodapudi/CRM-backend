@@ -60,6 +60,22 @@ function mapCommonProjectFields(data: Partial<ProjectCreateInput & ProjectUpdate
   return out;
 }
 
+const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'csv',
+  'txt',
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+]);
+
 export class ProjectService {
   private static async generateNextProjectCode(): Promise<string> {
     const currentYear = new Date().getFullYear();
@@ -855,7 +871,17 @@ export class ProjectService {
     if (!can(user, Permissions.PROJECTS_UPDATE, project)) {
       throw { status: 403, message: 'Forbidden: Missing projects.update permission' };
     }
-    const ext = (file.originalname.split('.').pop() || 'pdf').toLowerCase();
+    // Any extension used to be accepted and stored as-is, then served from
+    // the API's own origin -- an uploaded .html/.svg/.js would run there,
+    // next to the refresh-token cookie. Documents are limited to office
+    // formats and images.
+    const ext = (file.originalname.split('.').pop() || '').toLowerCase();
+    if (!ALLOWED_DOCUMENT_EXTENSIONS.has(ext)) {
+      throw {
+        status: 400,
+        message: 'Unsupported file type. Upload a PDF, Word, Excel, PowerPoint or image file.',
+      };
+    }
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const url = await getStorageService('projects-documents').upload(
       file.buffer,
