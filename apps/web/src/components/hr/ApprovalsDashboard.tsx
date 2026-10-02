@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Clock, Calendar, CheckCircle, XCircle, History } from 'lucide-react';
+import {
+  ShieldAlert,
+  Clock,
+  Calendar,
+  CheckCircle,
+  XCircle,
+  History,
+  Home,
+  Send,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { ProposalItem } from '../../types';
@@ -73,6 +82,9 @@ export const ApprovalsDashboard: React.FC = () => {
   const leaves = queue.filter((q) => q.type === 'LEAVE');
   const lates = queue.filter((q) => q.type === 'LATE_CHECKIN');
   const earlys = queue.filter((q) => q.type === 'EARLY_CHECKOUT');
+  // These were loaded but never shown, so they could not be approved.
+  const wfhs = queue.filter((q) => q.type === 'WORK_FROM_HOME');
+  const fieldWorks = queue.filter((q) => q.type === 'FIELD_WORK');
 
   const leaveTypeLabel = (leaveType?: string | null) => {
     if (leaveType === 'FIRST_HALF') return '1st Half';
@@ -165,6 +177,8 @@ export const ApprovalsDashboard: React.FC = () => {
   const historyLeaves = history.filter((q) => q.type === 'LEAVE');
   const historyLates = history.filter((q) => q.type === 'LATE_CHECKIN');
   const historyEarlys = history.filter((q) => q.type === 'EARLY_CHECKOUT');
+  const historyWfhs = history.filter((q) => q.type === 'WORK_FROM_HOME');
+  const historyFieldWorks = history.filter((q) => q.type === 'FIELD_WORK');
 
   const renderHistorySection = (
     title: string,
@@ -265,13 +279,25 @@ export const ApprovalsDashboard: React.FC = () => {
         </div>
         <p className="text-sm text-navy-200/80 max-w-2xl">
           {activeTab === 'pending'
-            ? 'Review and process pending employee requests for leaves, late arrivals, and early checkouts.'
+            ? 'Review and process pending employee requests: work from home, field work, leave, late arrivals and early checkouts.'
             : 'Recently approved and rejected requests (most recent 100).'}
         </p>
       </div>
 
       {activeTab === 'pending' ? (
         <div className="grid grid-cols-1 gap-6">
+          {renderQueueSection(
+            'Work from Home',
+            wfhs,
+            <Home className="w-5 h-5 text-emerald-600" />,
+            'No pending work-from-home requests.',
+          )}
+          {renderQueueSection(
+            'Field Work',
+            fieldWorks,
+            <Send className="w-5 h-5 text-sky-600" />,
+            'No pending field work requests.',
+          )}
           {renderQueueSection(
             'Leave Requests',
             leaves,
@@ -295,6 +321,18 @@ export const ApprovalsDashboard: React.FC = () => {
         <div className="p-12 text-center text-slate-500">Loading history...</div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
+          {renderHistorySection(
+            'Work from Home',
+            historyWfhs,
+            <Home className="w-5 h-5 text-emerald-600" />,
+            'No work-from-home history yet.',
+          )}
+          {renderHistorySection(
+            'Field Work',
+            historyFieldWorks,
+            <Send className="w-5 h-5 text-sky-600" />,
+            'No field work history yet.',
+          )}
           {renderHistorySection(
             'Leave Requests',
             historyLeaves,

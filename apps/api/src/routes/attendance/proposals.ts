@@ -6,10 +6,19 @@ import { calculateAttendanceStatus, getISTComponents } from '../../utils/time';
 import { Roles, LateProposalSchema, LeaveProposalSchema, EmptyBodySchema } from '../../shared';
 import { validateRequestBody } from '../../middleware/validate';
 import { notifyEmployee } from '../../utils/notifyEmployee';
+import { getAccessibleCompanyIds } from '../../authz/dataScope';
 
 const router = Router();
 
 const p = prisma;
+
+// Same scope as the MD Approvals inbox (routes/md.ts): every company the
+// reviewer can access (Admin: all). Using only the home company meant the
+// inbox could count requests this queue never showed.
+const proposalEmployeeScope = async (req: AuthenticatedRequest) =>
+  req.user!.roles.includes(Roles.ADMIN)
+    ? {}
+    : { company_id: { in: await getAccessibleCompanyIds(req.user!) } };
 
 const proposalLabel = (type: string) =>
   ({
@@ -244,7 +253,7 @@ router.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const companyEmployees = await p.employee.findMany({
-        where: { company_id: req.user!.companyId },
+        where: await proposalEmployeeScope(req),
         select: { id: true, full_name: true, employee_code: true },
       });
 
@@ -349,7 +358,7 @@ router.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const companyEmployees = await p.employee.findMany({
-        where: { company_id: req.user!.companyId },
+        where: await proposalEmployeeScope(req),
         select: { id: true, full_name: true, employee_code: true },
       });
 
