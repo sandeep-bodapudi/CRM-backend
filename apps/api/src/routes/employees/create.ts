@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger';
+import { getCompanyLeaders, suggestManager } from '../../utils/reportingRules';
 import { Router, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import bcrypt from 'bcryptjs';
@@ -158,6 +159,14 @@ router.post(
         role_name,
       );
 
+      // No manager chosen: apply the company's default reporting line
+      // (utils/reportingRules.ts) instead of leaving it empty -- almost no
+      // one in production had a reporting manager, so "my team" views were
+      // blank for every manager.
+      const defaultManager = reporting_manager_id
+        ? null
+        : suggestManager(-1, [role_name], null, await getCompanyLeaders(targetCompanyId));
+
       const newEmp = await prisma.employee.create({
         data: {
           employee_code: employeeCode,
@@ -188,7 +197,9 @@ router.post(
           // routes/attendance/qr.ts). Still overridable per-employee via the
           // existing admin-actions endpoint for genuine exceptions.
           report_required: report_required !== undefined ? Boolean(report_required) : true,
-          reporting_manager_id: reporting_manager_id ? parseInt(reporting_manager_id, 10) : null,
+          reporting_manager_id: reporting_manager_id
+            ? parseInt(reporting_manager_id, 10)
+            : (defaultManager?.id ?? null),
           date_of_joining: date_of_joining ? new Date(date_of_joining) : new Date(),
           salary_ctc: salary_ctc ? parseFloat(salary_ctc) : 35000,
           background_education,

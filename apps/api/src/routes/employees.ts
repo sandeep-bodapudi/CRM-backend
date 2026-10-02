@@ -9,9 +9,11 @@ import createRouter from './employees/create';
 import updateRouter from './employees/update';
 import adminActionsRouter from './employees/admin-actions';
 import lifecycleRouter from './employees/lifecycle';
+import reportingRouter from './employees/reporting';
 
 const router = Router();
 
+router.use('/', reportingRouter);
 router.use('/', selfRouter);
 router.use('/', listRouter);
 router.use('/', createRouter);

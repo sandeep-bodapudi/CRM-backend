@@ -37,6 +37,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { Roles } from '../../shared';
 import { API_BASE_URL } from '../../config';
+import { ReportingSuggestionsCard } from './ReportingSuggestionsCard';
 import { useLiveAttendanceQr } from '../../hooks/useLiveAttendanceQr';
 import { QRCodeVisual } from '../common/QRCodeVisual';
 import { AddEmployeeWizard } from './AddEmployeeWizard';
@@ -475,6 +476,9 @@ export const EmployeeManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Employees with no reporting manager, and the one the company rule gives them */}
+      <ReportingSuggestionsCard onApplied={fetchEmployeesAndMetadata} />
+
       {/* Top Banner & Stats Overview */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-card space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
