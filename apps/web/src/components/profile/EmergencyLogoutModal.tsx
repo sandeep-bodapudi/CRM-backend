@@ -13,6 +13,7 @@ export const EmergencyLogoutModal: React.FC<EmergencyLogoutModalProps> = ({ onCl
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,9 +27,19 @@ export const EmergencyLogoutModal: React.FC<EmergencyLogoutModalProps> = ({ onCl
 
     // Get current time in IST
     const now = new Date();
-    const formatterDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });
-    const formatterTime = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
-    
+    const formatterDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const formatterTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+
     const dateString = formatterDate.format(now);
     const timeString = formatterTime.format(now);
 
@@ -48,6 +59,9 @@ export const EmergencyLogoutModal: React.FC<EmergencyLogoutModalProps> = ({ onCl
         throw new Error(data.error || 'Failed to submit emergency logout request.');
       }
 
+      // From the 3rd in a month the request waits for the MD.
+      if (data.approved === false)
+        setPendingMessage(data.message || 'Sent to the MD for approval.');
       setSuccess(true);
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
@@ -58,9 +72,9 @@ export const EmergencyLogoutModal: React.FC<EmergencyLogoutModalProps> = ({ onCl
 
   return (
     <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div 
+      <div
         className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-up border border-slate-200"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2 text-rose-600">
@@ -81,9 +95,12 @@ export const EmergencyLogoutModal: React.FC<EmergencyLogoutModalProps> = ({ onCl
               <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Send className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Request Approved</h3>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">
+                {pendingMessage ? 'Sent for MD approval' : 'Request Approved'}
+              </h3>
               <p className="text-slate-500 mb-6">
-                You may now proceed to the Kiosk and scan out. Please don't forget to submit your Daily Report if required.
+                {pendingMessage ||
+                  "You may now proceed to the Kiosk and scan out. Please don't forget to submit your Daily Report if required."}
               </p>
               <button
                 onClick={onClose}
@@ -95,7 +112,8 @@ export const EmergencyLogoutModal: React.FC<EmergencyLogoutModalProps> = ({ onCl
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <p className="text-sm text-slate-600">
-                Are you leaving before 6:00 PM due to an emergency? Please provide a brief reason below. This will unlock the Kiosk so you can log out immediately.
+                Are you leaving before 6:00 PM due to an emergency? Please provide a brief reason
+                below. This will unlock the Kiosk so you can log out immediately.
               </p>
 
               {error && (

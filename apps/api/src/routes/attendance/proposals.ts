@@ -135,18 +135,33 @@ router.post(
   validateRequestBody(LeaveProposalSchema),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { start_date, end_date, reason, leave_type = 'FULL_DAY' } = req.body;
+      const { start_date, end_date, reason, leave_type = 'FULL_DAY', sick = false } = req.body;
       if (!start_date || !reason) {
         return res.status(400).json({ error: 'Start date and reason are required' });
       }
 
       // Check if start_date is >= tomorrow
       // Compare IST calendar dates (the server clock is UTC).
-      const todayIST = getISTComponents(new Date()).dateString;
-      if (String(start_date).slice(0, 10) <= todayIST) {
-        return res.status(400).json({
-          error: 'Leave requests must be submitted at least 1 day in advance.',
-        });
+      // Sick leave (MD decision 2026-10-02) may start today if asked
+      // before 11:00 IST; all other leave needs at least a day's notice.
+      const nowIST = getISTComponents(new Date());
+      const todayIST = nowIST.dateString;
+      const startDay = String(start_date).slice(0, 10);
+      if (startDay < todayIST) {
+        return res.status(400).json({ error: 'Leave cannot start in the past.' });
+      }
+      if (startDay === todayIST) {
+        if (!sick) {
+          return res.status(400).json({
+            error:
+              'Leave requests must be submitted at least 1 day in advance (tick "Sick leave" for today).',
+          });
+        }
+        if (nowIST.hours * 60 + nowIST.minutes >= 11 * 60) {
+          return res.status(400).json({
+            error: 'Same-day sick leave must be requested before 11:00 AM.',
+          });
+        }
       }
 
       // A leave covers every working day from start_date to end_date. Only
@@ -213,7 +228,7 @@ router.post(
           type: 'LEAVE',
           leave_type,
           target_date: day,
-          reason,
+          reason: sick ? `Sick leave: ${reason}` : reason,
           status: 'PENDING',
           created_at: createdAt,
         })),
@@ -331,6 +346,22 @@ router.post(
   validateRequestBody(LateProposalSchema), // Reusing LateProposalSchema since it has date, expected_time, reason
   async (req: AuthenticatedRequest, res: Response) => {
     try {
+      // First 2 emergency early logouts in an IST month are approved on the
+      // spot; from the 3rd the MD must approve (MD decision 2026-10-02) and
+      // the kiosk/app checkout gate waits for that approval.
+      const { dateString: todayStr } = getISTComponents(new Date());
+      const [y, m] = todayStr.split('-');
+      const monthStart = new Date(`${y}-${m}-01T00:00:00+05:30`);
+      const usedThisMonth = await p.attendanceProposal.count({
+        where: {
+          employee_id: req.user!.employeeId,
+          type: 'EARLY_CHECKOUT',
+          status: { in: ['APPROVED', 'PENDING'] },
+          created_at: { gte: monthStart },
+        },
+      });
+      const autoApprove = usedThisMonth < 2;
+
       // Record proposal in AttendanceProposal table
       const proposal = await p.attendanceProposal.create({
         data: {
@@ -338,7 +369,7 @@ router.post(
           type: 'EARLY_CHECKOUT',
           target_date: new Date(`${req.body.date}T${req.body.expected_time}:00+05:30`),
           reason: req.body.reason,
-          status: 'APPROVED', // Auto-approved for emergencies
+          status: autoApprove ? 'APPROVED' : 'PENDING',
         },
       });
 
@@ -353,13 +384,17 @@ router.post(
             type: 'EARLY_CHECKOUT',
             target_date: proposal.target_date,
             reason: req.body.reason,
+            auto_approved: autoApprove,
+            number_this_month: usedThisMonth + 1,
           }),
         },
       });
 
       return res.status(201).json({
-        message:
-          'Emergency logout request recorded successfully. You may now scan out at the Kiosk.',
+        approved: autoApprove,
+        message: autoApprove
+          ? 'Emergency logout request recorded successfully. You may now scan out at the Kiosk.'
+          : `This is your early logout no. ${usedThisMonth + 1} this month, so it needs the MD's approval. You can check out once it is approved.`,
         proposalId: proposal.id,
       });
     } catch (error: any) {

@@ -22,6 +22,12 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [leaveType, setLeaveType] = useState('FULL_DAY');
+  const [sick, setSick] = useState(false);
+  // IST calendar date; leave needs a day's notice unless it's sick leave.
+  const todayIST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(
+    new Date(),
+  );
+  const leaveTooSoon = !!startDate && (startDate < todayIST || (startDate === todayIST && !sick));
 
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -106,6 +112,7 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
           end_date: endDate || null,
           leave_type: leaveType,
           reason,
+          sick,
         }),
       });
 
@@ -378,6 +385,10 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
                 </div>
               </div>
 
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={sick} onChange={(e) => setSick(e.target.checked)} />
+                Sick leave (can be for today if requested before 11 AM)
+              </label>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Leave Type
@@ -433,19 +444,19 @@ export const LateLeaveProposals: React.FC<LateLeaveProposalsProps> = ({ hrViewOn
                 />
               </div>
 
-              {startDate && new Date(startDate) <= new Date(new Date().setHours(0, 0, 0, 0)) && (
+              {startDate && leaveTooSoon && (
                 <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Leave requests must be submitted at least 1 day in advance.</span>
+                  <span>
+                    Leave needs at least 1 day's notice. For today, tick "Sick leave" (before 11
+                    AM).
+                  </span>
                 </div>
               )}
 
               <button
                 type="submit"
-                disabled={
-                  isLoading ||
-                  (!!startDate && new Date(startDate) <= new Date(new Date().setHours(0, 0, 0, 0)))
-                }
+                disabled={isLoading || (!!startDate && leaveTooSoon)}
                 className="px-5 py-2.5 bg-navy-700 hover:bg-navy-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium rounded-xl text-sm transition-all flex items-center gap-2"
               >
                 <Send className="w-4 h-4" />

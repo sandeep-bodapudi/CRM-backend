@@ -44,6 +44,8 @@ export const LeaveProposalSchema = z.object({
   end_date: z.string().nullable().optional(),
   leave_type: z.enum(['FULL_DAY', 'FIRST_HALF', 'SECOND_HALF']).optional(),
   reason: z.string().min(5, 'Reason must be at least 5 characters'),
+  // Sick leave may start today (before 11:00 IST); other leave needs a day's notice.
+  sick: z.boolean().optional(),
 });
 
 export type LeaveProposalInput = z.infer<typeof LeaveProposalSchema>;
