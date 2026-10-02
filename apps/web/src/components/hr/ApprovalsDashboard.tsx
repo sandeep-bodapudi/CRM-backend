@@ -12,9 +12,14 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { ProposalItem } from '../../types';
+import { Roles } from '../../shared';
 
 export const ApprovalsDashboard: React.FC = () => {
-  const { fetchWithAuth } = useAuth();
+  const { fetchWithAuth, activeRole } = useAuth();
+  // Approve/reject is MD/Admin-only on the server (routes/attendance/
+  // proposals.ts); HR Managers see the queue read-only instead of buttons
+  // that always fail with "Forbidden".
+  const canDecide = activeRole === Roles.MD || activeRole === Roles.ADMIN;
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
   const [queue, setQueue] = useState<ProposalItem[]>([]);
   const [history, setHistory] = useState<ProposalItem[]>([]);
@@ -150,22 +155,28 @@ export const ApprovalsDashboard: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleAction(item.id, 'approve')}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => handleAction(item.id, 'reject')}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Reject
-                  </button>
-                </div>
+                {canDecide ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAction(item.id, 'approve')}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleAction(item.id, 'reject')}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1">
+                    Waiting for MD approval
+                  </span>
+                )}
               </div>
             ))}
           </div>

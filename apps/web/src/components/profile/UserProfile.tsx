@@ -52,7 +52,11 @@ export const UserProfile: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isEmergencyModalOpen, setIsEmergencyModalOpen] = useState(false);
   const [isQRFullscreen, setIsQRFullscreen] = useState(false);
-  const { token: qrToken, secondsLeft: qrSecondsLeft } = useLiveAttendanceQr('/attendance/my-qr');
+  const {
+    token: qrToken,
+    secondsLeft: qrSecondsLeft,
+    failed: qrFailed,
+  } = useLiveAttendanceQr('/attendance/my-qr');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -347,6 +351,12 @@ export const UserProfile: React.FC = () => {
                 Scan this code at the Kiosk terminal to mark your daily attendance. It is a live
                 code: it changes in {qrSecondsLeft}s, and screenshots stop working after 2 minutes.
               </p>
+              {qrFailed && (
+                <p className="text-xs font-bold text-red-600 mt-2 text-center">
+                  Couldn't refresh the code. Check your internet connection; an old code will be
+                  rejected at the kiosk.
+                </p>
+              )}
               <div className="mt-4 pt-4 border-t border-slate-100 w-full text-center">
                 <button
                   onClick={() => setIsEmergencyModalOpen(true)}

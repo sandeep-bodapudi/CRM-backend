@@ -126,6 +126,17 @@ export const authenticateToken = async (
     req.user = payload;
     next();
   } catch (err: any) {
+    // A database outage is not an expired token. Reporting it as
+    // TOKEN_EXPIRED (as on 2026-09-28, "Can't reach database server") makes
+    // every open app burn a refresh-token rotation and can push users to the
+    // login screen; tell the client to retry instead.
+    if (typeof err?.name === 'string' && err.name.startsWith('PrismaClient')) {
+      logger.error('AUTH_DB_UNAVAILABLE:', err.message);
+      return res.status(503).json({
+        error: 'Service temporarily unavailable, please retry.',
+        code: 'SERVICE_UNAVAILABLE',
+      });
+    }
     logger.error('JWT VERIFICATION ERROR:', err.name, err.message, err);
     // If token expired, return clear code so frontend automatically throws user to login page
     return res.status(401).json({
