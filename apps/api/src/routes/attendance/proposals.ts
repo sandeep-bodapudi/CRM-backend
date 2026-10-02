@@ -450,34 +450,41 @@ router.post(
           }
         }
       } else if (updated.type === 'FIELD_WORK') {
+        // Today or later: the employee checks in/out from the app on that
+        // day (routes/attendance/wfh.ts, source FIELD) -- real times instead
+        // of an automatic 9:30-18:30. Only a day that has already passed
+        // (approved after the fact) is filled in here, since no check-in
+        // is possible any more.
         const targetDate = new Date(updated.target_date);
         const { dateString } = getISTComponents(targetDate);
+        const todayString = getISTComponents(new Date()).dateString;
         const istTodayStart = new Date(`${dateString}T00:00:00+05:30`);
         const istTodayEnd = new Date(`${dateString}T23:59:59+05:30`);
 
-        const existingLog = await p.attendanceLog.findFirst({
-          where: {
-            employee_id: updated.employee_id,
-            check_in_at: { gte: istTodayStart, lte: istTodayEnd },
-          },
-        });
+        const existingLog =
+          dateString < todayString
+            ? await p.attendanceLog.findFirst({
+                where: {
+                  employee_id: updated.employee_id,
+                  check_in_at: { gte: istTodayStart, lte: istTodayEnd },
+                },
+              })
+            : null;
 
-        if (!existingLog) {
-          const checkIn = new Date(`${dateString}T09:30:00+05:30`);
-          const checkOut = new Date(`${dateString}T18:30:00+05:30`);
+        if (dateString < todayString && !existingLog) {
           await p.attendanceLog.create({
             data: {
               employee_id: updated.employee_id,
-              check_in_at: checkIn,
-              check_out_at: checkOut,
+              check_in_at: new Date(`${dateString}T09:30:00+05:30`),
+              check_out_at: new Date(`${dateString}T18:30:00+05:30`),
               working_duration_minutes: 540,
               status: 'PRESENT',
-              // Created by approving a request, not by anyone scanning -- the
-              // column default (QR_SCAN) made these look like real kiosk scans.
+              // Created by approving a request, not by anyone scanning.
               source: 'PROPOSAL',
+              notes: 'Field work (approved after the day)',
             },
           });
-        } else if (existingLog.status !== 'PRESENT') {
+        } else if (existingLog && existingLog.status === 'ABSENT') {
           await p.attendanceLog.update({
             where: { id: existingLog.id },
             data: { status: 'PRESENT' },
@@ -533,39 +540,9 @@ router.post(
         },
       });
 
-      if (updated.type === 'FIELD_WORK') {
-        const targetDate = new Date(updated.target_date);
-        const { dateString } = getISTComponents(targetDate);
-        const istTodayStart = new Date(`${dateString}T00:00:00+05:30`);
-        const istTodayEnd = new Date(`${dateString}T23:59:59+05:30`);
-
-        const existingLog = await p.attendanceLog.findFirst({
-          where: {
-            employee_id: updated.employee_id,
-            check_in_at: { gte: istTodayStart, lte: istTodayEnd },
-          },
-        });
-
-        if (!existingLog) {
-          const checkIn = new Date(`${dateString}T09:30:00+05:30`);
-          const checkOut = new Date(`${dateString}T18:30:00+05:30`);
-          await p.attendanceLog.create({
-            data: {
-              employee_id: updated.employee_id,
-              check_in_at: checkIn,
-              check_out_at: checkOut,
-              working_duration_minutes: 0,
-              status: 'ABSENT',
-              source: 'PROPOSAL',
-            },
-          });
-        } else if (existingLog.status !== 'ABSENT') {
-          await p.attendanceLog.update({
-            where: { id: existingLog.id },
-            data: { status: 'ABSENT' },
-          });
-        }
-      }
+      // A rejected field-work request no longer touches attendance: it used
+      // to mark the day ABSENT even over a real kiosk check-in. Days with no
+      // check-in are already handled by the nightly attendance rollup.
 
       notifyEmployee(proposal.employee_id, {
         title: 'Proposal Rejected',

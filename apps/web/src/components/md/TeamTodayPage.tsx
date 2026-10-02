@@ -423,7 +423,7 @@ export const TeamTodayPage: React.FC = () => {
                     <div className="text-slate-400">
                       {r.attendance.status.replace(/_/g, ' ').toLowerCase()}
                       {r.attendance.source !== 'QR_SCAN' &&
-                        ` · ${r.attendance.source === 'REMOTE' ? 'work from home' : r.attendance.source.replace(/_/g, ' ').toLowerCase()}`}
+                        ` · ${r.attendance.source === 'REMOTE' ? 'work from home' : r.attendance.source === 'FIELD' ? 'field work' : r.attendance.source.replace(/_/g, ' ').toLowerCase()}`}
                     </div>
                   </>
                 ) : (

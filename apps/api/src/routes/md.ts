@@ -257,7 +257,7 @@ router.get(
         }
         // REMOTE = approved work-from-home check-in from the app; PROPOSAL =
         // created by approving a field-work request. Neither is a hand edit.
-        if (att && !['QR_SCAN', 'REMOTE', 'PROPOSAL'].includes(att.source)) {
+        if (att && !['QR_SCAN', 'REMOTE', 'FIELD', 'PROPOSAL'].includes(att.source)) {
           flags.push('Attendance entered or edited by hand');
         }
 

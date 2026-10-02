@@ -47,16 +47,21 @@ const RemoteCheckSchema = z.object({
   note: z.string().trim().max(300).optional(),
 });
 
-/** Approved WFH proposal covering this IST date, if any. */
+/**
+ * Approved WFH or field-work proposal covering this IST date, if any. Both
+ * mean "not at the office kiosk today": the employee checks in and out from
+ * the app (source REMOTE for WFH, FIELD for field work).
+ */
 const approvedWfhFor = (employeeId: number, dateString: string) => {
   const start = getISTMidnightInstant(dateString);
   return p.attendanceProposal.findFirst({
     where: {
       employee_id: employeeId,
-      type: WFH,
+      type: { in: [WFH, 'FIELD_WORK'] },
       status: 'APPROVED',
       target_date: { gte: start, lt: new Date(start.getTime() + DAY_MS) },
     },
+    orderBy: { reviewed_at: 'desc' },
   });
 };
 
@@ -85,6 +90,7 @@ router.get('/wfh/today', authenticateToken, async (req: AuthenticatedRequest, re
     return res.status(200).json({
       date: dateString,
       wfh_today: !!wfh,
+      day_type: wfh?.type || null,
       log: log
         ? {
             check_in_at: log.check_in_at,
@@ -279,7 +285,8 @@ router.post(
       if (await isHoliday(employee.company_id, dateString)) {
         return res.status(400).json({ error: 'Today is a holiday.' });
       }
-      if (!(await approvedWfhFor(employeeId, dateString))) {
+      const remoteDay = await approvedWfhFor(employeeId, dateString);
+      if (!remoteDay) {
         return res.status(403).json({
           error:
             'Today is not an approved work-from-home day. Please check in at the office kiosk.',
@@ -318,8 +325,10 @@ router.post(
             !!lateApproved,
             employee.employment_type || 'FULL_TIME',
           ),
-          source: 'REMOTE',
-          notes: req.body.note ? `WFH: ${req.body.note}` : 'Work from home',
+          source: remoteDay.type === 'FIELD_WORK' ? 'FIELD' : 'REMOTE',
+          notes:
+            (remoteDay.type === 'FIELD_WORK' ? 'Field work' : 'Work from home') +
+            (req.body.note ? `: ${req.body.note}` : ''),
         },
       });
       return res.status(200).json({
@@ -356,7 +365,7 @@ router.post(
         orderBy: { check_in_at: 'desc' },
       });
       if (!log) return res.status(400).json({ error: 'No open check-in for today.' });
-      if (log.source !== 'REMOTE') {
+      if (log.source !== 'REMOTE' && log.source !== 'FIELD') {
         return res
           .status(400)
           .json({ error: 'You checked in at the office. Please check out at the kiosk.' });
