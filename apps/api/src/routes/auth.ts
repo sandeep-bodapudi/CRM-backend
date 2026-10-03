@@ -208,6 +208,16 @@ router.post(
           where: { employee_id: employeeId, revoked: false },
           data: { revoked: true, revocation_reason: 'PASSWORD_CHANGED' },
         });
+
+        await tx.auditEvent.create({
+          data: {
+            actor_id: employeeId,
+            action: 'PASSWORD_CHANGED',
+            entity_type: 'EMPLOYEE',
+            entity_id: employeeId,
+            new_value: JSON.stringify({ firstLogin: !employee.first_login_done }),
+          },
+        });
       });
 
       // Fetch updated employee for new token version
@@ -444,7 +454,8 @@ router.post('/logout', validateRequestBody(EmptyBodySchema), async (req, res: Re
     const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
     try {
       await p.authSession.updateMany({
-        where: { refresh_token_hash: refreshTokenHash },
+        // Already-revoked sessions keep their reason (e.g. PASSWORD_CHANGED).
+        where: { refresh_token_hash: refreshTokenHash, revoked: false },
         data: { revoked: true, revocation_reason: 'LOGGED_OUT' },
       });
     } catch (error) {

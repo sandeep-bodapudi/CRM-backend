@@ -393,7 +393,7 @@ export const UserProfile: React.FC = () => {
           onClick={() => setIsPasswordModalOpen(false)}
         >
           <div onClick={(e) => e.stopPropagation()}>
-            <ChangePasswordModal />
+            <ChangePasswordModal onClose={() => setIsPasswordModalOpen(false)} />
           </div>
         </div>
       )}
