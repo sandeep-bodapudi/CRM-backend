@@ -1361,7 +1361,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
-                    Project being visited
+                    Project being visited <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={scheduleProjectId}
@@ -1375,6 +1375,10 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                       </option>
                     ))}
                   </select>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Visits are booked for the whole project — the customer sees all its units on
+                    site.
+                  </p>
                   {visitProjects && visitProjects.length === 0 && (
                     <p className="text-[11px] text-amber-700 mt-1">
                       No approved projects available yet — projects appear here once the MD approves
@@ -1384,14 +1388,14 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
-                    Attach Property or Project Unit
+                    Standalone property (only if not part of a project)
                   </label>
                   <select
                     value={scheduleInventoryKey}
                     onChange={(e) => setScheduleInventoryKey(e.target.value)}
                     className="w-full px-3 py-2 bg-surface border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gold-500"
                   >
-                    <option value="">-- Nothing Attached --</option>
+                    <option value="">-- None --</option>
                     {savedInterests.filter((i) => i.property).length > 0 && (
                       <optgroup label="Saved Properties">
                         {savedInterests
@@ -1404,25 +1408,6 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                               {interest.property!.title} ({interest.property!.property_code})
                             </option>
                           ))}
-                      </optgroup>
-                    )}
-                    {savedInterests.filter((i) => i.project_unit).length > 0 && (
-                      <optgroup label="Saved Project Units">
-                        {savedInterests
-                          .filter((interest) => interest.project_unit)
-                          .map((interest) => {
-                            const u = interest.project_unit!;
-                            const label =
-                              u.flat_number || u.villa_number || u.plot_number || u.unit_number;
-                            return (
-                              <option
-                                key={`UNIT-${interest.project_unit_id}`}
-                                value={`UNIT-${interest.project_unit_id}`}
-                              >
-                                {u.project.name} — Unit {label}
-                              </option>
-                            );
-                          })}
                       </optgroup>
                     )}
                   </select>
@@ -1442,6 +1427,18 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                       if (!scheduleDate) return;
                       const [kind, idStr] = scheduleInventoryKey.split('-');
                       const id = idStr ? parseInt(idStr, 10) : undefined;
+                      // Visits are per project (MD, 2026-10-03). Require one
+                      // whenever approved projects exist, unless a standalone
+                      // property is being visited instead.
+                      if (
+                        visitProjects &&
+                        visitProjects.length > 0 &&
+                        !scheduleProjectId &&
+                        !(kind === 'PROPERTY' && id)
+                      ) {
+                        showToast('Select the project being visited.', 'error');
+                        return;
+                      }
                       try {
                         const res = await fetchWithAuth(`${API_BASE_URL}/site-visits`, {
                           method: 'POST',
