@@ -90,7 +90,20 @@ interface SiteVisit {
     project: { id: number; name: string };
   };
   /** Multi-property links — the canonical source for what was visited */
-  site_visit_properties?: { property_id: number | null; project_unit_id: number | null }[];
+  site_visit_properties?: {
+    property_id: number | null;
+    project_unit_id: number | null;
+    property?: { id: number; property_code: string; title: string } | null;
+    project_unit?: {
+      id: number;
+      unit_code: string;
+      unit_number: string;
+      flat_number?: string | null;
+      villa_number?: string | null;
+      plot_number?: string | null;
+      project?: { id: number; name: string } | null;
+    } | null;
+  }[];
   project?: { id: number; project_code: string; name: string };
 }
 
@@ -173,6 +186,46 @@ const SiteVisitStepper: React.FC<{ status: SiteVisit['status'] }> = ({ status })
       </div>
     </div>
   );
+};
+
+const unitLabel = (u: {
+  unit_number?: string | null;
+  flat_number?: string | null;
+  villa_number?: string | null;
+  plot_number?: string | null;
+  unit_code?: string | null;
+}) =>
+  u.flat_number
+    ? `Flat ${u.flat_number}`
+    : u.villa_number
+      ? `Villa ${u.villa_number}`
+      : u.plot_number
+        ? `Plot ${u.plot_number}`
+        : u.unit_number
+          ? `Unit ${u.unit_number}`
+          : u.unit_code || 'Unit';
+
+/**
+ * What a visit is for. The card used to show only the legacy single
+ * `property` link, so visits booked for a project or for units (stored in
+ * `project`, `project_unit` and `site_visit_properties`) showed nothing.
+ */
+const visitTargets = (visit: SiteVisit): { project: string | null; items: string[] } => {
+  const items: string[] = [];
+  const add = (label: string) => {
+    if (!items.includes(label)) items.push(label);
+  };
+  let project = visit.project?.name || visit.project_unit?.project?.name || null;
+  if (visit.property) add(`${visit.property.title} (${visit.property.property_code})`);
+  if (visit.project_unit) add(unitLabel(visit.project_unit));
+  for (const sp of visit.site_visit_properties || []) {
+    if (sp.property) add(`${sp.property.title} (${sp.property.property_code})`);
+    if (sp.project_unit) {
+      add(unitLabel(sp.project_unit));
+      if (!project && sp.project_unit.project?.name) project = sp.project_unit.project.name;
+    }
+  }
+  return { project, items };
 };
 
 export const SiteVisitManagement: React.FC = () => {
@@ -752,12 +805,23 @@ export const SiteVisitManagement: React.FC = () => {
                     {visit.telecaller?.full_name}
                   </div>
 
-                  {visit.property && (
-                    <div className="text-[11px] text-slate-500">
-                      <span className="font-bold text-slate-700">Property:</span>{' '}
-                      {visit.property.title} ({visit.property.property_code})
-                    </div>
-                  )}
+                  {(() => {
+                    const t = visitTargets(visit);
+                    return t.project || t.items.length > 0 ? (
+                      <div className="text-[11px] text-slate-500">
+                        <span className="font-bold text-slate-700">Visiting:</span>{' '}
+                        {t.project && (
+                          <span className="font-semibold text-slate-700">{t.project}</span>
+                        )}
+                        {t.project && t.items.length > 0 ? ' — ' : ''}
+                        {t.items.join(', ')}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] font-semibold text-amber-700">
+                        No project or property linked to this visit
+                      </div>
+                    );
+                  })()}
 
                   {visit.project_manager && (
                     <div className="text-[11px] text-slate-500">

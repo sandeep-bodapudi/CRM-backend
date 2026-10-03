@@ -134,6 +134,27 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
 
   // Site Visit Schedule Form
   const [showScheduleModal, setShowScheduleModal] = useState(initialShowScheduleModal || false);
+  // Project being visited. Visits could only attach a lead's saved
+  // interests (default "Nothing Attached"), so every production visit was
+  // booked with no project at all -- the card and the PM routing had nothing
+  // to go on. Pick the project directly (the server accepts project_id).
+  const [scheduleProjectId, setScheduleProjectId] = useState('');
+  const [visitProjects, setVisitProjects] = useState<{ id: number; name: string }[] | null>(null);
+  useEffect(() => {
+    if (!showScheduleModal || visitProjects) return;
+    fetchWithAuth(`${API_BASE_URL}/projects?limit=200`)
+      .then((r) => (r.ok ? r.json() : { projects: [] }))
+      .then((d) =>
+        setVisitProjects(
+          (d.projects || []).map((pr: { id: number; name: string }) => ({
+            id: pr.id,
+            name: pr.name,
+          })),
+        ),
+      )
+      .catch(() => setVisitProjects([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showScheduleModal]);
   const [scheduleSuccess, setScheduleSuccess] = useState(false);
   const [scheduleDate, setScheduleDate] = useState(
     new Date(Date.now() + 86400000).toISOString().slice(0, 16),
@@ -1340,6 +1361,29 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                    Project being visited
+                  </label>
+                  <select
+                    value={scheduleProjectId}
+                    onChange={(e) => setScheduleProjectId(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  >
+                    <option value="">-- Select project --</option>
+                    {(visitProjects || []).map((pr) => (
+                      <option key={pr.id} value={pr.id}>
+                        {pr.name}
+                      </option>
+                    ))}
+                  </select>
+                  {visitProjects && visitProjects.length === 0 && (
+                    <p className="text-[11px] text-amber-700 mt-1">
+                      No approved projects available yet — projects appear here once the MD approves
+                      them.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
                     Attach Property or Project Unit
                   </label>
                   <select
@@ -1414,6 +1458,11 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                             // attached anything.
                             property_ids: kind === 'PROPERTY' && id ? [id] : undefined,
                             project_unit_ids: kind === 'UNIT' && id ? [id] : undefined,
+                            // A chosen property/unit already fixes the project
+                            // (the server checks they match); send the picked
+                            // project on its own otherwise.
+                            project_id:
+                              !id && scheduleProjectId ? Number(scheduleProjectId) : undefined,
                           }),
                         });
                         const data = await res.json();
