@@ -12,6 +12,7 @@ interface UploadBatch {
   source: string;
   day: string;
   count: number;
+  holders: Record<string, number>;
 }
 
 interface Props {
@@ -20,15 +21,25 @@ interface Props {
   onMoved: () => void;
 }
 
+// GET /employees sends camelCase names; some lists use snake_case.
+const nameOf = (e: EmployeeListItem) => e.fullName || e.full_name || '';
+const codeOf = (e: EmployeeListItem) => e.employeeCode || e.employee_code || '';
+const labelOf = (e: EmployeeListItem) => `${nameOf(e)} (${codeOf(e)})`;
+
 /**
- * Moves a whole upload's not-yet-called leads from one person to another —
- * e.g. an Excel upload sent to the pool by mistake instead of "Assign to Me",
- * which otherwise meant reassigning a hundred leads one at a time.
+ * Moves a whole upload's not-yet-called leads in one step — e.g. an Excel
+ * upload sent to the pool by mistake instead of "Assign to Me", which
+ * otherwise meant reassigning every lead one at a time.
+ *
+ * "Uploaded by": everything one person uploaded that ended up with others,
+ * across all telecallers. "Currently with": the uploads sitting with one
+ * person.
  */
 export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMoved }) => {
   const { fetchWithAuth } = useAuth();
   const { showToast } = useToast();
-  const [fromId, setFromId] = useState('');
+  const [mode, setMode] = useState<'uploader' | 'holder'>('uploader');
+  const [personId, setPersonId] = useState('');
   const [batches, setBatches] = useState<UploadBatch[] | null>(null);
   const [batchIdx, setBatchIdx] = useState<number | null>(null);
   const [toId, setToId] = useState('');
@@ -37,28 +48,31 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
   const [error, setError] = useState<string | null>(null);
 
   const active = employees
-    .filter((e: any) => !e.status || e.status === 'ACTIVE')
-    .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+    .filter((e) => !e.status || e.status === 'ACTIVE')
+    .sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
 
-  useEffect(() => {
+  const loadBatches = () => {
     setBatches(null);
     setBatchIdx(null);
-    if (!fromId) return;
-    fetchWithAuth(`${API_BASE_URL}/leads/upload-batches?employee_id=${fromId}`)
+    if (!personId) return;
+    const q = mode === 'uploader' ? `uploader_id=${personId}` : `employee_id=${personId}`;
+    fetchWithAuth(`${API_BASE_URL}/leads/upload-batches?${q}`)
       .then((r) => (r.ok ? r.json() : { batches: [] }))
       .then((d) => setBatches(d.batches || []))
       .catch(() => setBatches([]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromId]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadBatches, [personId, mode]);
 
   const batch = batchIdx !== null && batches ? batches[batchIdx] : null;
 
-  // When the uploader is a real employee they're the obvious destination.
+  // Back to the person who uploaded them is the usual fix.
   useEffect(() => {
-    if (batch?.created_by_id && String(batch.created_by_id) !== fromId) {
+    if (mode === 'uploader') setToId(personId);
+    else if (batch?.created_by_id && String(batch.created_by_id) !== personId) {
       setToId(String(batch.created_by_id));
     }
-  }, [batch, fromId]);
+  }, [batch, personId, mode]);
 
   const submit = async () => {
     if (!batch || !toId) return;
@@ -69,7 +83,7 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from_employee_id: parseInt(fromId, 10),
+          from_employee_id: mode === 'holder' ? parseInt(personId, 10) : null,
           to_employee_id: parseInt(toId, 10),
           created_by_id: batch.created_by_id,
           source: batch.source,
@@ -81,7 +95,8 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
       if (!res.ok) throw new Error(data.error || 'Could not move the leads');
       showToast(data.message || 'Leads moved', 'success');
       onMoved();
-      onClose();
+      setReason('');
+      loadBatches(); // more uploads may still need moving
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -95,6 +110,11 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
       month: 'short',
       year: 'numeric',
     });
+  const holdersText = (h: Record<string, number>) =>
+    Object.entries(h)
+      .sort((a, b) => b[1] - a[1])
+      .map(([n, c]) => `${n} (${c})`)
+      .join(', ');
 
   return (
     <div
@@ -111,13 +131,36 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
               <ArrowRightLeft className="w-5 h-5 text-navy-600" /> Move a batch of leads
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Moves the leads from one upload that nobody has called yet. Leads already called stay
+              Moves leads from one upload that nobody has called yet. Leads already called stay
               where they are.
             </p>
           </div>
           <button onClick={onClose} aria-label="Close" className="p-1 text-slate-400">
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {(
+            [
+              ['uploader', 'Uploaded by', 'Leads someone uploaded that went to others'],
+              ['holder', 'Currently with', 'Uploads sitting with one person'],
+            ] as const
+          ).map(([key, title, hint]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setMode(key);
+                setPersonId('');
+                setToId('');
+              }}
+              className={`p-2.5 rounded-xl border text-left ${mode === key ? 'border-navy-600 bg-navy-50' : 'border-slate-200'}`}
+            >
+              <div className="text-sm font-bold text-slate-800">{title}</div>
+              <div className="text-[11px] text-slate-500">{hint}</div>
+            </button>
+          ))}
         </div>
 
         {error && (
@@ -127,22 +170,22 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
         )}
 
         <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-          1. Leads are currently with
+          1. {mode === 'uploader' ? 'Who uploaded the leads' : 'Leads are currently with'}
         </label>
         <select
-          value={fromId}
-          onChange={(e) => setFromId(e.target.value)}
+          value={personId}
+          onChange={(e) => setPersonId(e.target.value)}
           className="w-full p-2.5 text-sm border border-slate-200 rounded-xl mb-4"
         >
           <option value="">Choose employee…</option>
           {active.map((e) => (
             <option key={e.id} value={e.id}>
-              {e.full_name} ({e.employee_code})
+              {labelOf(e)}
             </option>
           ))}
         </select>
 
-        {fromId && (
+        {personId && (
           <>
             <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
               2. Which upload
@@ -150,9 +193,13 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
             {batches === null ? (
               <p className="text-xs text-slate-400 mb-4">Loading…</p>
             ) : batches.length === 0 ? (
-              <p className="text-xs text-slate-500 mb-4">No uncalled leads with this person.</p>
+              <p className="text-xs text-slate-500 mb-4">
+                {mode === 'uploader'
+                  ? 'None of their uploaded leads are with anyone else (uncalled).'
+                  : 'No uncalled leads with this person.'}
+              </p>
             ) : (
-              <div className="space-y-2 mb-4 max-h-56 overflow-y-auto">
+              <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
                 {batches.map((b, i) => (
                   <button
                     key={`${b.created_by_id}|${b.source}|${b.day}`}
@@ -165,6 +212,11 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
                       · {getLeadSourceLabel(b.source)} · added by {b.created_by_name} on{' '}
                       {fmtDay(b.day)}
                     </span>
+                    {mode === 'uploader' && (
+                      <span className="block text-[11px] text-slate-500 mt-1">
+                        Now with: {holdersText(b.holders)}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -184,10 +236,10 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
             >
               <option value="">Choose employee…</option>
               {active
-                .filter((e) => String(e.id) !== fromId)
+                .filter((e) => mode === 'uploader' || String(e.id) !== personId)
                 .map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.full_name} ({e.employee_code})
+                    {labelOf(e)}
                     {e.id === batch.created_by_id ? ' — uploaded these' : ''}
                   </option>
                 ))}
@@ -211,7 +263,7 @@ export const MoveLeadBatchModal: React.FC<Props> = ({ employees, onClose, onMove
             onClick={onClose}
             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-lg"
           >
-            Cancel
+            Close
           </button>
           <button
             type="button"

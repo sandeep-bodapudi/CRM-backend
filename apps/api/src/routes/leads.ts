@@ -115,8 +115,15 @@ router.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const employeeId = parseInt(String(req.query.employee_id), 10);
-      if (isNaN(employeeId)) return res.status(400).json({ error: 'employee_id required' });
-      return res.status(200).json({ batches: await listUploadBatches(req.user!, employeeId) });
+      const uploaderId = parseInt(String(req.query.uploader_id), 10);
+      if (isNaN(employeeId) && isNaN(uploaderId)) {
+        return res.status(400).json({ error: 'employee_id or uploader_id required' });
+      }
+      const batches = await listUploadBatches(
+        req.user!,
+        isNaN(uploaderId) ? { employeeId } : { uploaderId },
+      );
+      return res.status(200).json({ batches });
     } catch (error: any) {
       return handleServiceError(error, res);
     }
@@ -126,7 +133,7 @@ router.get(
 // POST /api/v1/leads/move-batch - move one upload batch's uncalled leads
 // to another employee (e.g. an upload sent to the pool by mistake).
 const MoveBatchSchema = z.object({
-  from_employee_id: z.number().int().positive(),
+  from_employee_id: z.number().int().positive().nullable(),
   to_employee_id: z.number().int().positive(),
   created_by_id: z.number().int().positive().nullable(),
   source: z.string().min(1).max(100),
