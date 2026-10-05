@@ -1,3 +1,4 @@
+import { resolveInitialStage, applyInitialStage, ResolvedStage } from './stage';
 import { prisma } from '../../lib/prisma';
 import { TokenPayload } from '../../utils/jwt';
 import { Roles } from '../../shared';
@@ -98,7 +99,8 @@ export async function createLead(
       return { lead: existingLead };
     } else {
       // Dropped/Cancelled lead duplicate check
-      const isAutomatedChannel = dto.source !== 'MANUAL_ENTRY' && dto.source !== 'REFERRAL';
+      const isAutomatedChannel =
+        dto.source !== 'MANUAL_ENTRY' && dto.source !== 'REFERRAL' && dto.source !== 'ASSOCIATE';
 
       if (isAutomatedChannel) {
         // Task 7: Automated channel -> auto-recover to POOL
@@ -170,22 +172,34 @@ export async function createLead(
   let ownershipType = isPublicSubmission ? 'POOL' : dto.ownership_type || 'POOL';
   let bestAssignee: any = null;
 
-  if (isChannelPartner) {
-    // Phase-19 audit #9: a CPM lead traces back to an external agent who
-    // works for the partner company, not an internal employee -- capture
-    // that contact so the lead's origin isn't just "some phone number".
+  // A CPM lead that came through an associate traces back to that external
+  // agent -- capture the contact so its origin isn't just "some phone
+  // number". Other sources need only the customer's name and phone.
+  const fromAssociate = isChannelPartner && dto.source === 'ASSOCIATE';
+  if (fromAssociate) {
     if (!dto.external_agent_name || !dto.external_agent_phone || !dto.external_agent_associate_id) {
-      throw new AppError(
-        400,
-        'External agent name, phone, and associate ID are required for Channel Partner leads.',
-      );
+      throw new AppError(400, "Enter the associate's name, phone and associate ID.");
     }
   }
 
-  if (!isPublicSubmission && (ownershipType === 'DIRECT' || isChannelPartner)) {
+  // A CPM keeping the lead can add it at the stage it has already reached.
+  let resolvedStage: ResolvedStage | null = null;
+  if (dto.initial_stage && dto.initial_stage !== 'ASSIGNED') {
+    if (!isChannelPartner || ownershipType !== 'DIRECT') {
+      throw new AppError(400, 'Only a Channel Partner Manager keeping the lead can set its stage.');
+    }
+    resolvedStage = await resolveInitialStage(
+      user,
+      dto.initial_stage,
+      dto.stage_details || {},
+      dto,
+    );
+  }
+
+  if (!isPublicSubmission && ownershipType === 'DIRECT') {
     assignedToId = user.employeeId;
     assignmentType = 'MANUAL_OVERRIDE';
-    status = 'ASSIGNED';
+    status = resolvedStage?.stage || 'ASSIGNED';
     ownershipType = 'DIRECT';
   } else {
     // POOL: "Add to Pool" — immediately run the same performance-weighted
@@ -257,7 +271,7 @@ export async function createLead(
         enquiry_type: dto.enquiry_type || null,
         preferred_contact_time: dto.preferred_contact_time || null,
         property_ids: dto.property_ids || undefined,
-        project_id: dto.project_id || null,
+        project_id: resolvedStage?.project?.id || dto.project_id || null,
         created_by_id: isPublicSubmission ? null : user.employeeId,
         ownership_type: ownershipType,
         introduced_by_id: dto.introduced_by_id || null,
@@ -269,10 +283,11 @@ export async function createLead(
         sla_breach_at: slaBreachAt,
         referral_person_name: dto.source === 'REFERRAL' ? dto.referral_person_name || null : null,
         referral_employee_id: validReferralEmployeeId,
-        external_agent_name: isChannelPartner ? dto.external_agent_name : null,
-        external_agent_phone: isChannelPartner ? dto.external_agent_phone : null,
-        external_agent_associate_id: isChannelPartner ? dto.external_agent_associate_id : null,
-        external_agent_company: isChannelPartner ? dto.external_agent_company || null : null,
+        external_agent_name: fromAssociate ? dto.external_agent_name : null,
+        external_agent_phone: fromAssociate ? dto.external_agent_phone : null,
+        external_agent_associate_id: fromAssociate ? dto.external_agent_associate_id : null,
+        external_agent_company: fromAssociate ? dto.external_agent_company || null : null,
+        last_contacted_at: resolvedStage?.contactedAt || null,
       },
     });
 
@@ -288,6 +303,8 @@ export async function createLead(
         notes: `Lead ${lead.lead_code} registered via ${lead.source}`,
       },
     });
+
+    if (resolvedStage) await applyInitialStage(tx, user, lead, resolvedStage);
 
     if (bestAssignee) {
       await tx.leadActivity.create({

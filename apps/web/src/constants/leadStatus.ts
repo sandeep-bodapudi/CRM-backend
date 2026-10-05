@@ -35,6 +35,7 @@ const LEAD_SOURCE_LABELS: Record<string, string> = {
   WALK_IN: 'Walk-In',
   REFERRAL: 'Referral',
   HOUSING_COM: 'Housing.com',
+  ASSOCIATE: 'Associate',
 };
 
 export const getLeadSourceLabel = (source?: string | null): string => {

@@ -112,6 +112,38 @@ router.get(
   },
 );
 
+// GET /api/v1/leads/visit-handlers - active employees who can run a site
+// visit (for "Visit handled by" when adding a lead at a visit stage).
+router.get(
+  '/visit-handlers',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_CREATE),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employees = await prisma.employee.findMany({
+        where: { company_id: req.user!.companyId, status: 'ACTIVE' },
+        select: {
+          id: true,
+          full_name: true,
+          employee_code: true,
+          roles: { select: { role: { select: { name: true } } } },
+        },
+        orderBy: { full_name: 'asc' },
+      });
+      return res.status(200).json({
+        employees: employees.map((e) => ({
+          id: e.id,
+          name: e.full_name || e.employee_code,
+          code: e.employee_code,
+          roles: e.roles.map((r) => r.role.name),
+        })),
+      });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
 // GET /api/v1/leads/telecaller-report - telecallers with headline counts;
 // GET /api/v1/leads/telecaller-report/:employeeId - one telecaller's full
 // lead picture (MD, Admin, HR).

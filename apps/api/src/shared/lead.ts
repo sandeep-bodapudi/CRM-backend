@@ -105,6 +105,30 @@ export const LeadCreateSchema = z.object({
   external_agent_phone: z.string().optional().nullable(),
   external_agent_associate_id: z.string().optional().nullable(),
   external_agent_company: z.string().optional().nullable(),
+  // Channel Partner Manager keeping the lead ("Me") can add it at the stage
+  // it has already reached, with that stage's details (services/lead/stage.ts).
+  initial_stage: z
+    .enum([
+      'ASSIGNED',
+      'CONTACTED',
+      'QUALIFIED',
+      'SITE_VISIT_SCHEDULED',
+      'SITE_VISIT_COMPLETED',
+      'NEGOTIATION',
+    ])
+    .optional(),
+  stage_details: z
+    .object({
+      contacted_at: z.string().optional(),
+      call_notes: z.string().max(1000).optional(),
+      project_id: z.number().int().positive().optional(),
+      visit_at: z.string().optional(),
+      visit_handled_by_id: z.number().int().positive().optional(),
+      visit_rating: z.enum(['HOT_INTERESTED', 'WARM', 'COLD', 'NOT_INTERESTED']).optional(),
+      visit_feedback: z.string().max(2000).optional(),
+      negotiation_notes: z.string().max(2000).optional(),
+    })
+    .optional(),
 });
 
 export type LeadCreateInput = z.infer<typeof LeadCreateSchema>;
