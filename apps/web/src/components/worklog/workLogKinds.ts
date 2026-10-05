@@ -1,3 +1,5 @@
+import { Roles } from '../../shared';
+
 // Keep in sync with WORK_LOG_KINDS in apps/api/src/routes/workLog.ts.
 export const ASSOCIATE_KINDS = [
   'ASSOCIATE_CALL',
@@ -48,6 +50,112 @@ export const WORK_LOG_GROUPS: { label: string; kinds: readonly string[] }[] = [
   },
   { label: 'Other', kinds: ['OTHER'] },
 ];
+
+/**
+ * What each role is likely to log, so the picker opens on their own kind of
+ * work (with a one-line explanation) instead of one long list for everyone.
+ * The full list stays one tap away ("Show all work types").
+ */
+export interface RoleWorkLog {
+  /** Plain-language description of the role's work, shown above the picker. */
+  intro: string;
+  /** Groups shown for this role, most relevant first. */
+  groups: { label: string; kinds: readonly string[] }[];
+  /** Kind selected when the page opens. */
+  defaultKind: string;
+}
+
+const OTHER_GROUP = { label: 'Anything else', kinds: ['OTHER'] as readonly string[] };
+const MEETINGS_GROUP = {
+  label: 'Meetings',
+  kinds: ['CLIENT_MEETING', 'PARTNER_MEETING'] as readonly string[],
+};
+const FIELD_GROUP = {
+  label: 'Site & field work',
+  kinds: ['SITE_VISIT', 'PROPERTY_INSPECTION', 'CLIENT_MEETING'] as readonly string[],
+};
+const DIGITAL_GROUP = {
+  label: 'Posts, ads & creatives',
+  kinds: [
+    'INSTAGRAM_POST',
+    'INSTAGRAM_REEL',
+    'INSTAGRAM_STORY',
+    'FACEBOOK_POST',
+    'YOUTUBE_VIDEO',
+    'AD_CAMPAIGN',
+    'WHATSAPP_BROADCAST',
+    'CONTENT_DESIGN',
+  ] as readonly string[],
+};
+
+export function workLogForRole(role: string | undefined): RoleWorkLog {
+  switch (role) {
+    case Roles.CHANNEL_PARTNER_MANAGER:
+      return {
+        intro:
+          'Log your associate work: calls to associates, office and site visits, new prospects, enrollments and bookings.',
+        groups: [
+          { label: 'Associates (channel partners)', kinds: ASSOCIATE_KINDS },
+          { label: 'Meetings', kinds: ['PARTNER_MEETING', 'CLIENT_MEETING'] },
+          OTHER_GROUP,
+        ],
+        defaultKind: 'ASSOCIATE_CALL',
+      };
+    case Roles.DIGITAL_MARKETING_HEAD:
+    case Roles.DIGITAL_MARKETING_EXECUTIVE:
+    case Roles.MARKETING_DIRECTOR:
+      return {
+        intro:
+          'Log what you published or ran: Instagram and Facebook posts, reels, stories, YouTube videos, ad campaigns, WhatsApp broadcasts and creative design.',
+        groups: [
+          DIGITAL_GROUP,
+          { label: 'Meetings', kinds: ['CLIENT_MEETING', 'PARTNER_MEETING'] },
+          OTHER_GROUP,
+        ],
+        defaultKind: 'INSTAGRAM_POST',
+      };
+    case Roles.PROJECT_MANAGER:
+      return {
+        intro:
+          'Visits booked in the CRM are counted automatically. Log site trips and inspections done outside a booking, and client meetings.',
+        groups: [FIELD_GROUP, OTHER_GROUP],
+        defaultKind: 'SITE_VISIT',
+      };
+    case Roles.INVENTORY_EXECUTIVE:
+      return {
+        intro:
+          'Project and property updates made in the CRM are counted automatically. Log inspections, site trips and anything done outside the CRM.',
+        groups: [
+          { label: 'Site & field work', kinds: ['PROPERTY_INSPECTION', 'SITE_VISIT'] },
+          OTHER_GROUP,
+        ],
+        defaultKind: 'PROPERTY_INSPECTION',
+      };
+    case Roles.DATA_ENTRY_OPERATOR:
+      return {
+        intro:
+          'Leads, customers and booking entries made in the CRM are counted automatically. Use "Anything else" for work done outside the CRM, and say what you did.',
+        groups: [OTHER_GROUP],
+        defaultKind: 'OTHER',
+      };
+    case Roles.TELECALLER:
+    case Roles.AGENT:
+    case Roles.DIGITAL_LEAD_OPERATOR:
+      return {
+        intro:
+          'Calls and lead updates in the CRM are counted automatically. Log only work done outside the CRM, such as meetings or site trips.',
+        groups: [MEETINGS_GROUP, FIELD_GROUP, OTHER_GROUP],
+        defaultKind: 'CLIENT_MEETING',
+      };
+    default:
+      return {
+        intro:
+          'Log work you did outside the CRM so your manager can see it on Team Today. If nothing fits, choose "Anything else" and say what you did.',
+        groups: [MEETINGS_GROUP, FIELD_GROUP, OTHER_GROUP],
+        defaultKind: 'OTHER',
+      };
+  }
+}
 
 const LABELS: Record<string, string> = {
   ASSOCIATE_CALL: 'Call with an associate (follow-up)',

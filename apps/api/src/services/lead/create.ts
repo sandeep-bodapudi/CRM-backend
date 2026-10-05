@@ -175,7 +175,10 @@ export async function createLead(
   // A CPM lead that came through an associate traces back to that external
   // agent -- capture the contact so its origin isn't just "some phone
   // number". Other sources need only the customer's name and phone.
-  const fromAssociate = isChannelPartner && dto.source === 'ASSOCIATE';
+  // Anyone who sends associate details (older app versions always did) has
+  // them kept, even under another source.
+  const fromAssociate =
+    isChannelPartner && (dto.source === 'ASSOCIATE' || !!dto.external_agent_name?.trim());
   if (fromAssociate) {
     if (!dto.external_agent_name || !dto.external_agent_phone || !dto.external_agent_associate_id) {
       throw new AppError(400, "Enter the associate's name, phone and associate ID.");

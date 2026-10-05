@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import {
   WORK_LOG_GROUPS,
+  workLogForRole,
   workLogKindLabel,
   workLogEntryLabel,
   isAssociateKind,
@@ -39,7 +40,9 @@ export const WorkLogPage: React.FC = () => {
   const { fetchWithAuth, activeRole } = useAuth();
   const queryClient = useQueryClient();
   const isCpm = activeRole === Roles.CHANNEL_PARTNER_MANAGER;
-  const [kind, setKind] = useState<string>(isCpm ? 'ASSOCIATE_CALL' : 'INSTAGRAM_POST');
+  const roleLog = workLogForRole(activeRole);
+  const [showAll, setShowAll] = useState(false);
+  const [kind, setKind] = useState<string>(roleLog.defaultKind);
   const [associateName, setAssociateName] = useState('');
   const [associateId, setAssociateId] = useState('');
   const [count, setCount] = useState(1);
@@ -136,8 +139,7 @@ export const WorkLogPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Work Log</h1>
           <p className="text-sm text-slate-500">
-            Log work done outside the CRM — associate calls and visits, posts, reels, campaigns,
-            meetings. Your manager sees it on Team Today.
+            {roleLog.intro} Your manager sees it on Team Today.
           </p>
         </div>
       </div>
@@ -154,18 +156,26 @@ export const WorkLogPage: React.FC = () => {
               onChange={(e) => setKind(e.target.value)}
               className="mt-1 w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl"
             >
-              {(isCpm ? WORK_LOG_GROUPS : [...WORK_LOG_GROUPS.slice(1), WORK_LOG_GROUPS[0]]).map(
-                (g) => (
-                  <optgroup key={g.label} label={g.label}>
-                    {g.kinds.map((k) => (
-                      <option key={k} value={k}>
-                        {workLogKindLabel(k)}
-                      </option>
-                    ))}
-                  </optgroup>
-                ),
+              {(showAll ? WORK_LOG_GROUPS : roleLog.groups).map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.kinds.map((k) => (
+                    <option key={k} value={k}>
+                      {workLogKindLabel(k)}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+              {!showAll && !roleLog.groups.some((g) => g.kinds.includes(kind)) && (
+                <option value={kind}>{workLogKindLabel(kind)}</option>
               )}
             </select>
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="mt-1 text-[11px] font-bold text-navy-600 hover:text-navy-800"
+            >
+              {showAll ? 'Show only my role’s work types' : 'Show all work types'}
+            </button>
           </label>
           <label className="text-xs font-semibold text-slate-700">
             How many

@@ -57,7 +57,7 @@ export const PMDashboard: React.FC = () => {
             !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(v.status),
         ).length;
 
-        const pendingVisits = visits.filter((v: any) => v.status === 'PENDING');
+        const pendingVisits = visits.filter((v: any) => v.status === 'PENDING_ACCEPTANCE');
         visitsPendingCount = pendingVisits.length;
 
         pendingVisits.forEach((v: any) => {
@@ -109,7 +109,7 @@ export const PMDashboard: React.FC = () => {
       {/* Primary KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Assigned Demos"
+          label="Assigned Site Visits"
           value={isLoading ? '...' : metrics.assignedDemos}
           icon={CalendarCheck}
           link="/site-visits"

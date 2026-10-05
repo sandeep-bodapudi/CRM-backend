@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, AlertTriangle, Send } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 
@@ -9,7 +10,13 @@ interface EmergencyLogoutModalProps {
 
 export const EmergencyLogoutModal: React.FC<EmergencyLogoutModalProps> = ({ onClose }) => {
   const { fetchWithAuth } = useAuth();
+  const navigate = useNavigate();
   const [reason, setReason] = useState('');
+  // A day off asked for through this form is never recorded as leave.
+  const looksLikeLeave =
+    /\b(leave|holiday|day off|off day|vacation)\b|\b(tomorrow|next day)\b|\b\d{1,2}(st|nd|rd|th)\b/i.test(
+      reason,
+    );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -112,8 +119,11 @@ export const EmergencyLogoutModal: React.FC<EmergencyLogoutModalProps> = ({ onCl
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <p className="text-sm text-slate-600">
-                Are you leaving before 6:00 PM due to an emergency? Please provide a brief reason
-                below. This will unlock the Kiosk so you can log out immediately.
+                Are you leaving before 6:00 PM <b>today</b> due to an emergency? Please provide a
+                brief reason below. This will unlock the Kiosk so you can log out immediately.
+                <span className="block mt-1 text-xs text-slate-500">
+                  This is only for leaving early today. To take a day off, apply for leave instead.
+                </span>
               </p>
 
               {error && (
@@ -134,6 +144,23 @@ export const EmergencyLogoutModal: React.FC<EmergencyLogoutModalProps> = ({ onCl
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-500/20 focus:border-navy-500 transition-all resize-none h-24"
                 />
               </div>
+
+              {looksLikeLeave && (
+                <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-lg border border-amber-200">
+                  This sounds like a leave request. An early logout does <b>not</b> apply leave for
+                  any day.{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      navigate('/requests');
+                    }}
+                    className="font-bold underline"
+                  >
+                    Apply for leave instead
+                  </button>
+                </div>
+              )}
 
               <div className="pt-4 flex gap-3">
                 <button

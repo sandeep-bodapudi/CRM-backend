@@ -95,7 +95,7 @@ export const MarketingDirectorDashboard: React.FC = () => {
           icon={Calendar}
           link="/site-visits"
         />
-        <StatCard label="Top Lead Introducer" value={topSource} icon={Zap} link="/hr-hub" />
+        <StatCard label="Top Lead Introducer" value={topSource} icon={Zap} link="/leads" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

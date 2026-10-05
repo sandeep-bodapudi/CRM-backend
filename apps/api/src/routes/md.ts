@@ -192,15 +192,16 @@ router.get(
           select: { id: true, actor_id: true, new_value: true, created_at: true },
           orderBy: { created_at: 'asc' },
         }),
-        // Emergency early logout is self-approved with no limit; show it.
+        // Emergency early logouts asked for today: the first two a month are
+        // approved on the spot, later ones wait for the MD.
         p.attendanceProposal.findMany({
           where: {
             employee_id: { in: ids },
             type: 'EARLY_CHECKOUT',
-            status: 'APPROVED',
+            status: { in: ['APPROVED', 'PENDING'] },
             target_date: inDay,
           },
-          select: { employee_id: true, reason: true },
+          select: { employee_id: true, reason: true, status: true },
         }),
       ]);
       const countOf = (rows: any[], key: string, empId: number) =>
@@ -263,7 +264,22 @@ router.get(
         }
         const early = earlyExits.find((x) => x.employee_id === e.id);
         if (early) {
-          flags.push(`Left early – emergency request: ${(early.reason || '').slice(0, 80)}`);
+          const reason = (early.reason || '').trim();
+          const state = early.status === 'PENDING' ? 'waiting for MD approval' : 'approved';
+          // Said "emergency early logout" but is about taking a day off: the
+          // wrong form was used, so no leave request exists for that day.
+          const looksLikeLeave =
+            /\b(leave|holiday|day off|off day|vacation)\b|\b(tomorrow|next day)\b|\b\d{1,2}(st|nd|rd|th)\b/i.test(
+              reason,
+            );
+          flags.push(
+            `${att?.check_out_at ? 'Left early' : 'Asked to leave early'} (emergency logout, ${state}): ${reason.slice(0, 80)}`,
+          );
+          if (looksLikeLeave) {
+            flags.push(
+              'This reads like a leave request, but it was sent as an early logout — no leave was applied. Ask them to apply under Requests → Leave.',
+            );
+          }
         }
         if (kind === 'SITE' && site.visits_awaiting_acceptance > 0) {
           flags.push(

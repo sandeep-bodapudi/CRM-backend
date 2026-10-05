@@ -51,6 +51,18 @@ const STAGE_ICONS: Record<string, LucideIcon> = {
 
 const STAGE_ORDER = Object.keys(STAGE_LABELS);
 
+// Where each stage's tile opens: demos and site visits have their own pages,
+// booked stages the bookings page; the rest are lead stages (Leads page,
+// filtered to that stage).
+const STAGE_LINKS: Record<string, string> = {
+  DEMO_SCHEDULED: '/demos',
+  DEMO_COMPLETED: '/demos',
+  SITE_VISIT_SCHEDULED: '/site-visits',
+  SITE_VISIT_COMPLETED: '/site-visits',
+  BOOKING_INITIATED: '/bookings',
+  BOOKED: '/bookings',
+};
+
 // Polled rather than fetched once, so the counts on the MD/Admin dashboard
 // stay current as leads move through the pipeline without a manual refresh.
 const POLL_INTERVAL_MS = 20000;
@@ -97,7 +109,7 @@ export const LeadPipelineTabs: React.FC = () => {
             label={STAGE_LABELS[status]}
             value={isLoading ? '...' : countByStatus.get(status) || 0}
             icon={STAGE_ICONS[status]}
-            link={`/leads?status=${status}`}
+            link={STAGE_LINKS[status] || `/leads?status=${status}`}
           />
         ))}
       </div>
