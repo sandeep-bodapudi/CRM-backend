@@ -139,6 +139,7 @@ router.get(
         propertiesAdded,
         workLogRows,
         earlyExits,
+        leaveRequests,
       ] = await Promise.all([
         p.siteVisitBooking.groupBy({
           by: ['project_manager_id'],
@@ -203,6 +204,17 @@ router.get(
           },
           select: { employee_id: true, reason: true, status: true },
         }),
+        // Leave asked for today or later, still waiting or already approved.
+        p.attendanceProposal.findMany({
+          where: {
+            employee_id: { in: ids },
+            type: 'LEAVE',
+            status: { in: ['APPROVED', 'PENDING'] },
+            target_date: { gte: start },
+          },
+          select: { employee_id: true, target_date: true, status: true },
+          orderBy: { target_date: 'asc' },
+        }),
       ]);
       const countOf = (rows: any[], key: string, empId: number) =>
         rows.find((r) => r[key] === empId)?._count._all || 0;
@@ -262,22 +274,40 @@ router.get(
               : 'Present, but nothing recorded (CRM or work log)',
           );
         }
+        // Leave asked for today or later (one row per working day).
+        const leave = leaveRequests.filter((x) => x.employee_id === e.id);
+        const dayOf = (d: Date) =>
+          d.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            timeZone: 'Asia/Kolkata',
+          });
+        for (const status of ['PENDING', 'APPROVED'] as const) {
+          const days = leave.filter((x) => x.status === status).map((x) => dayOf(x.target_date));
+          if (days.length > 0) {
+            flags.push(
+              status === 'PENDING'
+                ? `Leave requested for ${days.join(', ')} – waiting for approval`
+                : `Leave approved for ${days.join(', ')}`,
+            );
+          }
+        }
         const early = earlyExits.find((x) => x.employee_id === e.id);
         if (early) {
           const reason = (early.reason || '').trim();
           const state = early.status === 'PENDING' ? 'waiting for MD approval' : 'approved';
-          // Said "emergency early logout" but is about taking a day off: the
-          // wrong form was used, so no leave request exists for that day.
+          flags.push(
+            `${att?.check_out_at ? 'Left early' : 'Asked to leave early'} (emergency logout, ${state}): ${reason.slice(0, 80)}`,
+          );
+          // The reason is about taking a day off: the early logout form was
+          // used for it. Only worth saying when no leave request exists.
           const looksLikeLeave =
             /\b(leave|holiday|day off|off day|vacation)\b|\b(tomorrow|next day)\b|\b\d{1,2}(st|nd|rd|th)\b/i.test(
               reason,
             );
-          flags.push(
-            `${att?.check_out_at ? 'Left early' : 'Asked to leave early'} (emergency logout, ${state}): ${reason.slice(0, 80)}`,
-          );
-          if (looksLikeLeave) {
+          if (looksLikeLeave && leave.length === 0) {
             flags.push(
-              'This reads like a leave request, but it was sent as an early logout — no leave was applied. Ask them to apply under Requests → Leave.',
+              'This reads like a leave request, but it was sent as an early logout — no leave request exists. Ask them to apply under Requests → Leave.',
             );
           }
         }
