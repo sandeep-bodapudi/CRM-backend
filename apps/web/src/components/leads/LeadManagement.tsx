@@ -27,6 +27,7 @@ import { getPropertyTypeLabel } from '../../constants/propertyTypes';
 import { Roles, Permissions } from '../../shared';
 import { QuickAddLeadModal } from './QuickAddLeadModal';
 import { MoveLeadBatchModal } from './MoveLeadBatchModal';
+import { TelecallerReport } from './TelecallerReport';
 import { UnclaimedLeadsBanner } from './UnclaimedLeadsBanner';
 import { LeadDetailModal } from './LeadDetailModal';
 import { DropLeadModal } from './DropLeadModal';
@@ -452,6 +453,8 @@ export const LeadManagement: React.FC = () => {
   };
 
   useEffect(() => {
+    // HR opens this page for the telecaller report only.
+    if (!user?.permissions?.includes(Permissions.LEADS_READ)) return;
     fetchLeads();
     if (user?.permissions?.includes(Permissions.LEADS_ASSIGN)) {
       fetchEmployees();
@@ -755,6 +758,19 @@ export const LeadManagement: React.FC = () => {
     },
   ];
 
+  const canSeeTelecallerReport = !!user?.permissions?.includes(Permissions.LEADS_TELECALLER_REPORT);
+  if (!user?.permissions?.includes(Permissions.LEADS_READ)) {
+    return (
+      <div className="space-y-6">
+        {canSeeTelecallerReport ? (
+          <TelecallerReport />
+        ) : (
+          <p className="text-sm text-slate-500">You don't have access to leads.</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {deepLinkError && (
@@ -856,6 +872,8 @@ export const LeadManagement: React.FC = () => {
           Unable to load leads. Please try again later.
         </div>
       )}
+
+      {canSeeTelecallerReport && <TelecallerReport />}
 
       {/* Digital Lead Operator Intake Monitor */}
       {canBulkUpload && monitorData && (

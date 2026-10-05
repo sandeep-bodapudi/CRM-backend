@@ -18,6 +18,12 @@ import prisma from '../lib/prisma';
 import { z } from 'zod';
 import { logCall, getCallQueueMeta, splitCalls } from '../services/lead/calls';
 import { listUploadBatches, moveUploadBatch } from '../services/lead/batches';
+import {
+  getTelecallerReport,
+  listTelecallersForReport,
+  REPORT_LISTS,
+  ReportList,
+} from '../services/lead/telecallerReport';
 import { getISTComponents } from '../utils/time';
 
 const router = Router();
@@ -100,6 +106,42 @@ router.get(
         splitCalls(req.user!.employeeId, start, end),
       ]);
       return res.status(200).json({ leads, today });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
+// GET /api/v1/leads/telecaller-report - telecallers with headline counts;
+// GET /api/v1/leads/telecaller-report/:employeeId - one telecaller's full
+// lead picture (MD, Admin, HR).
+router.get(
+  '/telecaller-report',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_TELECALLER_REPORT),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      return res.status(200).json({ telecallers: await listTelecallersForReport(req.user!) });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+router.get(
+  '/telecaller-report/:employeeId',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_TELECALLER_REPORT),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employeeId = parseInt(req.params.employeeId, 10);
+      if (isNaN(employeeId)) return res.status(400).json({ error: 'Invalid employee' });
+      const list = (REPORT_LISTS as readonly string[]).includes(String(req.query.list))
+        ? (req.query.list as ReportList)
+        : 'all';
+      const historyOffset = Math.max(0, parseInt(String(req.query.history_offset), 10) || 0);
+      return res
+        .status(200)
+        .json(await getTelecallerReport(req.user!, employeeId, { list, historyOffset }));
     } catch (error: any) {
       return handleServiceError(error, res);
     }

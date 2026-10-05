@@ -256,7 +256,8 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     label: 'Leads',
     icon: Users,
     path: '/leads-clients',
-    requiredPermission: Permissions.LEADS_READ,
+    // HR sees the page for the telecaller report only.
+    requiredPermission: `${Permissions.LEADS_READ}|${Permissions.LEADS_TELECALLER_REPORT}`,
   },
   {
     id: 'customers',

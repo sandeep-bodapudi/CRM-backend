@@ -72,6 +72,8 @@ export const Permissions = {
   LEADS_ASSIGN: 'leads.assign',
   LEADS_BULK_UPLOAD: 'leads.bulk_upload',
   LEADS_DISTRIBUTION_MONITOR: 'leads.distribution_monitor',
+  // Per-telecaller lead report on the Leads page (MD, Admin, HR).
+  LEADS_TELECALLER_REPORT: 'leads.telecaller_report',
   LEADS_WHATSAPP_PROPOSAL: 'leads.whatsapp_proposal',
 
   CUSTOMERS_CREATE: 'customers.create',
@@ -186,6 +188,7 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
   [Roles.ADMIN]: ALL_PERMISSIONS, // Admin is a second fully-privileged account alongside MD (2026-09-07 -- previously a curated list that excluded EMPLOYEES_VIEW_SENSITIVE and all LEADS_* permissions, which blocked real Admin usage; product decision was to match MD instead of narrowing the gaps one by one).
 
   [Roles.HR_MANAGER]: [
+    Permissions.LEADS_TELECALLER_REPORT,
     Permissions.PROJECTS_READ,
     Permissions.PROPERTIES_READ,
     Permissions.EMPLOYEES_CREATE,
