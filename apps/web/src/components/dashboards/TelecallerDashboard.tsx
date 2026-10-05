@@ -24,7 +24,7 @@ import { StatusPill, ListItem } from '../ui';
 import { QualificationFormModal, QualificationData } from '../leads/QualificationFormModal';
 import { LeadDetailModal } from '../leads/LeadDetailModal';
 import { getPropertyTypeLabel } from '../../constants/propertyTypes';
-import { LEAD_STATUS_LABELS } from '../../constants/leadStatus';
+import { LEAD_STATUS_LABELS, getLeadSourceLabel, getRelativeAge } from '../../constants/leadStatus';
 import { toUserFacingError } from '../../utils/userFacingError';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -50,6 +50,32 @@ const STATUS_COLOR: Record<string, string> = {
   DROPPED: 'bg-slate-100 text-slate-400',
 };
 
+// Per-lead call history from GET /leads/call-queue.
+interface CallMeta {
+  calls: number;
+  last_call_at: string | null;
+  last_outcome: string | null;
+  follow_up_at: string | null;
+}
+const OUTCOME_LABEL: Record<string, string> = {
+  CONNECTED_INTERESTED: 'Interested',
+  CONNECTED_NOT_INTERESTED: 'Not interested',
+  CALL_BACK: 'Asked to call back',
+  NO_ANSWER: 'No answer',
+  BUSY_OR_SWITCHED_OFF: 'Busy / switched off',
+  WRONG_NUMBER: 'Wrong number',
+};
+const RETRY_OUTCOMES = ['NO_ANSWER', 'BUSY_OR_SWITCHED_OFF'];
+
+const dayLabel = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'No date';
+const timeLabel = (iso: string) =>
+  new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+
+/** Leads handed over together: same source, given the same day. */
+const batchKey = (l: LeadListItem) =>
+  `${l.source || 'UNKNOWN'}|${l.assigned_at ? new Date(l.assigned_at).toDateString() : ''}`;
+
 export const TelecallerDashboard: React.FC = () => {
   const { user, fetchWithAuth } = useAuth();
   const navigate = useNavigate();
@@ -69,11 +95,15 @@ export const TelecallerDashboard: React.FC = () => {
   // the API returned. "Load More" reveals more of the already-fetched list.
   const LEADS_PAGE_SIZE = 50;
   const [visibleLeadCount, setVisibleLeadCount] = useState(LEADS_PAGE_SIZE);
+  // New calls (never called) and follow-ups (called before) are separate
+  // lists, so a fresh upload can't bury older leads among follow-ups.
+  const [leadTab, setLeadTab] = useState<'new' | 'followups' | 'all' | null>(null);
+  const [batchFilter, setBatchFilter] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['telecallerDashboardData'],
     queryFn: async () => {
-      const [leadsRes, visitsRes, tasksRes] = await Promise.all([
+      const [leadsRes, visitsRes, tasksRes, queueRes] = await Promise.all([
         // Explicit high limit: this is a personal, already-scoped list (see
         // GET /leads's own comment) that can legitimately run into the tens
         // of thousands after a large bulk import gets auto-distributed —
@@ -83,7 +113,16 @@ export const TelecallerDashboard: React.FC = () => {
         fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
         fetchWithAuth(`${API_BASE_URL}/site-visits`),
         fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`),
+        fetchWithAuth(`${API_BASE_URL}/leads/call-queue`),
       ]);
+
+      let callMeta: Record<number, CallMeta> = {};
+      let callsToday = { new_calls: 0, follow_up_calls: 0 };
+      if (queueRes.ok) {
+        const q = await queueRes.json();
+        callMeta = q.leads || {};
+        callsToday = q.today || callsToday;
+      }
 
       let assignedLeads = [];
       let tomorrowVisits: ListItem[] = [];
@@ -173,6 +212,8 @@ export const TelecallerDashboard: React.FC = () => {
         callBacksDue,
         demosByLead,
         visitsByLead,
+        callMeta,
+        callsToday,
       };
     },
   });
@@ -183,6 +224,8 @@ export const TelecallerDashboard: React.FC = () => {
   const callBacksDue = data?.callBacksDue || 0;
   const demosByLead = data?.demosByLead || {};
   const visitsByLead = data?.visitsByLead || {};
+  const callMeta: Record<number, CallMeta> = data?.callMeta || {};
+  const callsToday = data?.callsToday || { new_calls: 0, follow_up_calls: 0 };
 
   const updateLeadStatusMutation = useMutation({
     mutationFn: async ({
@@ -236,22 +279,111 @@ export const TelecallerDashboard: React.FC = () => {
 
   // Compute KPIs from existing data
   const myAssignedLeadsRaw = assignedLeads.filter((l: any) => l.assigned_to?.id === user?.id);
-  const leadsAssigned = myAssignedLeadsRaw.length;
-  // Leads actually worked today (call logged / status changed today). This
-  // used to count every lead currently in CONTACTED status, however long ago.
-  const todayKey = new Date().toDateString();
-  const contactedToday = myAssignedLeadsRaw.filter(
-    (l: any) => l.last_contacted_at && new Date(l.last_contacted_at).toDateString() === todayKey,
-  ).length;
-  const uncontactedLeads = myAssignedLeadsRaw.filter(
-    (l: any) => l.status === 'NEW' || l.status === 'ASSIGNED',
-  ).length;
 
   const activeStatuses = ['NEW', 'ASSIGNED', 'CONTACTED', 'QUALIFIED', 'SITE_VISIT_SCHEDULED'];
-  const myAssignedLeads = myAssignedLeadsRaw.filter(
+  const myAssignedLeads: LeadListItem[] = myAssignedLeadsRaw.filter(
     (l: any): l is typeof l & { status: string } =>
       typeof l.status === 'string' && activeStatuses.includes(l.status),
   );
+
+  // New call = not called yet and still fresh. Everything else is a
+  // follow-up (including leads moved on before calls were logged).
+  const isNewCall = (l: LeadListItem) =>
+    !callMeta[l.id]?.calls && (l.status === 'NEW' || l.status === 'ASSIGNED');
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+  const isDue = (l: LeadListItem) => {
+    const f = callMeta[l.id]?.follow_up_at;
+    return !!f && new Date(f) <= endOfToday;
+  };
+  const isRetry = (l: LeadListItem) => {
+    const m = callMeta[l.id];
+    return (
+      !m?.follow_up_at &&
+      !!m?.last_outcome &&
+      RETRY_OUTCOMES.includes(m.last_outcome) &&
+      !!m.last_call_at &&
+      new Date(m.last_call_at).toDateString() !== new Date().toDateString()
+    );
+  };
+
+  // Oldest hand-over first, so leads given earlier are finished before the
+  // next upload's (the list used to show the newest leads on top).
+  const newCallLeads = myAssignedLeads
+    .filter(isNewCall)
+    .sort(
+      (a, b) =>
+        new Date(a.assigned_at || a.created_at || 0).getTime() -
+        new Date(b.assigned_at || b.created_at || 0).getTime(),
+    );
+  // Due call-backs (overdue first), then unanswered calls to retry, then the
+  // rest by how long since the last call; later call-backs at the end.
+  const followUpRank = (l: LeadListItem) =>
+    isDue(l) ? 0 : isRetry(l) ? 1 : callMeta[l.id]?.follow_up_at ? 3 : 2;
+  const followUpTime = (l: LeadListItem) => {
+    const m = callMeta[l.id];
+    return new Date((m?.follow_up_at || m?.last_call_at || 0) as any).getTime();
+  };
+  const followUpLeads = myAssignedLeads
+    .filter((l) => !isNewCall(l))
+    .sort((a, b) => followUpRank(a) - followUpRank(b) || followUpTime(a) - followUpTime(b));
+  const followUpsDue = followUpLeads.filter((l) => isDue(l) || isRetry(l)).length;
+
+  // Which hand-overs still have leads waiting for a first call.
+  const batches = Object.values(
+    myAssignedLeads.reduce<
+      Record<string, { key: string; label: string; when: number; total: number; left: number }>
+    >((acc, l) => {
+      const key = batchKey(l);
+      const b = (acc[key] ??= {
+        key,
+        label: `${getLeadSourceLabel(l.source)} · ${dayLabel(l.assigned_at)}`,
+        when: l.assigned_at ? new Date(l.assigned_at).getTime() : 0,
+        total: 0,
+        left: 0,
+      });
+      b.total += 1;
+      if (isNewCall(l)) b.left += 1;
+      return acc;
+    }, {}),
+  )
+    .filter((b) => b.left > 0)
+    .sort((a, b) => a.when - b.when);
+
+  const tab = leadTab ?? (followUpsDue > 0 ? 'followups' : 'new');
+  const shownLeads =
+    tab === 'new'
+      ? newCallLeads.filter((l) => !batchFilter || batchKey(l) === batchFilter)
+      : tab === 'followups'
+        ? followUpLeads
+        : myAssignedLeads;
+
+  const followUpHint = (l: LeadListItem): { text: string; tone: string } | null => {
+    const m = callMeta[l.id];
+    if (m?.follow_up_at) {
+      const f = new Date(m.follow_up_at);
+      if (f < new Date())
+        return {
+          text: `Call-back overdue (${dayLabel(m.follow_up_at)}, ${timeLabel(m.follow_up_at)})`,
+          tone: 'bg-red-50 border-red-200 text-red-700',
+        };
+      if (f <= endOfToday)
+        return {
+          text: `Call back today at ${timeLabel(m.follow_up_at)}`,
+          tone: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+        };
+      return {
+        text: `Call back on ${dayLabel(m.follow_up_at)}`,
+        tone: 'bg-slate-50 border-slate-200 text-slate-600',
+      };
+    }
+    if (isRetry(l) && m?.last_outcome)
+      return {
+        text: `Try again: ${(OUTCOME_LABEL[m.last_outcome] || '').toLowerCase()} last time`,
+        tone: 'bg-amber-50 border-amber-200 text-amber-700',
+      };
+    return null;
+  };
 
   return (
     <div className="space-y-0 -mx-4 -mt-4 sm:mx-0 sm:mt-0 sm:space-y-6">
@@ -275,22 +407,39 @@ export const TelecallerDashboard: React.FC = () => {
 
         {/* KPI Chips */}
         <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white/10 rounded-2xl p-3 text-center border border-white/10">
-            <p className="text-white font-black text-xl">{leadsAssigned}</p>
+          <button
+            onClick={() => {
+              setActiveSection('leads');
+              setLeadTab('new');
+            }}
+            className="bg-white/10 rounded-2xl p-3 text-center border border-white/10"
+          >
+            <p className="text-white font-black text-xl">{newCallLeads.length}</p>
             <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mt-0.5">
-              Assigned
+              New to call
             </p>
-          </div>
-          <div className="bg-white/10 rounded-2xl p-3 text-center border border-white/10">
-            <p className="text-amber-400 font-black text-xl">{uncontactedLeads}</p>
+          </button>
+          <button
+            onClick={() => {
+              setActiveSection('leads');
+              setLeadTab('followups');
+            }}
+            className="bg-white/10 rounded-2xl p-3 text-center border border-white/10"
+          >
+            <p className="text-amber-400 font-black text-xl">{followUpsDue}</p>
             <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mt-0.5">
-              Pending
+              Follow-ups due
             </p>
-          </div>
+          </button>
           <div className="bg-white/10 rounded-2xl p-3 text-center border border-white/10">
-            <p className="text-emerald-400 font-black text-xl">{contactedToday}</p>
+            <p className="text-emerald-400 font-black text-xl">
+              {callsToday.new_calls + callsToday.follow_up_calls}
+            </p>
             <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mt-0.5">
-              Worked today
+              Calls today
+            </p>
+            <p className="text-white/50 text-[10px] mt-0.5">
+              {callsToday.new_calls} new · {callsToday.follow_up_calls} follow-up
             </p>
           </div>
         </div>
@@ -412,10 +561,66 @@ export const TelecallerDashboard: React.FC = () => {
       {/* ─── LEAD LIST ─── */}
       {activeSection === 'leads' && (
         <div className="px-4 sm:px-0 space-y-3 pb-6">
+          <div className="flex gap-2 overflow-x-auto">
+            {(
+              [
+                ['new', `New calls (${newCallLeads.length})`],
+                [
+                  'followups',
+                  `Follow-ups (${followUpLeads.length}${followUpsDue ? `, ${followUpsDue} due` : ''})`,
+                ],
+                ['all', `All (${myAssignedLeads.length})`],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setLeadTab(key);
+                  setVisibleLeadCount(LEADS_PAGE_SIZE);
+                }}
+                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${tab === key ? 'bg-navy-900 text-white border-navy-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {tab === 'new' && batches.length > 1 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
+              <p className="text-[11px] font-bold text-slate-500 mb-2">
+                Your lead batches, oldest first. Tap one to see only those leads.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setBatchFilter(null)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${!batchFilter ? 'bg-navy-900 text-white border-navy-900' : 'bg-white text-slate-600 border-slate-200'}`}
+                >
+                  All batches
+                </button>
+                {batches.map((b) => (
+                  <button
+                    key={b.key}
+                    onClick={() => {
+                      setBatchFilter(batchFilter === b.key ? null : b.key);
+                      setVisibleLeadCount(LEADS_PAGE_SIZE);
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${batchFilter === b.key ? 'bg-navy-900 text-white border-navy-900' : 'bg-white text-slate-600 border-slate-200'}`}
+                  >
+                    {b.label}: {b.left} of {b.total} left
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {isLoading ? (
             <div className="py-12 text-center text-sm text-slate-400 flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-2 border-navy-500 border-t-transparent rounded-full animate-spin" />
               Loading your leads...
+            </div>
+          ) : myAssignedLeads.length > 0 && shownLeads.length === 0 ? (
+            <div className="py-10 text-center bg-slate-50 rounded-2xl border border-slate-100">
+              <p className="font-bold text-slate-500 text-sm">
+                {tab === 'new' ? 'Every lead has been called at least once' : 'No follow-ups'}
+              </p>
             </div>
           ) : myAssignedLeads.length === 0 ? (
             <div className="py-12 text-center bg-slate-50 rounded-2xl border border-slate-100">
@@ -428,7 +633,7 @@ export const TelecallerDashboard: React.FC = () => {
               </p>
             </div>
           ) : (
-            myAssignedLeads.slice(0, visibleLeadCount).map((lead: LeadListItem) => (
+            shownLeads.slice(0, visibleLeadCount).map((lead: LeadListItem) => (
               <div
                 key={lead.id}
                 onClick={() => setSelectedLead(lead)}
@@ -456,6 +661,36 @@ export const TelecallerDashboard: React.FC = () => {
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0 mt-1" />
+                </div>
+
+                {/* Where it came from, and its call history */}
+                <div className="px-4 pb-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                    {getLeadSourceLabel(lead.source)} · given {dayLabel(lead.assigned_at)}
+                  </span>
+                  {callMeta[lead.id]?.calls ? (
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                      {callMeta[lead.id].calls} call{callMeta[lead.id].calls > 1 ? 's' : ''}
+                      {callMeta[lead.id].last_outcome &&
+                        ` · last: ${OUTCOME_LABEL[callMeta[lead.id].last_outcome as string] || ''}`}
+                      {callMeta[lead.id].last_call_at &&
+                        ` · ${getRelativeAge(callMeta[lead.id].last_call_at)}`}
+                    </span>
+                  ) : (
+                    isNewCall(lead) && (
+                      <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                        Not called yet
+                      </span>
+                    )
+                  )}
+                  {(() => {
+                    const hint = followUpHint(lead);
+                    return hint ? (
+                      <span className={`px-2 py-0.5 rounded-full border ${hint.tone}`}>
+                        {hint.text}
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
 
                 {/* Demo/Visit Status Badges */}
@@ -599,12 +834,12 @@ export const TelecallerDashboard: React.FC = () => {
               </div>
             ))
           )}
-          {myAssignedLeads.length > visibleLeadCount && (
+          {shownLeads.length > visibleLeadCount && (
             <button
               onClick={() => setVisibleLeadCount((c) => c + LEADS_PAGE_SIZE)}
               className="w-full py-3 rounded-2xl border border-slate-200 bg-white text-navy-700 font-bold text-sm hover:bg-slate-50 transition-colors"
             >
-              Load More ({myAssignedLeads.length - visibleLeadCount} remaining)
+              Load More ({shownLeads.length - visibleLeadCount} remaining)
             </button>
           )}
         </div>

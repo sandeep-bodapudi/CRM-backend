@@ -16,7 +16,9 @@ import { syncLeadPreferredLocations } from '../services/lead/shared';
 import { OpportunityService } from '../services/opportunity.service';
 import prisma from '../lib/prisma';
 import { z } from 'zod';
-import { logCall } from '../services/lead/calls';
+import { logCall, getCallQueueMeta, splitCalls } from '../services/lead/calls';
+import { listUploadBatches, moveUploadBatch } from '../services/lead/batches';
+import { getISTComponents } from '../utils/time';
 
 const router = Router();
 
@@ -79,6 +81,75 @@ router.get(
 // entirely (no eligible telecaller existed at creation/recovery time) and so
 // were never assigned to anyone. A safety net, not the primary intake path —
 // most leads are auto-assigned instantly and never appear here.
+// GET /api/v1/leads/call-queue - the caller's own active leads' call history
+// (calls logged, last outcome, next call-back) and today's calls split into
+// new calls vs follow-ups. The telecaller dashboard uses it to separate
+// never-called leads from follow-ups.
+const CALL_QUEUE_STATUSES = ['NEW', 'ASSIGNED', 'CONTACTED', 'QUALIFIED', 'SITE_VISIT_SCHEDULED'];
+router.get(
+  '/call-queue',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_READ),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { dateString } = getISTComponents(new Date());
+      const start = new Date(`${dateString}T00:00:00+05:30`);
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      const [leads, today] = await Promise.all([
+        getCallQueueMeta(req.user!, CALL_QUEUE_STATUSES),
+        splitCalls(req.user!.employeeId, start, end),
+      ]);
+      return res.status(200).json({ leads, today });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
+// GET /api/v1/leads/upload-batches?employee_id= - not-yet-called leads with
+// an employee, grouped by upload (uploader, source, day).
+router.get(
+  '/upload-batches',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_ASSIGN),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employeeId = parseInt(String(req.query.employee_id), 10);
+      if (isNaN(employeeId)) return res.status(400).json({ error: 'employee_id required' });
+      return res.status(200).json({ batches: await listUploadBatches(req.user!, employeeId) });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
+// POST /api/v1/leads/move-batch - move one upload batch's uncalled leads
+// to another employee (e.g. an upload sent to the pool by mistake).
+const MoveBatchSchema = z.object({
+  from_employee_id: z.number().int().positive(),
+  to_employee_id: z.number().int().positive(),
+  created_by_id: z.number().int().positive().nullable(),
+  source: z.string().min(1).max(100),
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  reason: z.string().trim().min(3).max(300),
+});
+router.post(
+  '/move-batch',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_ASSIGN),
+  validateRequestBody(MoveBatchSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = await moveUploadBatch(req.user!, req.body);
+      return res
+        .status(200)
+        .json({ message: `Moved ${result.moved} leads to ${result.to}`, ...result });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
 router.get(
   '/unclaimed',
   authenticateToken,

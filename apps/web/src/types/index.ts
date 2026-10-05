@@ -371,6 +371,7 @@ export interface LeadListItem {
   assigned_to?: { id: number; employee_code: string; full_name: string; phone: string } | null;
   created_by?: { id: number; employee_code: string; full_name?: string } | null;
   created_at?: ISODateTime;
+  assigned_at?: ISODateTime | null;
   lead_score?: number;
   sla_breach_at?: ISODateTime | null;
   campaign?: string | null;

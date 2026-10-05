@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
+import { Roles } from '../../shared';
 import { FormSchemaField, SpeechRecognitionLike, SpeechRecognitionEventLike } from '../../types';
 
 interface DailyReportProps {
@@ -63,11 +64,20 @@ export const DailyReportModal: React.FC<DailyReportProps> = ({
   const [serverBelowTarget, setServerBelowTarget] = useState<string | null>(null);
   const [todayActivity, setTodayActivity] = useState<{
     calls: number;
+    new_calls?: number;
+    follow_up_calls?: number;
     leads_worked: number;
     work_log?: Record<string, number>;
   } | null>(null);
-  // Work-log count behind each Channel Partner Manager report field.
+  // Work-log count behind each Channel Partner Manager report field; for
+  // everyone else, the logged lead calls (split into first calls and
+  // follow-ups by the server).
   const recordedFor = (fieldId: string): number | null => {
+    if (roleName !== Roles.CHANNEL_PARTNER_MANAGER && todayActivity) {
+      if (fieldId === 'callsMade') return todayActivity.calls;
+      if (fieldId === 'newCalls') return todayActivity.new_calls ?? null;
+      if (fieldId === 'followupsDone') return todayActivity.follow_up_calls ?? null;
+    }
     const kinds = CPM_FIELD_SOURCES[fieldId];
     if (!kinds || !todayActivity?.work_log) return null;
     return kinds.reduce((n, k) => n + (todayActivity.work_log?.[k] || 0), 0);
@@ -256,7 +266,13 @@ export const DailyReportModal: React.FC<DailyReportProps> = ({
       // (The backend looks for these specifically in the legacy target_json logic, but we now use metrics_json)
       formSchema.forEach((field) => {
         if (field.type === 'COUNT') {
-          if (field.label.toLowerCase().includes('call'))
+          // Total calls only: "New calls" / "Follow-up calls" fields are
+          // parts of it and used to overwrite the total here.
+          if (
+            field.id === 'callsMade' ||
+            (!formSchema.some((f) => f.id === 'callsMade') &&
+              field.label.toLowerCase().includes('call'))
+          )
             metrics.callsMade = parseInt(String(formResponses[field.id]), 10) || 0;
           if (field.label.toLowerCase().includes('visit'))
             metrics.siteVisits = parseInt(String(formResponses[field.id]), 10) || 0;
@@ -337,7 +353,10 @@ export const DailyReportModal: React.FC<DailyReportProps> = ({
         {todayActivity && (
           <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-xs text-emerald-900">
             <span className="font-bold">Recorded in the CRM today:</span> {todayActivity.calls} call
-            {todayActivity.calls === 1 ? '' : 's'} logged · {todayActivity.leads_worked} lead
+            {todayActivity.calls === 1 ? '' : 's'} logged
+            {todayActivity.new_calls !== undefined &&
+              ` (${todayActivity.new_calls} new · ${todayActivity.follow_up_calls ?? 0} follow-up)`}{' '}
+            · {todayActivity.leads_worked} lead
             {todayActivity.leads_worked === 1 ? '' : 's'} worked. Your call target is checked
             against logged calls.
           </div>
@@ -415,7 +434,11 @@ export const DailyReportModal: React.FC<DailyReportProps> = ({
                       />
                       {recordedFor(field.id) !== null && (
                         <span className="text-xs text-slate-500">
-                          Recorded in Work Log today: <b>{recordedFor(field.id)}</b>{' '}
+                          Recorded{' '}
+                          {CPM_FIELD_SOURCES[field.id] && roleName === Roles.CHANNEL_PARTNER_MANAGER
+                            ? 'in Work Log'
+                            : 'in the CRM'}{' '}
+                          today: <b>{recordedFor(field.id)}</b>{' '}
                           <button
                             type="button"
                             onClick={() =>

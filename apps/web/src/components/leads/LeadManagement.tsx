@@ -5,6 +5,7 @@ import {
   Users,
   Plus,
   Upload,
+  ArrowRightLeft,
   TrendingUp,
   PhoneCall,
   ChevronRight,
@@ -25,6 +26,7 @@ import { getLeadStatusLabel, getLeadSourceLabel, getRelativeAge } from '../../co
 import { getPropertyTypeLabel } from '../../constants/propertyTypes';
 import { Roles, Permissions } from '../../shared';
 import { QuickAddLeadModal } from './QuickAddLeadModal';
+import { MoveLeadBatchModal } from './MoveLeadBatchModal';
 import { UnclaimedLeadsBanner } from './UnclaimedLeadsBanner';
 import { LeadDetailModal } from './LeadDetailModal';
 import { DropLeadModal } from './DropLeadModal';
@@ -255,6 +257,7 @@ export const LeadManagement: React.FC = () => {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showMoveBatch, setShowMoveBatch] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   // /leads/:id -- notification links (follow-up reminders, stale leads,
@@ -291,7 +294,7 @@ export const LeadManagement: React.FC = () => {
   const [bulkSkippedRows, setBulkSkippedRows] = useState<SkippedRow[]>([]);
   const [bulkHeaderMatched, setBulkHeaderMatched] = useState(true);
   const [isBulkUploading, setIsBulkUploading] = useState(false);
-  const [bulkOwnershipType, setBulkOwnershipType] = useState<'POOL' | 'DIRECT'>('POOL');
+  const [bulkOwnershipType, setBulkOwnershipType] = useState<'POOL' | 'DIRECT' | null>(null);
   const [bulkUploadProgress, setBulkUploadProgress] = useState<{
     done: number;
     total: number;
@@ -352,7 +355,7 @@ export const LeadManagement: React.FC = () => {
     setShowBulkModal(false);
     setParsedBulkLeads([]);
     setBulkSkippedRows([]);
-    setBulkOwnershipType('POOL');
+    setBulkOwnershipType(null);
   };
 
   // Backend caps each bulk-upload request at 1000 rows by design (keeps one
@@ -364,7 +367,7 @@ export const LeadManagement: React.FC = () => {
   const BULK_CHUNK_SIZE = 1000;
 
   const handleConfirmBulkUpload = async () => {
-    if (parsedBulkLeads.length === 0) return;
+    if (parsedBulkLeads.length === 0 || !bulkOwnershipType) return;
     setIsBulkUploading(true);
 
     const chunks: ParsedBulkLeadRow[][] = [];
@@ -811,6 +814,17 @@ export const LeadManagement: React.FC = () => {
             </button>
           )}
 
+          {user?.permissions?.includes(Permissions.LEADS_ASSIGN) && employees.length > 0 && (
+            <button
+              onClick={() => setShowMoveBatch(true)}
+              title="Move a whole upload's uncalled leads to another person"
+              className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition-all flex items-center gap-1.5 shadow"
+            >
+              <ArrowRightLeft className="w-4 h-4 text-navy-300" />
+              <span>Move leads</span>
+            </button>
+          )}
+
           {canCreateLead && (
             <button
               onClick={() => setShowAddModal(true)}
@@ -826,6 +840,14 @@ export const LeadManagement: React.FC = () => {
 
       {user?.permissions?.includes(Permissions.LEADS_UPDATE) && (
         <UnclaimedLeadsBanner onClaimed={fetchLeads} />
+      )}
+
+      {showMoveBatch && (
+        <MoveLeadBatchModal
+          employees={employees}
+          onClose={() => setShowMoveBatch(false)}
+          onMoved={fetchLeads}
+        />
       )}
 
       {hasError && (
@@ -1074,7 +1096,9 @@ export const LeadManagement: React.FC = () => {
             </p>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Assign these leads to</label>
+              <label className="text-sm font-semibold text-slate-700">
+                Assign these leads to <span className="text-red-500">*</span>
+              </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -1145,7 +1169,7 @@ export const LeadManagement: React.FC = () => {
               </button>
               <button
                 type="button"
-                disabled={isBulkUploading}
+                disabled={isBulkUploading || !bulkOwnershipType}
                 onClick={handleConfirmBulkUpload}
                 className="px-5 py-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm rounded-lg shadow transition-colors"
               >
@@ -1153,7 +1177,11 @@ export const LeadManagement: React.FC = () => {
                   ? bulkUploadProgress && bulkUploadProgress.total > 1
                     ? `Importing batch ${bulkUploadProgress.done}/${bulkUploadProgress.total}...`
                     : 'Importing...'
-                  : 'Confirm & Import'}
+                  : bulkOwnershipType === 'DIRECT'
+                    ? `Import ${parsedBulkLeads.length} & assign to me`
+                    : bulkOwnershipType === 'POOL'
+                      ? `Import ${parsedBulkLeads.length} & share among telecallers`
+                      : 'Choose who gets these leads'}
               </button>
             </div>
           </div>

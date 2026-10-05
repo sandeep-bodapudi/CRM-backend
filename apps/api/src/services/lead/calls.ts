@@ -102,3 +102,91 @@ export async function logCall(
 
   return { activity, task, lead: updatedLead };
 }
+
+const OUTCOME_BY_LABEL = new Map<string, CallOutcome>(
+  (Object.entries(CALL_OUTCOMES) as [CallOutcome, string][]).map(([k, v]) => [v, k]),
+);
+/** CALL_LOGGED notes start with "[<outcome label>]" (see logCall). */
+const outcomeOf = (notes: string | null): CallOutcome | null =>
+  OUTCOME_BY_LABEL.get(/^\[([^\]]+)\]/.exec(notes || '')?.[1] || '') || null;
+
+/**
+ * Splits an employee's calls in [start, end) into first calls on a lead
+ * ("new calls") and calls to a lead that had already been called before
+ * ("follow-ups"). Telecallers had to work this out by hand for their report.
+ */
+export async function splitCalls(employeeId: number, start: Date, end: Date) {
+  const calls = await p.leadActivity.findMany({
+    where: {
+      actor_id: employeeId,
+      activity_type: 'CALL_LOGGED',
+      created_at: { gte: start, lt: end },
+    },
+    select: { id: true, lead_id: true },
+  });
+  if (calls.length === 0) return { new_calls: 0, follow_up_calls: 0 };
+  const firsts = await p.leadActivity.groupBy({
+    by: ['lead_id'],
+    where: {
+      activity_type: 'CALL_LOGGED',
+      lead_id: { in: [...new Set(calls.map((c) => c.lead_id))] },
+    },
+    _min: { id: true },
+  });
+  const firstId = new Map(firsts.map((f) => [f.lead_id, f._min.id]));
+  const newCalls = calls.filter((c) => firstId.get(c.lead_id) === c.id).length;
+  return { new_calls: newCalls, follow_up_calls: calls.length - newCalls };
+}
+
+/**
+ * Per-lead call history for the telecaller's own active leads, so the
+ * dashboard can separate leads never called from follow-ups and show when
+ * each follow-up is due.
+ */
+export async function getCallQueueMeta(user: TokenPayload, activeStatuses: string[]) {
+  const mine = {
+    assigned_to_id: user.employeeId,
+    company_id: user.companyId,
+    status: { in: activeStatuses },
+  };
+  const [calls, callBacks] = await Promise.all([
+    p.leadActivity.findMany({
+      where: { activity_type: 'CALL_LOGGED', lead: mine },
+      select: { lead_id: true, notes: true, created_at: true },
+      orderBy: { id: 'asc' },
+    }),
+    p.task.findMany({
+      where: {
+        assignee_id: user.employeeId,
+        status: { notIn: ['COMPLETED', 'CANCELLED'] },
+        title: { startsWith: 'Call back ' },
+        lead: mine,
+      },
+      select: { lead_id: true, target_date: true },
+    }),
+  ]);
+
+  const meta: Record<
+    number,
+    {
+      calls: number;
+      last_call_at: Date | null;
+      last_outcome: CallOutcome | null;
+      follow_up_at: Date | null;
+    }
+  > = {};
+  const entry = (id: number) =>
+    (meta[id] ??= { calls: 0, last_call_at: null, last_outcome: null, follow_up_at: null });
+  for (const c of calls) {
+    const m = entry(c.lead_id);
+    m.calls += 1;
+    m.last_call_at = c.created_at;
+    m.last_outcome = outcomeOf(c.notes);
+  }
+  for (const t of callBacks) {
+    if (!t.lead_id || !t.target_date) continue;
+    const m = entry(t.lead_id);
+    if (!m.follow_up_at || t.target_date < m.follow_up_at) m.follow_up_at = t.target_date;
+  }
+  return meta;
+}

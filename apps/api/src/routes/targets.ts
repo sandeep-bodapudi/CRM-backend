@@ -51,8 +51,13 @@ const ROLE_PRESETS: Record<
 > = {
   [Roles.TELECALLER]: {
     target_type: 'COUNT',
-    targets_json: { callsMade: 50, leadsQualified: 5, followupsDone: 15 },
-    form_schema_json: generateBasicSchema(['callsMade', 'leadsQualified', 'followupsDone']),
+    targets_json: { callsMade: 50, newCalls: 35, followupsDone: 15, leadsQualified: 5 },
+    form_schema_json: generateBasicSchema([
+      'callsMade',
+      'newCalls',
+      'followupsDone',
+      'leadsQualified',
+    ]),
   },
   [Roles.PROJECT_MANAGER]: {
     target_type: 'COUNT',
