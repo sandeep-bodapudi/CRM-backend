@@ -59,3 +59,12 @@ scripts/adhoc/
 # Or ignore only the investigative/reference docs, keeping canonical architecture docs:
 # docs/investigation/
 # docs/reference/
+
+# One-off developer and database scripts (may hold credentials) - keep out of git
+.scratch/
+.ops/
+apps/api/baseline.js
+apps/api/drop_migrations.js
+apps/api/fetch_logs.js
+apps/api/fix_drop_table.js
+apps/api/fix_migrations.js
