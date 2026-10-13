@@ -17,7 +17,7 @@ router.get('/', async (req, res: Response) => {
       select: {
         announcement_image_url: true,
         announcement_active: true,
-      }
+      },
     });
 
     if (!company) {
@@ -26,7 +26,7 @@ router.get('/', async (req, res: Response) => {
 
     return res.json({
       imageUrl: company.announcement_image_url,
-      active: company.announcement_active
+      active: company.announcement_active,
     });
   } catch (error) {
     logger.error('Error fetching announcement:', error);
@@ -44,6 +44,21 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     }
 
     const { imageUrl, active } = req.body;
+    // The image is shown to everyone on the login/dashboard: it must be a web
+    // address (or empty to clear it), and the switch must be a real boolean.
+    if (
+      imageUrl !== undefined &&
+      imageUrl !== null &&
+      imageUrl !== '' &&
+      (typeof imageUrl !== 'string' ||
+        imageUrl.length > 2000 ||
+        !/^https?:\/\/\S+$/i.test(imageUrl))
+    ) {
+      return res.status(400).json({ error: 'Image link must start with http:// or https://' });
+    }
+    if (active !== undefined && typeof active !== 'boolean') {
+      return res.status(400).json({ error: 'active must be true or false' });
+    }
 
     const updatedCompany = await p.company.update({
       where: { id: req.user!.companyId },

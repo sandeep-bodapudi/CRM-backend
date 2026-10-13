@@ -9,6 +9,7 @@ import { requireAuthz } from '../middleware/authz';
 import { can } from '../authz/authorization';
 import { getDownstreamEmployeeIds } from '../utils/hierarchy';
 import { deriveTaskSlaStatus } from '../services/task-sla.status';
+import { TaskPolicy } from '../policies/task.policy';
 
 const router = Router();
 
@@ -244,9 +245,12 @@ router.get(
       // Locate the Task within the user's company scope
       const task = await p.task.findFirst({
         where: { id: taskId, assignee: { company_id: req.user!.companyId } },
+        include: { assignee: { select: { company_id: true } } },
       });
 
-      if (!task) {
+      // Someone else's task looks the same as a missing one. Allowed: the
+      // assignee, the creator, their managers, MD/Admin.
+      if (!task || !(await TaskPolicy.canMutate(req.user!, task))) {
         return res.status(404).json({ error: 'Task not found' });
       }
 
