@@ -141,6 +141,13 @@ const closeIfStaleOpenLog = async (
 // ALLOW_STATIC_ATTENDANCE_QR=true is set -- a temporary switch for the
 // changeover, not something to leave on.
 const allowStaticQr = () => process.env.ALLOW_STATIC_ATTENDANCE_QR === 'true';
+if (allowStaticQr()) {
+  // Printed / saved QR badges can be forwarded as a screenshot, so a colleague can
+  // check someone in. This switch was meant only as a temporary fallback.
+  logger.warn(
+    '[attendance] ALLOW_STATIC_ATTENDANCE_QR is ON: old printed QR badges are accepted at the kiosk. Turn it off.',
+  );
+}
 
 type QrCheck = { payload: any } | { error: string };
 
