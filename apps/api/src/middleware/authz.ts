@@ -33,7 +33,7 @@ const RESOURCE_POLICY_ACTIONS = new Set<string>([
  *   override for it. That deny used to be ignored: the role grant
  *   short-circuited before the token was ever consulted.
  */
-async function hasEffectivePermission(
+export async function hasEffectivePermission(
   user: NonNullable<AuthenticatedRequest['user']>,
   action: string,
 ): Promise<boolean> {
