@@ -7,15 +7,54 @@ import { Roles, Permissions } from '../shared';
 import { calculatePerformanceScore } from '../services/performance-metric';
 import { getISTComponents, getISTMonthRange, calculateAttendancePoints } from '../utils/time';
 import { AttendanceStatusType } from '../shared';
+import { isManagerOf } from '../utils/hierarchy';
 
 const router = Router();
 const p = prisma;
+
+// Roles that may look at any employee's performance numbers in their company.
+const METRICS_VIEWER_ROLES: string[] = [
+  Roles.MD,
+  Roles.ADMIN,
+  Roles.HR_MANAGER,
+  Roles.MARKETING_DIRECTOR,
+];
+
+/**
+ * Who may read another employee's metrics: the person themselves, a manager
+ * above them, or a management role -- and only inside their own company.
+ * The two per-person metric endpoints used to take any employee id from any
+ * logged-in user ("In production, add authorization" was still a comment).
+ */
+async function canViewEmployeeMetrics(
+  user: NonNullable<AuthenticatedRequest['user']>,
+  targetId: number,
+): Promise<boolean> {
+  if (targetId === user.employeeId) return true;
+  const target = await p.employee.findUnique({
+    where: { id: targetId },
+    select: { company_id: true },
+  });
+  if (!target) return false;
+  if (user.roles.includes(Roles.ADMIN)) return true;
+  if (target.company_id !== user.companyId) return false;
+  if (user.roles.some((r) => METRICS_VIEWER_ROLES.includes(r))) return true;
+  return isManagerOf(user.employeeId, targetId);
+}
 
 router.post(
   '/reset-score-history',
   authenticateToken,
   requireRole([Roles.ADMIN]),
   async (req: AuthenticatedRequest, res: Response) => {
+    // Destructive test helper: deletes EVERY audit event, daily report,
+    // attendance log, task and score snapshot in the whole system (no company
+    // filter, no confirmation). Off unless this environment variable is set
+    // deliberately, and never needed on production.
+    if (process.env.ALLOW_SCORE_RESET !== 'true') {
+      logger.error(`Blocked score reset attempt by employee ${req.user!.employeeId}`);
+      return res.status(403).json({ error: 'Score reset is disabled on this server.' });
+    }
     try {
       await p.auditEvent.deleteMany({});
       await p.dailyReport.deleteMany({});
@@ -717,7 +756,14 @@ router.get(
 
       const tId = telecallerId ? parseInt(telecallerId as string, 10) : undefined;
 
-      // In production, add authorization to verify they are allowed to check this user
+      if (
+        tId !== undefined &&
+        (Number.isNaN(tId) || !(await canViewEmployeeMetrics(req.user!, tId)))
+      ) {
+        return res
+          .status(403)
+          .json({ error: 'You can only view your own or your team’s metrics.' });
+      }
 
       const { PerformanceTrackingService } =
         await import('../services/performanceTracking.service');
@@ -744,7 +790,12 @@ router.get('/pm-metrics', authenticateToken, async (req: AuthenticatedRequest, r
 
     const pId = pmId ? parseInt(pmId as string, 10) : undefined;
 
-    // In production, add authorization checks
+    if (
+      pId !== undefined &&
+      (Number.isNaN(pId) || !(await canViewEmployeeMetrics(req.user!, pId)))
+    ) {
+      return res.status(403).json({ error: 'You can only view your own or your team’s metrics.' });
+    }
 
     const { PerformanceTrackingService } = await import('../services/performanceTracking.service');
     const metrics = await PerformanceTrackingService.getPmMetrics(req.user!, start, end, pId);

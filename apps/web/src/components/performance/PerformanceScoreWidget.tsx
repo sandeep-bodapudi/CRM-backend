@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PerformanceScoreResponse } from '../../types';
-import {
-  Award,
-  TrendingUp,
-  ShieldAlert,
-  CheckCircle,
-  Clock,
-  Sparkles,
-  RefreshCw,
-} from 'lucide-react';
+import { Award, TrendingUp, ShieldAlert, CheckCircle, Clock, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 
@@ -34,19 +26,6 @@ export const PerformanceScoreWidget: React.FC = () => {
     const interval = setInterval(fetchScore, 10000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleResetTestHistory = async () => {
-    try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/performance/reset-score-history`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        fetchScore();
-      }
-    } catch (e) {
-      console.error('Failed to reset history');
-    }
-  };
 
   if (isLoading && !scoreData) {
     return (
@@ -126,13 +105,6 @@ export const PerformanceScoreWidget: React.FC = () => {
           >
             {statusZone.label}
           </span>
-          <button
-            onClick={handleResetTestHistory}
-            className="p-1 text-slate-400 hover:text-navy-700 hover:bg-slate-100 rounded-lg transition-colors"
-            title="Reset Legacy Test Events (Start Clean at 50.0)"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
 
