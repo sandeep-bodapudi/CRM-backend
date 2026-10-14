@@ -23,6 +23,7 @@ import {
   Briefcase,
   EyeOff,
   MessageCircle,
+  Copy,
 } from 'lucide-react';
 import { PasswordInput } from '../ui/PasswordInput';
 import { useAuth } from '../../context/AuthContext';
@@ -841,7 +842,34 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
               <span className="font-bold text-navy-700">{createdEmployeeCode}</span>.
             </p>
 
-            <div className="pt-6 w-full max-w-sm flex flex-col gap-4">
+            {/* Previously this screen never showed the temporary password in
+                plain text at all -- it only existed inside the WhatsApp share
+                link below, so anyone who closed this screen without sending
+                that message had lost it for good (the server never returns
+                it again; a fresh reset is the only recovery). */}
+            <div className="w-full max-w-sm p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wide mb-2">
+                Temporary Password — shown only this once
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-lg text-sm font-mono font-bold text-slate-800 select-all break-all">
+                  {initialPassword}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(initialPassword);
+                    showToast('Password copied', 'success');
+                  }}
+                  title="Copy password"
+                  className="shrink-0 p-2.5 bg-white border border-amber-300 rounded-lg text-amber-700 hover:bg-amber-100"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-2 w-full max-w-sm flex flex-col gap-4">
               <a
                 href={whatsappUrl}
                 target="_blank"
