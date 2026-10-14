@@ -35,6 +35,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
 import { Roles } from '../../shared';
 import { API_BASE_URL } from '../../config';
 import { ReportingSuggestionsCard } from './ReportingSuggestionsCard';
@@ -104,6 +106,7 @@ interface ManagerOption {
 
 export const EmployeeManagement: React.FC = () => {
   const { fetchWithAuth, user } = useAuth();
+  const { showError } = useToast();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
@@ -352,9 +355,17 @@ export const EmployeeManagement: React.FC = () => {
           `Password for ${resetPwdEmp.fullName} reset. Temporary password: ${data.temporaryPassword} — share this with them directly, it won't be shown again.`,
         );
         setResetPwdEmp(null);
+      } else {
+        // Used to fall through here silently -- a failed reset (missing
+        // permission, cross-company target, server error) looked identical
+        // to a successful one that simply produced no banner, with nothing
+        // telling the admin it hadn't worked.
+        await handleApiError(res, showError, data);
       }
     } catch (e) {
-      alert('Failed to reset password');
+      showError(
+        toUserFacingError({ message: e instanceof Error ? e.message : String(e), body: e }),
+      );
     } finally {
       setIsSubmitting(false);
     }
