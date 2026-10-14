@@ -106,6 +106,7 @@ export const EmployeeManagement: React.FC = () => {
   const { fetchWithAuth, user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
   const [managers, setManagers] = useState<ManagerOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -186,7 +187,7 @@ export const EmployeeManagement: React.FC = () => {
   const fetchEmployeesAndMetadata = async () => {
     setIsLoading(true);
     try {
-      const [empRes, branchRes, mgrRes] = await Promise.all([
+      const [empRes, branchRes, mgrRes, companyRes] = await Promise.all([
         // Explicit high limit — the backend defaults to 20, which silently
         // hid every employee past the 20th (not searchable, not filterable,
         // not editable — this page has no pagination UI at all) for any
@@ -195,6 +196,7 @@ export const EmployeeManagement: React.FC = () => {
         fetchWithAuth(`${API_BASE_URL}/employees?limit=1000`),
         fetchWithAuth(`${API_BASE_URL}/employees/branches`),
         fetchWithAuth(`${API_BASE_URL}/employees/managers`),
+        fetchWithAuth(`${API_BASE_URL}/employees/companies`),
       ]);
 
       if (empRes.ok) {
@@ -214,6 +216,10 @@ export const EmployeeManagement: React.FC = () => {
         if (bData.branches?.length > 0) {
           setAddBranchId(String(bData.branches[0].id));
         }
+      }
+      if (companyRes.ok) {
+        const cData = await companyRes.json();
+        setCompanies(cData.companies || []);
       }
       if (mgrRes.ok) {
         const mData = await mgrRes.json();
@@ -714,6 +720,7 @@ export const EmployeeManagement: React.FC = () => {
 
       {showAddModal && (
         <AddEmployeeWizard
+          companies={companies}
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
             setShowAddModal(false);
@@ -1325,6 +1332,7 @@ export const EmployeeManagement: React.FC = () => {
 
       {showEditModal && dossierEmp && (
         <EditEmployeeModal
+          companies={companies}
           employee={dossierEmp}
           onClose={() => setShowEditModal(false)}
           onSuccess={() => {

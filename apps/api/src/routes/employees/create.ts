@@ -9,6 +9,7 @@ import { Roles, DepartmentCodes, Permissions, EmployeeCreateSchema } from '../..
 import { encryptData } from '../../utils/crypto';
 import { validateRequestBody } from '../../middleware/validate';
 import { generateTemporaryPassword } from '../../utils/tempPassword';
+import { filterToExistingCompanyIds } from '../../services/employeeCompanyAccess.service';
 import {
   findEmployeeContactConflict,
   employeeContactConflictMessage,
@@ -153,6 +154,14 @@ router.post(
         return res.status(400).json({ error: 'Invalid role specified' });
       }
 
+      const { valid: validAccessibleCompanyIds, dropped: droppedCompanyIds } =
+        await filterToExistingCompanyIds(prisma, accessible_company_ids);
+      if (droppedCompanyIds.length > 0) {
+        logger.warn(
+          `[employees/create] Ignored accessible_company_ids not in the database: ${droppedCompanyIds.join(', ')}`,
+        );
+      }
+
       const effectivePassword = initial_password || generateTemporaryPassword();
       const passwordHash = await bcrypt.hash(effectivePassword, 12);
       const isExempt = [Roles.MD, Roles.HR_MANAGER, Roles.ADMIN, Roles.MARKETING_DIRECTOR].includes(
@@ -217,12 +226,8 @@ router.post(
           branches: {
             create: validAdditionalBranchIds.map((id) => ({ branch_id: id })),
           },
-          company_access: accessible_company_ids?.length
-            ? {
-                create: accessible_company_ids.map((id: string | number) => ({
-                  company_id: typeof id === 'string' ? parseInt(id, 10) : id,
-                })),
-              }
+          company_access: validAccessibleCompanyIds.length
+            ? { create: validAccessibleCompanyIds.map((id) => ({ company_id: id })) }
             : {
                 create: [{ company_id: targetCompanyId }], // default to their own company if nothing specified
               },

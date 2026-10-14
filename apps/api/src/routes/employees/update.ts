@@ -1,3 +1,4 @@
+import { logger } from '../../utils/logger';
 import { Router, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { authenticateToken, AuthenticatedRequest } from '../../middleware/auth';
@@ -8,6 +9,7 @@ import { notifyEmployee } from '../../utils/notifyEmployee';
 import { encryptData, decryptData } from '../../utils/crypto';
 import { validateRequestBody } from '../../middleware/validate';
 import { applyRoleChange, roleAssignmentError } from './roleChange';
+import { filterToExistingCompanyIds } from '../../services/employeeCompanyAccess.service';
 import {
   findEmployeeContactConflict,
   employeeContactConflictMessage,
@@ -157,13 +159,19 @@ router.patch(
         }
 
         if (body.accessible_company_ids !== undefined) {
+          const { valid, dropped } = await filterToExistingCompanyIds(
+            tx,
+            body.accessible_company_ids,
+          );
+          if (dropped.length > 0) {
+            logger.warn(
+              `[employees/update] Ignored accessible_company_ids not in the database: ${dropped.join(', ')}`,
+            );
+          }
           await tx.employeeCompanyAccess.deleteMany({ where: { employee_id: employeeId } });
-          if (body.accessible_company_ids.length > 0) {
+          if (valid.length > 0) {
             await tx.employeeCompanyAccess.createMany({
-              data: body.accessible_company_ids.map((id: string | number) => ({
-                employee_id: employeeId,
-                company_id: typeof id === 'string' ? parseInt(id, 10) : id,
-              })),
+              data: valid.map((id) => ({ employee_id: employeeId, company_id: id })),
             });
           }
         }

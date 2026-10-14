@@ -62,6 +62,11 @@ interface AddEmployeeWizardProps {
   onSuccess: () => void;
   branches: { id: number; name: string }[];
   managers: { id: number; label: string }[];
+  // Real companies, fetched from the server (GET /employees/companies) --
+  // was a hardcoded two-option list, so an environment missing one of them
+  // (e.g. a staging database without Sonthillu Constructions) let the form
+  // submit a company id the database would then reject.
+  companies: { id: number; name: string }[];
 }
 
 export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
@@ -69,6 +74,7 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
   onSuccess,
   branches,
   managers,
+  companies,
 }) => {
   const { fetchWithAuth } = useAuth();
   const { showToast, showError } = useToast();
@@ -357,8 +363,11 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
                   }}
                   className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500 min-h-[80px]"
                 >
-                  <option value="1">Radha Real Homes</option>
-                  <option value="2">Sonthillu Constructions</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
                 </select>
                 <p className="text-[10px] text-slate-500 mt-1">
                   Which companies' projects and properties this employee can see/manage. Hold Ctrl

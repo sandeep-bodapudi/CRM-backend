@@ -212,6 +212,27 @@ router.get('/branches', authenticateToken, async (req: AuthenticatedRequest, res
   }
 });
 
+// GET /api/v1/employees/companies - Companies that actually exist, for the
+// "Accessible Companies" picker on the Add/Edit Employee forms. That picker
+// used to be a hardcoded two-option list (Radha Real Homes, Sonthillu
+// Constructions); on any database missing one of them (e.g. a staging copy
+// seeded with only one company), picking the missing one let the browser
+// submit a company id that doesn't exist, which the server only discovered
+// when the database rejected the write -- see validateCompanyIds below for
+// the other half of this fix.
+router.get('/companies', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const companies = await prisma.company.findMany({
+      where: { deleted_at: null },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return res.status(200).json({ companies });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch companies' });
+  }
+});
+
 // GET /api/v1/employees/managers - Get list of reporting managers
 // GET /api/v1/employees/managers - Get list of reporting managers
 router.get('/managers', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {

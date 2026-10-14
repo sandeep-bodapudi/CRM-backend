@@ -52,11 +52,6 @@ export const ROLE_OPTIONS = Object.values(Roles).map((value) => ({
   label: ROLE_LABELS[value] || value,
 }));
 
-const COMPANY_OPTIONS = [
-  { id: '1', name: 'Radha Real Homes' },
-  { id: '2', name: 'Sonthillu Constructions' },
-];
-
 interface Employee {
   id: number;
   employeeCode: string;
@@ -103,6 +98,10 @@ interface EditEmployeeModalProps {
   onSuccess: () => void;
   branches: { id: number; name: string }[];
   managers: { id: number; label: string }[];
+  // Real companies, fetched from the server (GET /employees/companies) --
+  // was a hardcoded two-option list; see AddEmployeeWizardProps for why
+  // that caused "Failed to update employee" on a database missing one.
+  companies: { id: number; name: string }[];
 }
 
 export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
@@ -111,6 +110,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
   onSuccess,
   branches,
   managers,
+  companies,
 }) => {
   const { fetchWithAuth, user } = useAuth();
   const currentUserRoles = user?.roles || [];
@@ -417,8 +417,9 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                   {/* Checkboxes instead of a Ctrl-click multi-select (unusable
                       on a phone). Nothing ticked = home company only. */}
                   <div className="flex flex-wrap gap-3">
-                    {COMPANY_OPTIONS.map((c) => {
-                      const checked = accessibleCompanyIds.includes(c.id);
+                    {companies.map((c) => {
+                      const id = String(c.id);
+                      const checked = accessibleCompanyIds.includes(id);
                       return (
                         <label
                           key={c.id}
@@ -433,7 +434,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                             checked={checked}
                             onChange={() =>
                               setAccessibleCompanyIds((prev) =>
-                                checked ? prev.filter((x) => x !== c.id) : [...prev, c.id],
+                                checked ? prev.filter((x) => x !== id) : [...prev, id],
                               )
                             }
                           />
