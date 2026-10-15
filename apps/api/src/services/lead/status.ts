@@ -315,10 +315,16 @@ export async function updateLeadStatus(
         where: { outcome: 'INTERESTED', visit: { lead_id: leadId } },
         include: { property: true, project_unit: true },
       });
+      // D9: with no liked unit yet (e.g. a project visit where the customer
+      // hasn't picked one), the lead's own budget stands in as an estimate.
       entityContext.opportunities = [
         {
           expected_value:
-            interested?.property?.final_price ?? interested?.project_unit?.final_price ?? null,
+            (interested?.property?.final_price || null) ??
+            (interested?.project_unit?.final_price || null) ??
+            lead.budget_max ??
+            lead.budget_min ??
+            null,
         },
       ];
     }
@@ -508,16 +514,40 @@ export async function updateLeadStatus(
           include: { visit: true },
         });
         const interestedLeadId = interested?.visit?.lead_id;
-        if (interestedLeadId && interestedLeadId === leadId) {
-          await OpportunityService.createFromLeadTx(
-            tx,
-            lead,
-            user.employeeId || 1,
-            interested.property_id,
-            interested.project_unit_id,
-          );
-        } else {
-          await OpportunityService.createFromLeadTx(tx, lead, user.employeeId || 1);
+        // The project the customer was shown, so the Opportunity is linked to it
+        // even when no specific unit was chosen.
+        const lastVisit = await tx.siteVisitBooking.findFirst({
+          where: { lead_id: leadId, project_id: { not: null } },
+          orderBy: { id: 'desc' },
+          select: { project_id: true },
+        });
+        const estimate = lead.budget_max ?? lead.budget_min ?? null;
+        const opp = await OpportunityService.createFromLeadTx(
+          tx,
+          lead,
+          // The lead's own owner, not whoever triggered the move (often the PM
+          // completing the visit) -- the owner is who later sets the unit.
+          lead.assigned_to_id ?? user.employeeId ?? 1,
+          interestedLeadId === leadId ? interested?.property_id : null,
+          interestedLeadId === leadId ? interested?.project_unit_id : null,
+          {
+            expectedValue: estimate,
+            estimate: true,
+            projectId: lastVisit?.project_id ?? null,
+            budgetMin: lead.budget_min ?? null,
+            budgetMax: lead.budget_max ?? null,
+          },
+        );
+        // No unit was liked: say plainly that the value is a guess.
+        if (!opp.property_id && !opp.project_unit_id) {
+          await tx.leadActivity.create({
+            data: {
+              lead_id: leadId,
+              actor_id: user.employeeId || 1,
+              activity_type: 'NOTE_ADDED',
+              notes: `Deal value is an ESTIMATE from the lead's budget (${opp.expected_value ?? 'not set'}); no unit has been chosen yet. Pick the unit before moving to Booking initiated.`,
+            },
+          });
         }
       }
 

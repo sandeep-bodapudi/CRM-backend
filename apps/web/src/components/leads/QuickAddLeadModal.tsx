@@ -93,6 +93,7 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
   const [rating, setRating] = useState('');
   const [feedback, setFeedback] = useState('');
   const [negotiationNotes, setNegotiationNotes] = useState('');
+  const [expectedValue, setExpectedValue] = useState('');
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
   const [handlers, setHandlers] = useState<
     { id: number; name: string; code: string; roles: string[] }[]
@@ -140,6 +141,9 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
     }
     if (stage === 'NEGOTIATION' && !negotiationNotes.trim()) {
       return fail('Enter what is being negotiated');
+    }
+    if (stage === 'NEGOTIATION' && !(Number(expectedValue) > 0)) {
+      return fail('Enter the expected deal value in rupees');
     }
     return true;
   };
@@ -194,7 +198,10 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
                     ? { visit_rating: rating, visit_feedback: feedback.trim() }
                     : {}),
                   ...(stage === 'NEGOTIATION'
-                    ? { negotiation_notes: negotiationNotes.trim() }
+                    ? {
+                        negotiation_notes: negotiationNotes.trim(),
+                        expected_value: Number(expectedValue),
+                      }
                     : {}),
                 },
               }
@@ -529,6 +536,17 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
                     onChange={(e) => setNegotiationNotes(e.target.value)}
                     rows={3}
                     placeholder="Unit and price discussed, customer's offer, next step"
+                    className={inputCls}
+                  />
+                  <label className="text-xs font-bold text-slate-600 uppercase block pt-1">
+                    Expected deal value (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={expectedValue}
+                    onChange={(e) => setExpectedValue(e.target.value)}
+                    placeholder="e.g. 4500000"
                     className={inputCls}
                   />
                 </div>

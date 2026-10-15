@@ -24,6 +24,7 @@ import { API_BASE_URL } from '../../config';
 import { Permissions } from '../../shared';
 import { formatEmployeeLabel } from '../../utils/employeeLabel';
 import { buildWhatsAppUrl } from '../../utils/phone';
+import { BookingUnitPickerModal } from './BookingUnitPickerModal';
 import {
   LeadActivity,
   MatchItem,
@@ -111,6 +112,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   >('DETAILS');
   const [activeTab, setActiveTab] = useState('DETAILS');
   const [showQualifyModal, setShowQualifyModal] = useState(false);
+  const [showBookingUnitModal, setShowBookingUnitModal] = useState(false);
   const [showDropModal, setShowDropModal] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
 
@@ -807,6 +809,8 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                               setShowQualifyModal(true);
                             } else if (st === 'DROPPED') {
                               setShowDropModal(true);
+                            } else if (st === 'BOOKING_INITIATED') {
+                              setShowBookingUnitModal(true);
                             } else {
                               onUpdateStatus(lead.id, st);
                             }
@@ -1794,6 +1798,17 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {showBookingUnitModal && (
+        <BookingUnitPickerModal
+          lead={{ id: lead.id, customer_name: lead.customer_name }}
+          onClose={() => setShowBookingUnitModal(false)}
+          onConfirmed={async () => {
+            setShowBookingUnitModal(false);
+            await onUpdateStatus(lead.id, 'BOOKING_INITIATED');
+          }}
+        />
       )}
 
       {showQualifyModal && (

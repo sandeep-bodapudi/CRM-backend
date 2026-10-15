@@ -24,6 +24,14 @@ import { Roles, Permissions } from '../../shared';
 import { EmployeeListItem } from '../../types';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
 
+interface ProjectUnitOption {
+  id: number;
+  unit_code: string;
+  unit_number: string;
+  unit_type?: string;
+  final_price?: number;
+}
+
 interface SiteVisit {
   id: number;
   booking_code: string;
@@ -260,6 +268,11 @@ export const SiteVisitManagement: React.FC = () => {
     new Date(Date.now() + 86400000).toISOString().slice(0, 16),
   );
   const [feedbackNotes, setFeedbackNotes] = useState('');
+  // Project visits link no unit up front: the PM picks the ones the customer
+  // liked when completing it. Empty = "none yet" (the lead's budget is then
+  // used as an estimated deal value).
+  const [projectUnits, setProjectUnits] = useState<ProjectUnitOption[]>([]);
+  const [likedUnitIds, setLikedUnitIds] = useState<number[]>([]);
   const [rating, setRating] = useState('HOT_INTERESTED');
   const [proofPhotoUrl, setProofPhotoUrl] = useState('');
   const [propertyOutcome, setPropertyOutcome] = useState<'INTERESTED' | 'NOT_INTERESTED'>(
@@ -292,6 +305,30 @@ export const SiteVisitManagement: React.FC = () => {
     canAssign &&
     ['ACCEPTED', 'PENDING_CUSTOMER_RECONFIRMATION', 'CONFIRMED'].includes(v.status) &&
     (isMD || v.project_manager?.id === user?.id);
+
+  // A visit to a project with no specific property/unit attached.
+  const isProjectVisit = (v: SiteVisit) =>
+    !!v.project?.id &&
+    !v.property &&
+    !v.project_unit &&
+    !(v.site_visit_properties || []).some((sp) => sp.property_id || sp.project_unit_id);
+
+  useEffect(() => {
+    setLikedUnitIds([]);
+    setProjectUnits([]);
+    if (!showCompleteModal || !selectedVisit || !isProjectVisit(selectedVisit)) return;
+    let cancelled = false;
+    fetchWithAuth(
+      `${API_BASE_URL}/projects/${selectedVisit.project!.id}/units?limit=200&sales_status=AVAILABLE`,
+    )
+      .then(async (res) => (res.ok ? (await res.json()).units || [] : []))
+      .then((units) => !cancelled && setProjectUnits(units))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCompleteModal, selectedVisit?.id]);
 
   const fetchVisitsData = async () => {
     setIsLoading(true);
@@ -598,7 +635,14 @@ export const SiteVisitManagement: React.FC = () => {
         .filter((id): id is number => id != null),
     );
     if (selectedVisit.project_unit) linkedUnitIds.add(selectedVisit.project_unit.id);
+    const likedUnits =
+      isProjectVisit(selectedVisit) && rating !== 'NOT_INTERESTED' ? likedUnitIds : [];
     const outcomes = [
+      ...likedUnits.map((project_unit_id) => ({
+        project_unit_id,
+        outcome: 'INTERESTED' as const,
+        outcome_reason: undefined,
+      })),
       ...Array.from(linkedPropertyIds).map((property_id) => ({
         property_id,
         outcome: propertyOutcome,
@@ -1478,12 +1522,61 @@ export const SiteVisitManagement: React.FC = () => {
                 </p>
               </div>
 
-              {!selectedVisit.property && (
-                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
-                  No property is attached to this visit, so it can't automatically advance to
-                  Negotiation — that needs a specific property to base the offer on. Attach one to
-                  the lead first if the customer is interested.
-                </p>
+              {!selectedVisit.property &&
+                !selectedVisit.project_unit &&
+                !selectedVisit.project?.id &&
+                !(selectedVisit.site_visit_properties || []).length && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                    No project or property is attached to this visit, so its value can only be
+                    estimated from the lead's budget when it moves to Negotiation.
+                  </p>
+                )}
+
+              {isProjectVisit(selectedVisit) && rating !== 'NOT_INTERESTED' && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase">
+                    Units the customer liked
+                  </label>
+                  {projectUnits.length === 0 ? (
+                    <p className="text-[11px] text-slate-500">
+                      No available units to pick from. Leave this empty — the lead's budget will be
+                      used as an estimated deal value.
+                    </p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                      {projectUnits.map((u) => (
+                        <label
+                          key={u.id}
+                          className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={likedUnitIds.includes(u.id)}
+                            onChange={(e) =>
+                              setLikedUnitIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, u.id]
+                                  : prev.filter((id) => id !== u.id),
+                              )
+                            }
+                          />
+                          <span className="font-semibold">{u.unit_number}</span>
+                          <span className="text-slate-400">{u.unit_code}</span>
+                          {u.final_price ? (
+                            <span className="ml-auto text-slate-500">
+                              ₹{(u.final_price / 100000).toFixed(1)}L
+                            </span>
+                          ) : null}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-400">
+                    {likedUnitIds.length > 0
+                      ? `${likedUnitIds.length} unit(s) chosen — the deal value comes from the first one.`
+                      : 'None yet — the lead moves to Negotiation with its budget as an estimated value.'}
+                  </p>
+                </div>
               )}
 
               {selectedVisit.property && (

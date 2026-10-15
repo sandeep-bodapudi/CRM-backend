@@ -495,6 +495,7 @@ export interface LeadSalesOppItem {
   project_id?: number | null;
   project?: { id?: number; name?: string } | null;
   property_id?: number | null;
+  project_unit_id?: number | null;
   booking_id?: number | null;
 
   expected_value?: number | null;

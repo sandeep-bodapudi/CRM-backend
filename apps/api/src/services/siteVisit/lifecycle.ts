@@ -551,6 +551,28 @@ export async function completeVisit(
     }
   }
 
+  // Project-based visits link no unit up front: the PM records the units the
+  // customer liked afterwards. Those units must belong to this visit's project.
+  const extraUnitIds = [...providedUnits].filter((id) => !linkedUnits.includes(id as number));
+  if (extraUnitIds.length > 0) {
+    const projectId = (visit as any).project_id as number | null;
+    const found = projectId
+      ? await p.projectUnit.count({
+          where: {
+            id: { in: extraUnitIds as number[] },
+            project_id: projectId,
+            company_id: visit.lead.company_id,
+          },
+        })
+      : 0;
+    if (found !== extraUnitIds.length) {
+      throw {
+        status: 400,
+        message: "Every unit the customer liked must belong to this visit's project.",
+      };
+    }
+  }
+
   const transition = WorkflowEngine.canTransition({
     domain: WorkflowDomain.SITE_VISIT,
     currentState: visit.status,
@@ -566,8 +588,11 @@ export async function completeVisit(
   // Array.prototype.every() is vacuously true on an empty array — guard
   // against that so a visit with no linked properties (outcomes: []) isn't
   // misreported as "all not interested".
+  // A project visit with no unit picked and a "not interested" rating is a
+  // drop, not a Negotiation on an estimate.
   const allNotInterested =
-    outcomes.length > 0 && outcomes.every((o: any) => o.outcome === 'NOT_INTERESTED');
+    (outcomes.length > 0 && outcomes.every((o: any) => o.outcome === 'NOT_INTERESTED')) ||
+    (outcomes.length === 0 && rating === 'NOT_INTERESTED');
 
   const result = await p.$transaction(
     async (tx: import('@prisma/client').Prisma.TransactionClient) => {

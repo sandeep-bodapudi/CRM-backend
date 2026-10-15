@@ -4,6 +4,7 @@ import { TokenPayload } from '../../utils/jwt';
 import { AppError } from './errors';
 import { CALL_OUTCOMES } from './calls';
 import { generateNextBookingCode } from '../siteVisit/shared';
+import { OpportunityService } from '../opportunity.service';
 
 const p = prisma;
 
@@ -32,6 +33,7 @@ export interface StageDetails {
   visit_rating?: 'HOT_INTERESTED' | 'WARM' | 'COLD' | 'NOT_INTERESTED';
   visit_feedback?: string;
   negotiation_notes?: string;
+  expected_value?: number;
 }
 
 const STAGE_LABEL: Record<InitialStage, string> = {
@@ -132,6 +134,11 @@ export async function resolveInitialStage(
   if (stage === 'NEGOTIATION' && !details.negotiation_notes?.trim()) {
     throw new AppError(400, 'Enter what is being negotiated');
   }
+  // Negotiation needs a deal value: without an Opportunity carrying one, the
+  // lead could never be moved on to Booking initiated afterwards.
+  if (stage === 'NEGOTIATION' && !(Number(details.expected_value) > 0)) {
+    throw new AppError(400, 'Enter the expected deal value for the negotiation');
+  }
   return out;
 }
 
@@ -139,7 +146,19 @@ export async function resolveInitialStage(
 export async function applyInitialStage(
   tx: Prisma.TransactionClient,
   user: TokenPayload,
-  lead: { id: number; customer_name: string; lead_code: string },
+  lead: {
+    id: number;
+    customer_name: string;
+    lead_code: string;
+    company_id: number;
+    source?: string | null;
+    campaign?: string | null;
+    utm_source?: string | null;
+    utm_medium?: string | null;
+    utm_campaign?: string | null;
+    budget_min?: number | null;
+    budget_max?: number | null;
+  },
   r: ResolvedStage,
 ) {
   if (r.stage === 'ASSIGNED') return;
@@ -205,6 +224,13 @@ export async function applyInitialStage(
         activity_type: 'NOTE_ADDED',
         notes: `Negotiation: ${r.details.negotiation_notes!.trim()}`,
       },
+    });
+    // The deal value the CPM gave; the unit is chosen later, at Booking initiated.
+    await OpportunityService.createFromLeadTx(tx, lead, user.employeeId, null, null, {
+      expectedValue: Number(r.details.expected_value),
+      projectId: r.project?.id ?? null,
+      budgetMin: lead.budget_min ?? null,
+      budgetMax: lead.budget_max ?? null,
     });
   }
 

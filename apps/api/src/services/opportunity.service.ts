@@ -154,6 +154,15 @@ export class OpportunityService {
     actingEmployeeId: number,
     interestedPropertyId?: number | null,
     interestedProjectUnitId?: number | null,
+    opts?: {
+      /** Used when no property/unit price is available. */
+      expectedValue?: number | null;
+      /** True when expectedValue is a guess (e.g. the lead's budget), not a unit's price. */
+      estimate?: boolean;
+      projectId?: number | null;
+      budgetMin?: number | null;
+      budgetMax?: number | null;
+    },
   ) {
     // Avoid duplicates if an Opportunity was already created for this lead.
     const existing = await tx.opportunity.findFirst({ where: { lead_id: lead.id } });
@@ -177,8 +186,17 @@ export class OpportunityService {
         company_id: lead.company_id,
         lead_id: lead.id,
         owner_id: actingEmployeeId,
-        expected_value: property?.final_price ?? projectUnit?.final_price ?? null,
-        probability: 30,
+        // A price of 0 means "not priced yet", not "worth nothing".
+        expected_value:
+          (property?.final_price || null) ??
+          (projectUnit?.final_price || null) ??
+          opts?.expectedValue ??
+          null,
+        // An estimated value starts at the lowest confidence.
+        probability: opts?.estimate ? 10 : 30,
+        project_id: opts?.projectId ?? projectUnit?.project_id ?? null,
+        budget_min: opts?.budgetMin ?? null,
+        budget_max: opts?.budgetMax ?? null,
         expected_close_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         source: lead.source ?? null,
         campaign: lead.campaign ?? null,

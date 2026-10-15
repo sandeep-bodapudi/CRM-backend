@@ -127,6 +127,8 @@ export const LeadCreateSchema = z.object({
       visit_rating: z.enum(['HOT_INTERESTED', 'WARM', 'COLD', 'NOT_INTERESTED']).optional(),
       visit_feedback: z.string().max(2000).optional(),
       negotiation_notes: z.string().max(2000).optional(),
+      // Expected deal value (rupees) -- required at Negotiation so an Opportunity can be created.
+      expected_value: z.number().positive().optional(),
     })
     .optional(),
 });
