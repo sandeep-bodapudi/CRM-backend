@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../config';
 import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 
@@ -165,7 +165,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   // Access token strictly in memory
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [accessToken, setAccessTokenState] = useState<string | null>(null);
+  // The latest token, readable synchronously. A request that started before
+  // the token arrived keeps running with the fetchWithAuth it was created
+  // with, whose copy of the state is still null -- so its next call used to
+  // trigger another refresh (a wasted round trip that also counts against the
+  // refresh limit).
+  const accessTokenRef = useRef<string | null>(null);
+  const setAccessToken = (token: string | null) => {
+    accessTokenRef.current = token;
+    setAccessTokenState(token);
+  };
   const [authStatus, setAuthStatus] = useState<AuthStatus>('bootstrapping');
 
   const [firstLoginDone, setFirstLoginDoneState] = useState<boolean>(() => {
@@ -390,7 +400,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // refresh; worse, every page request raced the refresh. Wait for the one
     // shared refresh (single-flight, so this adds no extra refresh call) and
     // send once, with the token.
-    let token = accessToken;
+    let token = accessTokenRef.current;
     let refreshedUpFront = false;
     if (!token && localStorage.getItem('rrh_user')) {
       refreshedUpFront = true;
