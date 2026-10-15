@@ -8,6 +8,7 @@ import { calculatePerformanceScore } from '../services/performance-metric';
 import { getISTComponents, getISTMonthRange, calculateAttendancePoints } from '../utils/time';
 import { AttendanceStatusType } from '../shared';
 import { isManagerOf } from '../utils/hierarchy';
+import { overdueInPeriod } from '../services/taskOverdue';
 
 const router = Router();
 const p = prisma;
@@ -133,11 +134,7 @@ async function computeMonthScore(
       },
     }),
     p.task.count({
-      where: {
-        assignee_id: employeeId,
-        status: 'OVERDUE',
-        updated_at: { gte: startOfMonth, lte: endOfMonth },
-      },
+      where: { assignee_id: employeeId, ...overdueInPeriod(startOfMonth, endOfMonth) },
     }),
     p.auditEvent.count({
       where: {
@@ -284,11 +281,7 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
       orderBy: { completed_at: 'desc' },
     });
     const overdueTasksQuery = p.task.findMany({
-      where: {
-        assignee_id: employeeId,
-        status: 'OVERDUE',
-        updated_at: { gte: startOfMonth, lte: endOfMonth },
-      },
+      where: { assignee_id: employeeId, ...overdueInPeriod(startOfMonth, endOfMonth) },
       orderBy: { updated_at: 'desc' },
     });
     const dailyReportsQuery = p.dailyReport.findMany({
@@ -590,11 +583,7 @@ router.get('/team', authenticateToken, async (req: AuthenticatedRequest, res: Re
             },
           }),
           p.task.count({
-            where: {
-              assignee_id: emp.id,
-              status: 'OVERDUE',
-              updated_at: { gte: startOfMonth, lte: endOfMonth },
-            },
+            where: { assignee_id: emp.id, ...overdueInPeriod(startOfMonth, endOfMonth) },
           }),
           p.dailyReport.count({
             where: { employee_id: emp.id, submitted_at: { gte: startOfMonth, lte: endOfMonth } },

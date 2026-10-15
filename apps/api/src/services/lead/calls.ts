@@ -5,6 +5,7 @@ import { buildLeadScope } from '../../authz/dataScope';
 import { Permissions } from '../../shared';
 import { AppError } from './errors';
 import { updateLeadStatus } from './status';
+import { closeCallBackTasks } from './callBacks';
 
 const p = prisma;
 
@@ -59,33 +60,42 @@ export async function logCall(
   const note = input.notes?.trim();
   const activityNotes = `[${CALL_OUTCOMES[input.outcome]}]${note ? ` ${note}` : ''}`;
 
-  const { activity, task } = await p.$transaction(async (tx) => {
-    const activity = await tx.leadActivity.create({
-      data: {
-        lead_id: leadId,
-        actor_id: user.employeeId,
-        activity_type: 'CALL_LOGGED',
-        notes: activityNotes,
-      },
-    });
-    await tx.lead.update({ where: { id: leadId }, data: { last_contacted_at: new Date() } });
+  const { activity, task } = await p.$transaction(
+    async (tx) => {
+      const activity = await tx.leadActivity.create({
+        data: {
+          lead_id: leadId,
+          actor_id: user.employeeId,
+          activity_type: 'CALL_LOGGED',
+          notes: activityNotes,
+        },
+      });
+      await tx.lead.update({ where: { id: leadId }, data: { last_contacted_at: new Date() } });
 
-    const task = followUpAt
-      ? await tx.task.create({
-          data: {
-            title: `Call back ${lead.customer_name}`,
-            description: note || CALL_OUTCOMES[input.outcome],
-            assignee_id: user.employeeId,
-            created_by: user.employeeId,
-            status: 'PENDING',
-            priority: 'HIGH',
-            target_date: followUpAt,
-            lead_id: leadId,
-          },
-        })
-      : null;
-    return { activity, task };
-  });
+      // This call is the call-back the earlier task(s) asked for: close them, so
+      // they neither stay pending nor turn overdue (and cost points) for a call
+      // that was in fact made. A new date below then creates the next one.
+      await closeCallBackTasks(tx, leadId, { outcome: 'COMPLETED', assigneeId: user.employeeId });
+
+      const task = followUpAt
+        ? await tx.task.create({
+            data: {
+              title: `Call back ${lead.customer_name}`,
+              description: note || CALL_OUTCOMES[input.outcome],
+              assignee_id: user.employeeId,
+              created_by: user.employeeId,
+              status: 'PENDING',
+              priority: 'HIGH',
+              target_date: followUpAt,
+              lead_id: leadId,
+            },
+          })
+        : null;
+      return { activity, task };
+      // Several writes over a remote database: the 5 s default is too tight.
+    },
+    { maxWait: 10000, timeout: 30000 },
+  );
 
   // Someone actually answered: a freshly assigned lead is now genuinely
   // "contacted". Goes through the normal status path (workflow checks,

@@ -33,6 +33,7 @@ import { AttendanceStatusType } from '../shared';
 import { calculatePerformanceScore, roundPerformanceScore } from './performance-metric';
 import { IntegrationService } from './integration.service';
 import { OpportunityService } from './opportunity.service';
+import { OPEN_TASK_STATUSES } from './taskOverdue';
 import {
   getISTComponents,
   getISTMidnightInstant,
@@ -327,7 +328,15 @@ export class AnalyticsService {
           p.task.count({
             where: { assignee_id: emp.id, status: 'COMPLETED', created_by: { not: emp.id } },
           }),
-          p.task.count({ where: { assignee_id: emp.id, status: 'OVERDUE' } }),
+          p.task.count({
+            where: {
+              assignee_id: emp.id,
+              OR: [
+                { status: 'OVERDUE' },
+                { status: { in: OPEN_TASK_STATUSES }, target_date: { lt: new Date() } },
+              ],
+            },
+          }),
           p.dailyReport.count({ where: { employee_id: emp.id } }),
           p.auditEvent.count({ where: { actor_id: emp.id, action: 'DAILY_REPORT_BELOW_TARGET' } }),
           p.auditEvent.count({

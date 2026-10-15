@@ -674,8 +674,12 @@ export interface TaskItem {
   lead_id?: number | null;
   opportunity_id?: number | null;
   priority?: string;
-  lead?: { id: number; customer_name?: string } | null;
+  lead?: { id: number; customer_name?: string; phone?: string | null; status?: string } | null;
   assignee?: { id: number; full_name?: string | null; employee_code?: string } | null;
+  /** Who assigned the task (the API looks the creator up by id). */
+  creator?: { id: number; full_name?: string | null; employee_code?: string } | null;
+  /** True once the target time has passed and the task is not finished -- computed by the API. */
+  is_overdue?: boolean;
   created_at?: ISODateTime;
   updated_at?: ISODateTime;
 }

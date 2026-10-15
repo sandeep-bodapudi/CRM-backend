@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
 import { jobManager } from './index';
 import * as tasks from './tasks';
+import { sweepOverdueTasks } from '../services/taskOverdue';
 
 // 1. Lead follow-up reminders (Daily at 8:00 AM)
 jobManager.register({
@@ -103,6 +104,18 @@ jobManager.register({
   schedule: '0 9 * * *',
   handler: siteVisitReconfirmReminderJob,
   envDisableKey: 'DISABLE_JOB_VISIT_REMINDERS',
+});
+
+// 13. Overdue task sweep (Every 15 minutes) -- flips open tasks past their
+// target time to OVERDUE and alerts each company's MD with one summary. This
+// used to happen inside the task-list requests themselves.
+jobManager.register({
+  name: 'Overdue Task Sweep',
+  schedule: '*/15 * * * *',
+  handler: async () => {
+    await sweepOverdueTasks();
+  },
+  envDisableKey: 'DISABLE_JOB_TASK_OVERDUE',
 });
 
 export const initJobs = () => {

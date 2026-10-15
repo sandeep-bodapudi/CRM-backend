@@ -14,20 +14,44 @@ import {
   CheckSquare,
   Calendar,
   Building2,
+  PhoneCall,
+  MessageCircle,
+  Search,
+  UserCircle2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Roles } from '../../shared';
 import { API_BASE_URL } from '../../config';
 import { TaskItem, EmployeeListItem } from '../../types';
 import { formatEmployeeLabel } from '../../utils/employeeLabel';
-import { DataTable, ColumnDef } from '../ui/DataTable';
 import { StatusPill } from '../ui/StatusPill';
 import { StatCard } from '../ui/StatCard';
+import { useToast } from '../../context/ToastContext';
+import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
+import { buildWhatsAppUrl } from '../../utils/phone';
+import { CallOutcomeModal } from '../leads/CallOutcomeModal';
+
+const DONE_STATUSES = ['COMPLETED', 'CANCELLED'];
+const TEAM_PAGE_SIZE = 200;
+
+/** Calendar day (IST) of an instant, as YYYY-MM-DD. */
+const istDay = (d: Date) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(d);
 
 export const TaskManager: React.FC = () => {
   const { user, fetchWithAuth, activeRole } = useAuth();
+  const { showError } = useToast();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [teamTasks, setTeamTasks] = useState<TaskItem[]>([]);
+  const [teamTotal, setTeamTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  // Task whose lead is being called: the outcome form opens when they come
+  // back from the dialer, like on the telecaller dashboard.
+  const [callLead, setCallLead] = useState<{
+    id: number;
+    customer_name: string;
+    phone?: string | null;
+  } | null>(null);
   const [employees, setEmployees] = useState<EmployeeListItem[]>([]);
   const [activeTab, setActiveTab] = useState<'my_tasks' | 'team_tasks'>('my_tasks');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
@@ -79,10 +103,13 @@ export const TaskManager: React.FC = () => {
       }
 
       if (canViewTeam) {
-        const teamRes = await fetchWithAuth(`${API_BASE_URL}/tasks/all-team-tasks`);
+        const teamRes = await fetchWithAuth(
+          `${API_BASE_URL}/tasks/all-team-tasks?limit=${TEAM_PAGE_SIZE}&offset=0`,
+        );
         if (teamRes.ok) {
           const teamData = await teamRes.json();
           setTeamTasks(teamData.tasks || []);
+          setTeamTotal(teamData.total ?? (teamData.tasks || []).length);
         }
       }
     } catch (e) {
@@ -113,6 +140,22 @@ export const TaskManager: React.FC = () => {
     fetchEmployees();
   }, []);
 
+  const loadMoreTeam = async () => {
+    try {
+      const res = await fetchWithAuth(
+        `${API_BASE_URL}/tasks/all-team-tasks?limit=${TEAM_PAGE_SIZE}&offset=${teamTasks.length}`,
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return handleApiError(res, showError, data);
+      setTeamTasks((prev) => [...prev, ...(data.tasks || [])]);
+      setTeamTotal(data.total ?? teamTotal);
+    } catch (e) {
+      showError(
+        toUserFacingError({ message: e instanceof Error ? e.message : String(e), body: e }),
+      );
+    }
+  };
+
   const handleUpdateStatus = async (taskId: number, newStatus: string) => {
     try {
       const res = await fetchWithAuth(`${API_BASE_URL}/tasks/${taskId}/status`, {
@@ -121,22 +164,39 @@ export const TaskManager: React.FC = () => {
         body: JSON.stringify({ status: newStatus }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      if (res.ok) {
-        setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
-        setTeamTasks((prev) =>
-          prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
+      if (!res.ok) {
+        // A failed update used to do nothing at all, so the task looked
+        // unchanged with no hint why.
+        await handleApiError(res, showError, data);
+        return;
+      }
+
+      const apply = (list: TaskItem[]) =>
+        list.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                status: newStatus,
+                is_overdue:
+                  !DONE_STATUSES.includes(newStatus) &&
+                  new Date(t.target_date).getTime() < Date.now(),
+              }
+            : t,
         );
-        if (data.cheerUp) {
-          setCheerUpToast(
-            `🎉 Fantastic work! Task completed! +1.0 Performance Boost added to your score!`,
-          );
-          setTimeout(() => setCheerUpToast(null), 5000);
-        }
+      setTasks(apply);
+      setTeamTasks(apply);
+      if (data.cheerUp) {
+        setCheerUpToast(
+          `🎉 Fantastic work! Task completed! +1.0 Performance Boost added to your score!`,
+        );
+        setTimeout(() => setCheerUpToast(null), 5000);
       }
     } catch (e) {
-      alert('Failed to update task status');
+      showError(
+        toUserFacingError({ message: e instanceof Error ? e.message : String(e), body: e }),
+      );
     }
   };
 
@@ -165,11 +225,12 @@ export const TaskManager: React.FC = () => {
         setIsCreating(false);
         fetchTasks();
       } else {
-        const data = await res.json();
-        alert(`Failed to create task: ${data.error}`);
+        await handleApiError(res, showError, await res.json().catch(() => ({})));
       }
     } catch (e) {
-      alert('Failed to create task');
+      showError(
+        toUserFacingError({ message: e instanceof Error ? e.message : String(e), body: e }),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -177,7 +238,7 @@ export const TaskManager: React.FC = () => {
 
   // Helper: Live relative countdown timer badge
   const getCountdownBadge = (deadlineIso: string, status: string) => {
-    if (status === 'COMPLETED') return null;
+    if (DONE_STATUSES.includes(status)) return null;
 
     const now = new Date().getTime();
     const target = new Date(deadlineIso).getTime();
@@ -246,17 +307,27 @@ export const TaskManager: React.FC = () => {
     }
   };
 
+  const isDone = (t: TaskItem) => DONE_STATUSES.includes(t.status || '');
+  // Overdue is decided from the target time (the API's is_overdue), not from
+  // the stored status, which only changes when the overdue sweep runs.
+  const overdueNow = (t: TaskItem) =>
+    !isDone(t) && (t.is_overdue ?? new Date(t.target_date).getTime() < Date.now());
+  const effectiveStatus = (t: TaskItem) =>
+    isDone(t) ? t.status || 'COMPLETED' : overdueNow(t) ? 'OVERDUE' : t.status || 'PENDING';
+
   const currentTaskList = activeTab === 'my_tasks' ? tasks : teamTasks;
-  const filteredTasks = currentTaskList.filter(
-    (t) => filterStatus === 'ALL' || t.status === filterStatus,
-  );
+  const q = search.trim().toLowerCase();
+  const filteredTasks = currentTaskList.filter((t) => {
+    if (filterStatus !== 'ALL' && effectiveStatus(t) !== filterStatus) return false;
+    if (!q) return true;
+    return [t.title, t.description, t.lead?.customer_name, t.lead?.phone]
+      .filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(q));
+  });
 
   // Quick Metrics Calcs
-  const now = new Date().getTime();
-  const pendingCount = currentTaskList.filter((t) => t.status !== 'COMPLETED').length;
-  const overdueCount = currentTaskList.filter(
-    (t) => t.status !== 'COMPLETED' && new Date(t.target_date).getTime() < now,
-  ).length;
+  const pendingCount = currentTaskList.filter((t) => !isDone(t)).length;
+  const overdueCount = currentTaskList.filter(overdueNow).length;
 
   // Tasks completed today
   const startOfToday = new Date();
@@ -266,118 +337,179 @@ export const TaskManager: React.FC = () => {
     return new Date(t.completed_at) >= startOfToday;
   }).length;
 
-  const columns: ColumnDef<TaskItem>[] = [
+  const today = istDay(new Date());
+  const byTime = (a: TaskItem, b: TaskItem) =>
+    new Date(a.target_date).getTime() - new Date(b.target_date).getTime();
+  const groups: { key: string; label: string; tone: string; items: TaskItem[] }[] = [
     {
-      key: 'title',
-      header: 'Task Details',
-      sortable: true,
-      render: (t) => (
-        <div className="space-y-1 max-w-[300px]">
-          <div className="flex items-center gap-2">
-            <span
-              className={`font-bold text-sm ${t.status === 'COMPLETED' ? 'text-slate-400 line-through' : 'text-slate-800'} truncate`}
-            >
-              {t.title}
-            </span>
-            {t.status !== 'COMPLETED' && getPriorityBadge(t.priority || 'MEDIUM')}
-          </div>
-          {t.description && <p className="text-xs text-slate-500 line-clamp-1">{t.description}</p>}
-        </div>
-      ),
+      key: 'overdue',
+      label: 'Overdue',
+      tone: 'text-red-700',
+      items: filteredTasks.filter(overdueNow).sort(byTime),
     },
     {
-      key: 'lead',
-      header: 'CRM Link',
-      render: (t) =>
-        t.lead ? (
-          <div className="flex items-center gap-1.5 text-xs">
-            <Building2 className="w-3.5 h-3.5 text-gold-600" />
-            <span className="font-semibold text-navy-800">{t.lead.customer_name}</span>
-          </div>
-        ) : (
-          <span className="text-slate-400 text-xs italic">General Task</span>
+      key: 'today',
+      label: 'Due today',
+      tone: 'text-amber-700',
+      items: filteredTasks
+        .filter((t) => !isDone(t) && !overdueNow(t) && istDay(new Date(t.target_date)) === today)
+        .sort(byTime),
+    },
+    {
+      key: 'upcoming',
+      label: 'Upcoming',
+      tone: 'text-navy-700',
+      items: filteredTasks
+        .filter((t) => !isDone(t) && !overdueNow(t) && istDay(new Date(t.target_date)) > today)
+        .sort(byTime),
+    },
+    {
+      key: 'done',
+      label: 'Done',
+      tone: 'text-emerald-700',
+      items: filteredTasks
+        .filter(isDone)
+        .sort(
+          (a, b) =>
+            new Date(b.completed_at || b.target_date).getTime() -
+            new Date(a.completed_at || a.target_date).getTime(),
         ),
     },
-    {
-      key: 'deadline',
-      header: 'Timeline',
-      sortable: true,
-      render: (t) => (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono">
+  ];
+
+  const renderTask = (t: TaskItem) => {
+    const done = isDone(t);
+    const status = effectiveStatus(t);
+    const mine = t.assignee_id === user?.id;
+    const phone = t.lead?.phone || '';
+    const assignedBy =
+      t.created_by === t.assignee_id
+        ? 'Self-assigned'
+        : t.creator
+          ? `Assigned by ${formatEmployeeLabel(t.creator)}`
+          : null;
+    return (
+      <div
+        key={t.id}
+        className={`bg-white rounded-2xl border p-4 space-y-3 shadow-sm ${
+          status === 'OVERDUE' ? 'border-red-200' : 'border-slate-200'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`font-bold text-sm break-words ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}
+              >
+                {t.title}
+              </span>
+              {!done && getPriorityBadge(t.priority || 'MEDIUM')}
+            </div>
+            {t.description && (
+              <p className="text-xs text-slate-600 whitespace-pre-wrap break-words">
+                {t.description}
+              </p>
+            )}
+          </div>
+          <StatusPill
+            status={status}
+            type={status === 'COMPLETED' ? 'success' : status === 'OVERDUE' ? 'danger' : 'pending'}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-500">
+          <span className="flex items-center gap-1.5 font-mono">
             <Calendar className="w-3.5 h-3.5" />
             {new Date(t.target_date || '').toLocaleString([], {
               dateStyle: 'short',
               timeStyle: 'short',
               timeZone: 'Asia/Kolkata',
             })}
-          </div>
+          </span>
           {getCountdownBadge(t.target_date || '', t.status || 'PENDING')}
-        </div>
-      ),
-    },
-    {
-      key: 'assignee',
-      header: 'Assignee',
-      render: (t) =>
-        t.assignee ? (
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-navy-100 text-navy-800 flex items-center justify-center font-bold text-[10px] shrink-0">
-              {(t.assignee.employee_code || '').slice(-3)}
-            </div>
-            <span className="text-xs font-semibold text-slate-700">
-              {formatEmployeeLabel(t.assignee)}
+          {assignedBy && (
+            <span className="flex items-center gap-1">
+              <UserCircle2 className="w-3.5 h-3.5" />
+              {assignedBy}
             </span>
-          </div>
-        ) : (
-          <span className="text-xs text-slate-400">Unassigned</span>
-        ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      sortable: true,
-      render: (t) => (
-        <StatusPill
-          status={t.status || 'PENDING'}
-          type={
-            t.status === 'COMPLETED' ? 'success' : t.status === 'OVERDUE' ? 'danger' : 'pending'
-          }
-        />
-      ),
-    },
-    {
-      key: 'actions',
-      header: 'Action',
-      render: (t) => (
-        <div className="flex items-center justify-end gap-2">
-          {t.status === 'COMPLETED' ? (
-            <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4" /> Done
+          )}
+          {activeTab === 'team_tasks' && t.assignee && (
+            <span className="font-semibold text-slate-700">
+              For {formatEmployeeLabel(t.assignee)}
             </span>
-          ) : (
-            <>
-              <select
-                value={t.status}
-                onChange={(e) => handleUpdateStatus(t.id, e.target.value)}
-                className="p-1.5 text-[11px] font-bold bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-navy-500"
-              >
-                <option value="PENDING">PENDING</option>
-                <option value="IN_PROGRESS">IN PROGRESS</option>
-              </select>
-              <button
-                onClick={() => handleUpdateStatus(t.id, 'COMPLETED')}
-                className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors border border-emerald-200"
-                title="Mark as Completed"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-              </button>
-            </>
+          )}
+          {t.lead && (
+            <span className="flex items-center gap-1 font-semibold text-navy-800">
+              <Building2 className="w-3.5 h-3.5 text-gold-600" />
+              {t.lead.customer_name}
+              {phone ? <span className="font-mono font-normal text-slate-400">{phone}</span> : null}
+            </span>
           )}
         </div>
-      ),
-    },
-  ];
+
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {!done && mine && t.lead && phone && (
+            <>
+              <a
+                href={`tel:${phone}`}
+                onClick={() => {
+                  // Let the dialer open first; the outcome form is waiting when they return.
+                  const lead = {
+                    id: t.lead!.id,
+                    customer_name: t.lead!.customer_name || 'Customer',
+                    phone,
+                  };
+                  setTimeout(() => setCallLead(lead), 400);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg"
+              >
+                <PhoneCall className="w-3.5 h-3.5" /> Call
+              </a>
+              <a
+                href={buildWhatsAppUrl(phone)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-xs rounded-lg"
+              >
+                <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+              </a>
+            </>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {done ? (
+              <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4" />{' '}
+                {t.status === 'CANCELLED' ? 'Cancelled' : 'Done'}
+              </span>
+            ) : (
+              <>
+                <select
+                  value={t.status || 'PENDING'}
+                  onChange={(e) => handleUpdateStatus(t.id, e.target.value)}
+                  className="p-1.5 text-[11px] font-bold bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-navy-500"
+                >
+                  <option value="PENDING">PENDING</option>
+                  <option value="IN_PROGRESS">IN PROGRESS</option>
+                  {t.status === 'OVERDUE' && (
+                    <option value="OVERDUE" disabled>
+                      OVERDUE
+                    </option>
+                  )}
+                </select>
+                <button
+                  onClick={() => handleUpdateStatus(t.id, 'COMPLETED')}
+                  className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors border border-emerald-200"
+                  title="Mark as Completed"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -488,14 +620,59 @@ export const TaskManager: React.FC = () => {
         {isLoading ? (
           <div className="py-12 text-center text-slate-500">Loading tasks...</div>
         ) : (
-          <DataTable
-            columns={columns}
-            data={filteredTasks}
-            searchable={true}
-            emptyMessage="No tasks found matching your criteria."
-          />
+          <div className="space-y-6">
+            <div className="relative max-w-sm">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search task, customer or phone..."
+                className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-navy-500"
+              />
+            </div>
+
+            {filteredTasks.length === 0 && (
+              <div className="py-12 text-center text-sm text-slate-500 bg-slate-50 rounded-2xl border border-slate-100">
+                No tasks found matching your criteria.
+              </div>
+            )}
+
+            {groups
+              .filter((g) => g.items.length > 0)
+              .map((g) => (
+                <section key={g.key} className="space-y-3">
+                  <h3 className={`text-xs font-extrabold uppercase tracking-wider ${g.tone}`}>
+                    {g.label} <span className="text-slate-400">({g.items.length})</span>
+                  </h3>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    {g.items.map(renderTask)}
+                  </div>
+                </section>
+              ))}
+
+            {activeTab === 'team_tasks' && teamTasks.length < teamTotal && (
+              <button
+                onClick={loadMoreTeam}
+                className="w-full py-3 rounded-2xl border border-slate-200 bg-white text-navy-700 font-bold text-sm hover:bg-slate-50"
+              >
+                Load more ({teamTotal - teamTasks.length} remaining)
+              </button>
+            )}
+          </div>
         )}
       </div>
+
+      {callLead && (
+        <CallOutcomeModal
+          lead={callLead}
+          onClose={() => setCallLead(null)}
+          onLogged={() => {
+            setCallLead(null);
+            fetchTasks();
+          }}
+        />
+      )}
 
       {/* New Task Creation Modal */}
       {isCreating && (

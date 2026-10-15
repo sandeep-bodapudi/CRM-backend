@@ -10,68 +10,69 @@ import { can } from '../authz/authorization';
 import { getDownstreamEmployeeIds } from '../utils/hierarchy';
 import { deriveTaskSlaStatus } from '../services/task-sla.status';
 import { TaskPolicy } from '../policies/task.policy';
+import { isTaskOverdue } from '../services/taskOverdue';
 
 const router = Router();
 
 const p = prisma;
 
+// Lead fields a task card needs (name, number to call, current stage).
+const TASK_LEAD_SELECT = { id: true, customer_name: true, phone: true, status: true } as const;
+
+/**
+ * Adds what the Tasks page needs to every task: who assigned it ("Assigned
+ * by" -- Task stores only the creator's id) and whether it is overdue right
+ * now, computed from its target time rather than from a stored status that
+ * only changes when the overdue sweep runs.
+ */
+async function decorateTasks<T extends { created_by: number; status: string; target_date: Date }>(
+  tasks: T[],
+) {
+  const creatorIds = [...new Set(tasks.map((t) => t.created_by))];
+  const creators = creatorIds.length
+    ? await p.employee.findMany({
+        where: { id: { in: creatorIds } },
+        select: { id: true, full_name: true, employee_code: true },
+      })
+    : [];
+  const byId = new Map(creators.map((c) => [c.id, c]));
+  const now = new Date();
+  return tasks.map((t) => ({
+    ...t,
+    creator: byId.get(t.created_by) ?? null,
+    is_overdue: isTaskOverdue(t, now),
+  }));
+}
+
 // GET /api/v1/tasks/all-team-tasks - MD & Management View of All Employee Tasks
+// Paged (limit default 200, max 500; offset) with the real total. Read-only:
+// tasks are flipped to OVERDUE by the scheduled sweep, never by this request.
 router.get(
   '/all-team-tasks',
   authenticateToken,
   requireAuthz(Permissions.REPORTS_READ_TEAM),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const now = new Date();
       const companyId = req.user!.companyId;
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 200, 1), 500);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const where = { assignee: { company_id: companyId } };
 
-      // Auto-flip past target date tasks to OVERDUE & send alerts to MD & Dept Head
-      const newlyOverdue = await p.task.findMany({
-        where: {
-          status: { in: ['PENDING', 'IN_PROGRESS'] },
-          target_date: { lt: now },
-          assignee: { company_id: companyId },
-        },
-        include: {
-          assignee: {
-            select: { id: true, employee_code: true, full_name: true, company_id: true },
+      const [rows, total] = await Promise.all([
+        p.task.findMany({
+          where,
+          include: {
+            assignee: { select: { id: true, employee_code: true, full_name: true } },
+            lead: { select: TASK_LEAD_SELECT },
           },
-        },
-      });
+          orderBy: [{ target_date: 'asc' }, { id: 'asc' }],
+          take: limit,
+          skip: offset,
+        }),
+        p.task.count({ where }),
+      ]);
 
-      for (const t of newlyOverdue) {
-        await p.task.update({
-          where: { id: t.id },
-          data: { status: 'OVERDUE' },
-        });
-
-        // Send alert to MD / System Admin & Assignee (same company as the task)
-        const mdEmp = await p.employee.findFirst({
-          where: {
-            company_id: companyId,
-            roles: { some: { role: { name: Roles.MD } } },
-          },
-        });
-
-        if (mdEmp) {
-          await p.notification.create({
-            data: {
-              employee_id: mdEmp.id,
-              title: '🚨 OVERDUE TASK ALERT',
-              message: `Task "${t.title}" assigned to ${t.assignee?.employee_code || 'staff'} is past deadline! Please contact employee to clarify.`,
-              type: 'TASK_OVERDUE',
-            },
-          });
-        }
-      }
-
-      const allTasks = await p.task.findMany({
-        where: { assignee: { company_id: companyId } },
-        include: { assignee: { select: { id: true, employee_code: true, full_name: true } } },
-        orderBy: [{ target_date: 'asc' }],
-      });
-
-      return res.status(200).json({ tasks: allTasks });
+      return res.status(200).json({ tasks: await decorateTasks(rows), total });
     } catch (error) {
       logger.error('Fetch all team tasks error:', error);
       return res.status(500).json({ error: 'Failed to fetch team tasks' });
@@ -79,31 +80,32 @@ router.get(
   },
 );
 
-// GET /api/v1/tasks/my-tasks - List assigned tasks with auto-overdue check
+// GET /api/v1/tasks/my-tasks - the caller's tasks: every open one, plus the
+// 100 most recently finished. Read-only (see all-team-tasks above).
 router.get(
   '/my-tasks',
   authenticateToken,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const employeeId = req.user!.employeeId;
-      const now = new Date();
+      const include = { lead: { select: TASK_LEAD_SELECT } };
 
-      // Auto-flip tasks to OVERDUE if past target_date
-      await p.task.updateMany({
-        where: {
-          assignee_id: employeeId,
-          status: { in: ['PENDING', 'IN_PROGRESS'] },
-          target_date: { lt: now },
-        },
-        data: { status: 'OVERDUE' },
-      });
+      const [open, done] = await Promise.all([
+        p.task.findMany({
+          where: { assignee_id: employeeId, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+          include,
+          orderBy: [{ target_date: 'asc' }, { id: 'asc' }],
+          take: 2000,
+        }),
+        p.task.findMany({
+          where: { assignee_id: employeeId, status: { in: ['COMPLETED', 'CANCELLED'] } },
+          include,
+          orderBy: [{ updated_at: 'desc' }],
+          take: 100,
+        }),
+      ]);
 
-      const tasks = await p.task.findMany({
-        where: { assignee_id: employeeId },
-        orderBy: [{ target_date: 'asc' }],
-      });
-
-      return res.status(200).json({ tasks });
+      return res.status(200).json({ tasks: await decorateTasks([...open, ...done]) });
     } catch (error) {
       logger.error('Fetch tasks error:', error);
       return res.status(500).json({ error: 'Failed to fetch tasks' });

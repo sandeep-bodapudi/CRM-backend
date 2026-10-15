@@ -5,6 +5,7 @@ import {
   DomainWorkflow,
 } from './types';
 import { LeadWorkflow } from './lead.workflow';
+import { closeCallBackTasks } from '../services/lead/callBacks';
 import { PropertyWorkflow } from './property.workflow';
 import { SiteVisitWorkflow } from './siteVisit.workflow';
 import { ProjectWorkflow } from './project.workflow';
@@ -77,12 +78,28 @@ export class WorkflowEngine {
       throw error;
     }
 
-    return await tx.lead.update({
+    const updated = await tx.lead.update({
       where: { id: leadId },
       data: {
         status: transitionRes.nextState || toStatus,
         ...extraUpdateData,
       },
     });
+
+    // Open "Call back" tasks stop applying when the lead is dropped or booked
+    // (for everyone), or handed to a different person (for the previous owner).
+    // Done here because this is the one place every status/owner change passes.
+    const previousOwner: number | null | undefined = context.entity.assigned_to_id;
+    if (toStatus === 'DROPPED' || toStatus === 'BOOKED') {
+      await closeCallBackTasks(tx, leadId, { outcome: 'CANCELLED' });
+    } else if (
+      previousOwner &&
+      extraUpdateData.assigned_to_id !== undefined &&
+      extraUpdateData.assigned_to_id !== previousOwner
+    ) {
+      await closeCallBackTasks(tx, leadId, { outcome: 'CANCELLED', assigneeId: previousOwner });
+    }
+
+    return updated;
   }
 }
