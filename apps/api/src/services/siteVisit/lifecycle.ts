@@ -669,6 +669,8 @@ export async function completeVisit(
 
       return updated;
     },
+    // Several sequential writes over a remote database: the 5 s default is too tight.
+    { maxWait: 10000, timeout: 30000 },
   );
 
   // Outside the transaction (this I/O must never roll back the visit

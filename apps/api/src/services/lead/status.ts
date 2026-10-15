@@ -296,6 +296,10 @@ export async function updateLeadStatus(
       }
     }
   }
+  // Looked up once, BEFORE the transaction: every extra query inside it runs
+  // against the (remote) database and counts toward the transaction's time limit.
+  let negotiationInterested: any = null;
+  let negotiationProjectId: number | null = null;
   // NEGOTIATION / BOOKING_INITIATED guards need the opportunity context
   if (newStatus === 'NEGOTIATION' || newStatus === 'BOOKING_INITIATED') {
     entityContext.opportunities = await p.opportunity.findMany({ where: { lead_id: leadId } });
@@ -315,6 +319,15 @@ export async function updateLeadStatus(
         where: { outcome: 'INTERESTED', visit: { lead_id: leadId } },
         include: { property: true, project_unit: true },
       });
+      negotiationInterested = interested;
+      negotiationProjectId =
+        (
+          await p.siteVisitBooking.findFirst({
+            where: { lead_id: leadId, project_id: { not: null } },
+            orderBy: { id: 'desc' },
+            select: { project_id: true },
+          })
+        )?.project_id ?? null;
       // D9: with no liked unit yet (e.g. a project visit where the customer
       // hasn't picked one), the lead's own budget stands in as an estimate.
       entityContext.opportunities = [
@@ -509,18 +522,12 @@ export async function updateLeadStatus(
         // matched if that happened to be this lead's own row, meaning any
         // pre-existing INTERESTED history for other leads silently produced
         // a blank Opportunity (no property/unit, no expected_value) here.
-        const interested = await tx.siteVisitProperty.findFirst({
-          where: { outcome: 'INTERESTED', visit: { lead_id: leadId } },
-          include: { visit: true },
-        });
-        const interestedLeadId = interested?.visit?.lead_id;
-        // The project the customer was shown, so the Opportunity is linked to it
-        // even when no specific unit was chosen.
-        const lastVisit = await tx.siteVisitBooking.findFirst({
-          where: { lead_id: leadId, project_id: { not: null } },
-          orderBy: { id: 'desc' },
-          select: { project_id: true },
-        });
+        //
+        // The lookups themselves (this lead's INTERESTED outcome, and the
+        // project it was shown) run before the transaction -- see
+        // negotiationInterested / negotiationProjectId above -- so this
+        // transaction only writes.
+        const interested = negotiationInterested;
         const estimate = lead.budget_max ?? lead.budget_min ?? null;
         const opp = await OpportunityService.createFromLeadTx(
           tx,
@@ -528,12 +535,12 @@ export async function updateLeadStatus(
           // The lead's own owner, not whoever triggered the move (often the PM
           // completing the visit) -- the owner is who later sets the unit.
           lead.assigned_to_id ?? user.employeeId ?? 1,
-          interestedLeadId === leadId ? interested?.property_id : null,
-          interestedLeadId === leadId ? interested?.project_unit_id : null,
+          interested?.property_id ?? null,
+          interested?.project_unit_id ?? null,
           {
             expectedValue: estimate,
             estimate: true,
-            projectId: lastVisit?.project_id ?? null,
+            projectId: negotiationProjectId,
             budgetMin: lead.budget_min ?? null,
             budgetMax: lead.budget_max ?? null,
           },
@@ -597,6 +604,10 @@ export async function updateLeadStatus(
 
       return finalUpdated;
     },
+    // Prisma's default is 5 s, too tight for several sequential writes over a
+    // remote database connection: a normal Negotiation move failed at 5.1 s on
+    // staging. The queries are small; only the round trips are slow.
+    { maxWait: 10000, timeout: 30000 },
   );
   // Send web push notification for lead status change (outside transaction)
   if (!isRecover && finalLead.assigned_to_id) {
