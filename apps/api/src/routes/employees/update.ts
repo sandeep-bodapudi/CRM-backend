@@ -292,7 +292,26 @@ router.patch(
         message: 'Employee details updated successfully',
         employee: responseEmployee,
       });
-    } catch (error) {
+    } catch (error: any) {
+      // This handler used to return a bare 500 and log nothing, so a failing
+      // save could not be diagnosed from the server logs or the screen.
+      logger.error('Update employee error:', error);
+      if (error?.code === 'P2003') {
+        const field = error?.meta?.field_name ?? error?.meta?.constraint ?? 'a linked record';
+        return res.status(400).json({
+          error: `Could not save: ${field} refers to a record that does not exist.`,
+        });
+      }
+      if (error?.code === 'P2002') {
+        return res
+          .status(409)
+          .json({ error: 'Could not save: another employee already has one of these values.' });
+      }
+      if (error?.name === 'PrismaClientValidationError') {
+        return res
+          .status(400)
+          .json({ error: 'Could not save: one of the fields has an invalid value.' });
+      }
       return res.status(500).json({ error: 'Failed to update employee' });
     }
   },
