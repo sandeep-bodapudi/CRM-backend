@@ -22,7 +22,7 @@ const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
 // The actual env var set in .env/.env.example is VAPID_SUBJECT — this read
 // VAPID_EMAIL, which is never set anywhere, so it silently fell back to the
 // hardcoded default on every deploy instead of the real configured value.
-const VAPID_EMAIL = process.env.VAPID_SUBJECT || 'mailto:admin@radharealhomes.com';
+const VAPID_EMAIL = process.env.VAPID_SUBJECT || 'mailto:admin@radharealhomeproperties.com';
 
 if (VAPID_PUBLIC && VAPID_PRIVATE) {
   try {

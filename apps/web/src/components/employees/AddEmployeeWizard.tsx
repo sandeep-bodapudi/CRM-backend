@@ -284,7 +284,7 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full p-3 pl-10 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500"
-                    placeholder="john.doe@radharealhomes.com"
+                    placeholder="john.doe@radharealhomeproperties.com"
                   />
                 </div>
               </div>
@@ -824,7 +824,7 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
       case 6:
         const whatsappText = encodeURIComponent(
           `Hi ${fullName},\n\nWelcome to Radha Real Homes! Your CRM account has been created.\n\n` +
-            `*Login URL:* https://erp.radharealhomes.com\n` +
+            `*Login URL:* https://crm.radharealhomeproperties.com\n` +
             `*Employee Code:* ${createdEmployeeCode}\n` +
             `*Temporary Password:* ${initialPassword}\n\n` +
             `Please log in. You will be required to change this password on your first login for security purposes.\n\nBest Regards,\nHR Team`,

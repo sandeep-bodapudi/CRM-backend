@@ -5,7 +5,7 @@
  * The rest of the AI core depends only on the canonical AIProvider / AIRequest / AIResponse /
  * AIProviderError contracts. Provider detail is normalized here and never escapes.
  *
-  * Runtime approach: `@openrouter/sdk@1.2.17` is declared in the root `package.json` but is NOT
+ * Runtime approach: `@openrouter/sdk@1.2.17` is declared in the root `package.json` but is NOT
  * imported here. This adapter issues a direct HTTPS request to the documented OpenRouter
  * chat-completions HTTP API using the runtime-global `fetch` (Node >= 18), keeping the
  * adapter dependency-free and the provider-agnostic core boundary clean. The SDK is
@@ -41,7 +41,7 @@ export const OPENROUTER_PROVIDER = 'openrouter';
  */
 export const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 /** App-level identity sent in OpenRouter's required headers (not a secret). */
-const OPENROUTER_DEFAULT_REFERER = 'https://crm.rradharealhomes.com';
+const OPENROUTER_DEFAULT_REFERER = 'https://crm.radharealhomeproperties.com';
 const OPENROUTER_APP_TITLE = 'RRH-CRMS AI Search';
 
 /** Build the provider-specific chat-completion request from a canonical AIRequest (pure). */
@@ -60,7 +60,7 @@ export function buildOpenRouterBody(request: AIRequest, model: string): Record<s
 export function parseOpenRouterResponse(
   body: any,
   request: AIRequest,
-  provider: string
+  provider: string,
 ): AIResponse {
   const b = body as any;
   const choice = (b && b.choices && b.choices[0]) || {};
@@ -112,21 +112,46 @@ export function classifyOpenRouterError(err: any, provider: string): AIProviderE
   const status = Number(err?.status ?? err?.statusCode ?? err?.response?.status ?? 0);
 
   if (status === 429) {
-    return { category: 'RATE_LIMITED', message: 'OpenRouter rate limited', retryable: true, provider };
+    return {
+      category: 'RATE_LIMITED',
+      message: 'OpenRouter rate limited',
+      retryable: true,
+      provider,
+    };
   }
   if (status === 402 || looksLikeQuota(err)) {
-    return { category: 'QUOTA_EXCEEDED', message: 'OpenRouter quota exceeded', retryable: false, provider };
+    return {
+      category: 'QUOTA_EXCEEDED',
+      message: 'OpenRouter quota exceeded',
+      retryable: false,
+      provider,
+    };
   }
   if (status === 401 || status === 403) {
-    return { category: 'CONFIGURATION_ERROR', message: 'OpenRouter authentication/authorization failed', retryable: false, provider };
+    return {
+      category: 'CONFIGURATION_ERROR',
+      message: 'OpenRouter authentication/authorization failed',
+      retryable: false,
+      provider,
+    };
   }
   if (status === 408) {
     return { category: 'TIMEOUT', message: 'OpenRouter timed out', retryable: true, provider };
   }
   if (status >= 500 || status === 502 || status === 503 || status === 504) {
-    return { category: 'PROVIDER_UNAVAILABLE', message: 'OpenRouter unavailable', retryable: true, provider };
+    return {
+      category: 'PROVIDER_UNAVAILABLE',
+      message: 'OpenRouter unavailable',
+      retryable: true,
+      provider,
+    };
   }
-  return { category: 'UNKNOWN_PROVIDER_ERROR', message: 'OpenRouter error', retryable: false, provider };
+  return {
+    category: 'UNKNOWN_PROVIDER_ERROR',
+    message: 'OpenRouter error',
+    retryable: false,
+    provider,
+  };
 }
 
 /**
@@ -196,8 +221,8 @@ export class OpenRouterProvider implements AIProvider {
         throw new AIProviderError(
           classifyOpenRouterError(
             { status: response.status, message: errBody?.error?.message ?? response.statusText },
-            OPENROUTER_PROVIDER
-          )
+            OPENROUTER_PROVIDER,
+          ),
         );
       }
 

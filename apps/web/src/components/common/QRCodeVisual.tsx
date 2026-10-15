@@ -11,8 +11,8 @@ export const QRCodeVisual: React.FC<QRCodeVisualProps> = ({ value, size = 180, l
   return (
     <div className="flex flex-col items-center space-y-2">
       <div className="bg-white p-3 rounded-2xl border-2 border-slate-900 shadow-lg relative inline-block">
-        <QRCodeCanvas 
-          value={value || 'https://radharealhomes.com'} 
+        <QRCodeCanvas
+          value={value || 'https://radharealhomeproperties.com'}
           size={size}
           bgColor="#ffffff"
           fgColor="#0f172a"
