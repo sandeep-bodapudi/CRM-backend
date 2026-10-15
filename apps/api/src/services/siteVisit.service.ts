@@ -23,6 +23,7 @@ import {
   pmReconfirm,
   confirmVisit,
   startVisit,
+  assignAgent,
   completeVisit,
 } from './siteVisit/lifecycle';
 import {
@@ -45,6 +46,7 @@ export class SiteVisitService {
   static pmReconfirm = pmReconfirm;
   static confirmVisit = confirmVisit;
   static startVisit = startVisit;
+  static assignAgent = assignAgent;
   static completeVisit = completeVisit;
 
   static cancelVisit = cancelVisit;

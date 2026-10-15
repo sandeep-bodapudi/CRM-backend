@@ -280,9 +280,18 @@ export const SiteVisitManagement: React.FC = () => {
   // the visit. Gating the buttons the same way avoids offering an action that
   // always 403s.
   const canVerify = !!user?.permissions?.includes(Permissions.SITE_VISITS_VERIFY);
-  // site_visits.complete (POST /complete) — held by Agent/Channel Partner
-  // Manager/MD/Admin, NOT the Project Manager, who only has assign_agent.
+  // site_visits.complete (start / complete) -- held by Agent, Project Manager,
+  // Channel Partner Manager and MD/Admin. Holding it is not enough: only the
+  // person running THIS visit may start or complete it (see canRunVisit).
   const canComplete = !!user?.permissions?.includes(Permissions.SITE_VISITS_COMPLETE);
+  const canAssign = !!user?.permissions?.includes(Permissions.SITE_VISITS_ASSIGN_AGENT);
+  const canRunVisit = (v: SiteVisit) =>
+    canComplete &&
+    (isMD || v.assigned_agent?.id === user?.id || v.project_manager?.id === user?.id);
+  const canChooseAgent = (v: SiteVisit) =>
+    canAssign &&
+    ['ACCEPTED', 'PENDING_CUSTOMER_RECONFIRMATION', 'CONFIRMED'].includes(v.status) &&
+    (isMD || v.project_manager?.id === user?.id);
 
   const fetchVisitsData = async () => {
     setIsLoading(true);
@@ -496,6 +505,31 @@ export const SiteVisitManagement: React.FC = () => {
         showToast(data.message || 'Visit cancelled.', 'success');
         setShowConfirmCancelModal(false);
         setCancelReason('');
+        fetchVisitsData();
+      } else {
+        await handleApiError(res, showError, data);
+      }
+    } catch (err) {
+      showError(
+        toUserFacingError({ message: err instanceof Error ? err.message : String(err), body: err }),
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // "I'll do this visit myself": the PM names themselves as the one running it.
+  const handleDoItMyself = async (visitId: number) => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/site-visits/${visitId}/assign-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ self: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('You are now running this visit.', 'success');
         fetchVisitsData();
       } else {
         await handleApiError(res, showError, data);
@@ -1185,32 +1219,35 @@ export const SiteVisitManagement: React.FC = () => {
                 )}
 
                 {/* ─── CONFIRMED ─── */}
-                {visit.status === 'CONFIRMED' && (
-                  <>
-                    {isPM && visit.project_manager?.id === user?.id && (
+                {canChooseAgent(visit) && (
+                  <div className="flex gap-2 w-full">
+                    <button
+                      onClick={() => {
+                        setSelectedVisit(visit);
+                        setShowAssignModal(true);
+                      }}
+                      className="flex-1 py-2 bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <UserCheck className="w-3.5 h-3.5" />
+                      <span>
+                        {visit.assigned_agent ? 'Change Field Agent' : 'Assign Field Agent'}
+                      </span>
+                    </button>
+                    {visit.assigned_agent?.id !== user?.id && (
                       <button
-                        onClick={() => {
-                          setSelectedVisit(visit);
-                          setShowAssignModal(true);
-                        }}
-                        className="w-full py-2 bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
+                        onClick={() => handleDoItMyself(visit.id)}
+                        disabled={isSubmitting}
+                        className="flex-1 py-2 bg-white border border-purple-700 text-purple-700 hover:bg-purple-50 font-extrabold text-xs rounded-xl shadow-sm transition-all disabled:opacity-50"
                       >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Assign Field Agent</span>
+                        I'll do this visit myself
                       </button>
                     )}
-                    {isMD && (!visit.project_manager || visit.project_manager.id !== user?.id) && (
-                      <div className="w-full py-2 bg-slate-50 border border-slate-200 text-slate-600 font-medium text-[10px] rounded-xl flex items-center justify-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        Waiting for PM to Assign Agent
-                      </div>
-                    )}
-                  </>
+                  </div>
                 )}
 
                 {/* COMPLETE is only valid from ACTIVE (siteVisit.workflow.ts),
                     never directly from CONFIRMED — START is the missing step. */}
-                {visit.status === 'CONFIRMED' && canComplete && (
+                {visit.status === 'CONFIRMED' && canRunVisit(visit) && (
                   <button
                     onClick={() => handleStartVisit(visit.id)}
                     disabled={isSubmitting}
@@ -1248,7 +1285,7 @@ export const SiteVisitManagement: React.FC = () => {
                 )}
 
                 {/* ─── ACTIVE ─── */}
-                {visit.status === 'ACTIVE' && canComplete && (
+                {visit.status === 'ACTIVE' && canRunVisit(visit) && (
                   <button
                     onClick={() => {
                       setSelectedVisit(visit);

@@ -6,6 +6,7 @@ import {
   SiteVisitCreateSchema,
   SiteVisitAcceptSchema,
   SiteVisitReassignSchema,
+  SiteVisitAssignAgentSchema,
   SiteVisitEscalateSchema,
   SiteVisitRescheduleSchema,
   SiteVisitReconfirmSchema,
@@ -147,6 +148,30 @@ router.post(
       });
     } catch (error: any) {
       logger.error('Reassign site visit error:', error);
+      next(error);
+    }
+  },
+);
+
+// POST /api/v1/site-visits/:id/assign-agent - the PM names who runs an accepted visit
+// ({ agent_id } for a colleague, { self: true } for "I'll do this visit myself")
+router.post(
+  '/:id/assign-agent',
+  authenticateToken,
+  requirePermission([Permissions.SITE_VISITS_ASSIGN_AGENT]),
+  validateRequestBody(SiteVisitAssignAgentSchema),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const visitId = parseInt(req.params.id, 10);
+      if (isNaN(visitId))
+        return next({ name: 'AppError', statusCode: 400, message: 'Invalid ID format' });
+      const visit = await SiteVisitService.assignAgent(req.user!, visitId, req.body);
+      return res.status(200).json({
+        message: `Site visit ${visit.booking_code} agent assigned.`,
+        visit,
+      });
+    } catch (error: any) {
+      logger.error('Assign agent error:', error);
       next(error);
     }
   },

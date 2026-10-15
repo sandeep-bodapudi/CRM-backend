@@ -9,6 +9,7 @@ import { applyTransition } from './shared';
 import { createFeedbackRequest, dispatchFeedbackRequestNotification } from '../feedback.service';
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import { logger } from '../../utils/logger';
+import { getISTComponents } from '../../utils/time';
 const p = prisma;
 
 /** accept: PM/Agent accepts the routed visit. */
@@ -364,6 +365,106 @@ export async function confirmVisit(user: TokenPayload, visitId: number) {
   );
 }
 
+/** Statuses in which the PM may still choose who runs the visit. */
+const AGENT_ASSIGNABLE_STATUSES = ['ACCEPTED', 'PENDING_CUSTOMER_RECONFIRMATION', 'CONFIRMED'];
+
+/**
+ * assign-agent: the visit's PM (or MD/Admin) names who physically runs an
+ * accepted visit -- another PM/Agent, or themselves (`self`). Until this
+ * existed assigned_agent_id was never set, so nobody but MD/Admin could start
+ * or complete a visit.
+ */
+export async function assignAgent(
+  user: TokenPayload,
+  visitId: number,
+  input: { agent_id?: number; self?: boolean; notes?: string },
+) {
+  const visit = await p.siteVisitBooking.findFirst({
+    where: { id: visitId, lead: {} },
+    include: { lead: true },
+  });
+  if (!visit) throw { status: 404, message: 'Site visit booking not found' };
+
+  const agentId = input.self ? user.employeeId : input.agent_id!;
+  const agentRow = await p.employee.findFirst({
+    where: { id: agentId },
+    include: { roles: { include: { role: true } } },
+  });
+  if (!agentRow || agentRow.status !== 'ACTIVE') {
+    throw { status: 404, message: 'That employee was not found or is not active' };
+  }
+
+  if (!SiteVisitPolicy.canAssignAgent(user, visit, agentRow)) {
+    throw { status: 403, message: 'Forbidden: you cannot assign an agent to this visit' };
+  }
+  if (!SiteVisitPolicy.canAssignAgentToVisit(user, visit)) {
+    throw { status: 403, message: "Forbidden: only this visit's PM can choose who runs it" };
+  }
+  const agentRoles = (agentRow.roles || []).map((er: any) => er.role?.name).filter(Boolean);
+  if (!SiteVisitPolicy.canReassignTarget(user, { id: agentRow.id, roles: agentRoles })) {
+    throw { status: 400, message: 'Only a Project Manager or Agent can run a site visit' };
+  }
+  if (!AGENT_ASSIGNABLE_STATUSES.includes(visit.status)) {
+    throw {
+      status: 409,
+      message: `The visit is ${visit.status}; an agent can only be chosen once it is accepted and before it starts.`,
+    };
+  }
+
+  const label = agentRow.full_name || agentRow.employee_code;
+  const updated = await p.$transaction(
+    async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+      const row = await tx.siteVisitBooking.update({
+        where: { id: visitId },
+        data: { assigned_agent_id: agentId },
+        include: { lead: true },
+      });
+      await tx.leadActivity.create({
+        data: {
+          lead: { connect: { id: visit.lead_id } },
+          actor: { connect: { id: user.employeeId } },
+          activity_type: 'SITE_VISIT_AGENT_ASSIGNED',
+          notes: `Site visit ${visit.booking_code} will be run by ${label}${agentId === user.employeeId ? ' (the PM themselves)' : ''}.${input.notes ? ` Instructions: ${input.notes}` : ''}`,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          actor_id: user.employeeId,
+          action: 'SITE_VISIT_AGENT_ASSIGNED',
+          entity_type: 'SITE_VISIT',
+          entity_id: visitId,
+          old_value: JSON.stringify({ assigned_agent_id: visit.assigned_agent_id }),
+          new_value: JSON.stringify({ assigned_agent_id: agentId }),
+        },
+      });
+      if (agentId !== user.employeeId) {
+        await tx.notification.create({
+          data: {
+            employee_id: agentId,
+            type: 'TARGET_ASSIGNED',
+            title: 'Site Visit Assigned to You',
+            message: `You will run site visit ${visit.booking_code}.`,
+          },
+        });
+      }
+      return row;
+    },
+  );
+
+  if (agentId !== user.employeeId) {
+    notifyEmployee(
+      agentId,
+      {
+        type: 'TARGET_ASSIGNED',
+        title: 'Site Visit Assigned to You',
+        message: `You will run site visit ${visit.booking_code}.`,
+      },
+      { skipDbNotification: true },
+    ).catch((err) => logger.error('[WebPush] Site visit assign-agent:', err));
+  }
+  return updated;
+}
+
 /** start: CONFIRMED → ACTIVE (day-of). */
 export async function startVisit(user: TokenPayload, visitId: number) {
   const visit = await p.siteVisitBooking.findFirst({
@@ -373,6 +474,18 @@ export async function startVisit(user: TokenPayload, visitId: number) {
   if (!visit) throw { status: 404, message: 'Site visit booking not found' };
   if (!can(user, Permissions.SITE_VISITS_COMPLETE, visit)) {
     throw { status: 403, message: 'Forbidden: Missing site_visits.complete permission' };
+  }
+  // A visit can't be started before its scheduled (IST) day; MD/Admin may
+  // override for genuine early starts.
+  if (!user.roles.includes(Roles.MD) && !user.roles.includes(Roles.ADMIN)) {
+    const today = getISTComponents(new Date()).dateString;
+    const scheduledDay = getISTComponents(visit.scheduled_date).dateString;
+    if (today < scheduledDay) {
+      throw {
+        status: 409,
+        message: `This visit is scheduled for ${scheduledDay}; it can't be started before that day.`,
+      };
+    }
   }
   return applyTransition(
     user,

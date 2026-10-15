@@ -82,11 +82,28 @@ export class SiteVisitPolicy {
     if (visit.lead.company_id !== user.companyId) {
       return false;
     }
-    // Fix IDOR: ensure the completing agent is the assigned agent, unless they are admin/management
+    // Fix IDOR: only the person who runs the visit may start/complete it --
+    // the agent it was assigned to, or the visit's own PM (who runs it
+    // themselves when they don't hand it to an agent). Another PM cannot.
     if (user.roles.includes(Roles.MD) || user.roles.includes(Roles.ADMIN)) {
       return true;
     }
-    return visit.assigned_agent_id === user.employeeId;
+    return (
+      visit.assigned_agent_id === user.employeeId || visit.project_manager_id === user.employeeId
+    );
+  }
+
+  /**
+   * Who may choose the agent that runs an accepted visit: the visit's own PM
+   * (they accepted it), or MD/Admin. Plain site_visits.assign_agent plus
+   * company is checked separately by canAssignAgent.
+   */
+  static canAssignAgentToVisit(
+    user: TokenPayload,
+    visit: { project_manager_id?: number | null },
+  ): boolean {
+    if (user.roles.includes(Roles.MD) || user.roles.includes(Roles.ADMIN)) return true;
+    return !!visit.project_manager_id && visit.project_manager_id === user.employeeId;
   }
 
   /**

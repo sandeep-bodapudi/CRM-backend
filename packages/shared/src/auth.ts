@@ -292,6 +292,7 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
     Permissions.SITE_VISITS_READ,
     Permissions.SITE_VISITS_ASSIGN_AGENT,
     Permissions.SITE_VISITS_ACCEPT,
+    Permissions.SITE_VISITS_COMPLETE, // PMs run their own visits (start / record feedback)
     Permissions.DEMOS_READ,
     Permissions.DEMOS_ASSIGN_AGENT,
     Permissions.DEMOS_ACCEPT,

@@ -55,6 +55,18 @@ export const SiteVisitReassignSchema = z.object({
   reason: z.string().min(3, 'Reassignment reason is required'),
 });
 export type SiteVisitReassignInput = z.infer<typeof SiteVisitReassignSchema>;
+// Assign who physically runs an accepted visit: a named PM/Agent, or the
+// caller themselves ("I'll do this visit myself").
+export const SiteVisitAssignAgentSchema = z
+  .object({
+    agent_id: z.number().int().positive().optional(),
+    self: z.boolean().optional(),
+    notes: z.string().trim().max(500).optional(),
+  })
+  .refine((v) => v.self === true || v.agent_id !== undefined, {
+    message: 'Pick an agent, or choose to do the visit yourself',
+  });
+export type SiteVisitAssignAgentInput = z.infer<typeof SiteVisitAssignAgentSchema>;
 
 // Escalate to Marketing Director (no PM/Agent left to try)
 export const SiteVisitEscalateSchema = z.object({
