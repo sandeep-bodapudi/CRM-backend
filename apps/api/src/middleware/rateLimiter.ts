@@ -30,10 +30,16 @@ export const apiRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Every page load and app open makes one refresh call (the access token lives
+// only in memory), and a whole office usually shares ONE public IP. At 20 per
+// 15 minutes the 21st person to open the app in a busy morning was refused a
+// token and saw "Unable to load" everywhere until the window passed. Refresh
+// tokens are signed and single-use (reuse revokes the session), so this
+// limiter only has to stop floods, not guessing.
 export const refreshRateLimiter = rateLimit({
   keyGenerator: (req: any) => clientIp(req),
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 600,
   skip: skipRateLimitInTests,
   message: {
     error: 'Too many refresh attempts, please try again later',

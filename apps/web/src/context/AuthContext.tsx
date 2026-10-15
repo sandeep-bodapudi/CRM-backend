@@ -73,7 +73,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 type RefreshResult =
   | { success: true; token: string }
-  | { success: false; reason: 'unauthorized' | 'network_error' | 'server_error' };
+  | { success: false; reason: 'unauthorized' | 'network_error' | 'server_error' | 'retryable' };
 
 // Shared single-flight refresh state
 let refreshPromise: Promise<RefreshResult> | null = null;
@@ -100,6 +100,17 @@ const performRefresh = async (): Promise<RefreshResult> => {
       return { success: true, token: data.accessToken };
     } else if (res.status === 401 || res.status === 403) {
       return { success: false, reason: 'unauthorized' };
+    } else if (
+      res.status === 429 ||
+      res.status === 502 ||
+      res.status === 503 ||
+      res.status === 504
+    ) {
+      // Refused by the rate limiter or the gateway BEFORE the refresh handler
+      // ran, so the token was not consumed and trying again is safe. (A 500
+      // or a lost response is not: the token may already be used, and using
+      // it twice revokes the session.)
+      return { success: false, reason: 'retryable' };
     } else {
       return { success: false, reason: 'server_error' };
     }
@@ -122,10 +133,23 @@ const refreshAccessToken = async (): Promise<RefreshResult> => {
   // serializes refreshes across all tabs of this origin; performRefresh reads
   // the token from IndexedDB *inside* the lock, so the second tab picks up
   // the token the first tab just stored instead of reusing the old one.
-  const run = (): Promise<RefreshResult> =>
+  const attemptOnce = (): Promise<RefreshResult> =>
     typeof navigator !== 'undefined' && navigator.locks?.request
       ? navigator.locks.request('rrh-token-refresh', performRefresh)
       : performRefresh();
+
+  // A busy or waking server answers "try again" for a moment; give up only
+  // after a few spaced attempts so a page load doesn't dead-end on one
+  // unlucky response. Callers share this one promise, so they all wait.
+  const run = async (): Promise<RefreshResult> => {
+    let result = await attemptOnce();
+    for (const delayMs of [1500, 4000, 8000]) {
+      if (result.success || result.reason !== 'retryable') break;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      result = await attemptOnce();
+    }
+    return result;
+  };
 
   refreshPromise = run().finally(() => {
     refreshPromise = null;
@@ -361,9 +385,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
 
+    // On a fresh page load the access token (memory-only) does not exist yet.
+    // Sending the request anyway guarantees a 401 and a second send after the
+    // refresh; worse, every page request raced the refresh. Wait for the one
+    // shared refresh (single-flight, so this adds no extra refresh call) and
+    // send once, with the token.
+    let token = accessToken;
+    let refreshedUpFront = false;
+    if (!token && localStorage.getItem('rrh_user')) {
+      refreshedUpFront = true;
+      const first = await refreshAccessToken();
+      if (first.success) {
+        token = first.token;
+        setAccessToken(first.token);
+      } else if (first.reason === 'unauthorized') {
+        logout();
+      }
+    }
+
     const headers = new Headers(options.headers || {});
-    if (accessToken) {
-      headers.set('Authorization', `Bearer ${accessToken}`);
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
     }
 
     const res = await fetch(url, { ...options, headers });
@@ -388,7 +430,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return res;
       }
 
-      const result = await refreshAccessToken();
+      // Already refreshed for this very request above: a second refresh would
+      // only repeat the same failure.
+      const result: Awaited<ReturnType<typeof refreshAccessToken>> = refreshedUpFront
+        ? { success: false, reason: 'server_error' }
+        : await refreshAccessToken();
 
       if (result.success) {
         setAccessToken(result.token);
