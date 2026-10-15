@@ -4,6 +4,7 @@ import { PhoneCall, Calendar, MessageCircle, Users, Clock, ChevronDown } from 'l
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
+import { fetchAllLeads } from '../../utils/fetchAllLeads';
 import { LeadListItem } from '../../types';
 import { PerformanceScoreWidget } from '../performance/PerformanceScoreWidget';
 import { TaskManager } from '../tasks/TaskManager';
@@ -114,7 +115,7 @@ export const CPMDashboard: React.FC = () => {
         // activeStatuses and sits in its own scrollable, max-height
         // container, so it doesn't need the same render-side "Load More"
         // pagination those did.
-        fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
+        fetchAllLeads(fetchWithAuth, API_BASE_URL, { assigned_to_id: 'me' }),
         fetchWithAuth(`${API_BASE_URL}/targets/my-target`),
         fetchWithAuth(`${API_BASE_URL}/site-visits`),
         fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`),

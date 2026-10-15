@@ -70,7 +70,7 @@ router.get(
       // Default was 50 with a 100 max and no `total` in the response, and
       // the frontend's own list fetches never pass a limit override — same
       // bug class as leads/properties/customers, fixed the same way.
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 1000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       const { projects, total } = await ProjectService.listProjects(

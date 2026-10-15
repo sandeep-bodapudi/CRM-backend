@@ -62,7 +62,7 @@ router.get(
       // properties (individual plots/units routinely exceed that) had the
       // rest silently invisible while the header looked complete instead of
       // flagging a cutoff. Same bug class as leads, fixed the same way.
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 1000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       const { properties, total } = await PropertyService.listProperties(

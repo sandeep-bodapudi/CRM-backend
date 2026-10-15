@@ -34,20 +34,23 @@ export const DigitalLeadOperatorDashboard: React.FC = () => {
         // scoped lead total passes that — same class of bug fixed in
         // TelecallerDashboard/LeadManagement. No render-side pagination
         // needed here since individual leads are never rendered as cards.
-        fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
+        fetchWithAuth(`${API_BASE_URL}/leads/summary`),
         fetchWithAuth(`${API_BASE_URL}/leads/distribution-monitor`),
       ]);
       if (!leadsRes.ok) throw new Error('Failed to load leads');
 
-      const leadsData = await leadsRes.json();
-      const leads = leadsData.leads || [];
-
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
+      const [unassignedRes, newTodayRes] = await Promise.all([
+        fetchWithAuth(`${API_BASE_URL}/leads/summary?unassigned=true`),
+        fetchWithAuth(
+          `${API_BASE_URL}/leads/summary?created_from=${encodeURIComponent(todayStart.toISOString())}`,
+        ),
+      ]);
 
-      const totalLeads = leads.length;
-      const unassigned = leads.filter((l: any) => !l.assigned_to_id).length;
-      const newToday = leads.filter((l: any) => new Date(l.created_at) >= todayStart).length;
+      const totalLeads = (await leadsRes.json()).total ?? 0;
+      const unassigned = unassignedRes.ok ? ((await unassignedRes.json()).total ?? 0) : 0;
+      const newToday = newTodayRes.ok ? ((await newTodayRes.json()).total ?? 0) : 0;
 
       let telecallerLoad: ListItem[] = [];
       let activeTelecallers = 0;

@@ -38,7 +38,7 @@ router.get(
       // Previously had no limit at all — every refund request this employee
       // ever created was fetched every load. Same bug class as leads/
       // properties/customers/projects, fixed the same way.
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 1000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       const { refunds, total } = await ExpenseRefundService.listMyRefunds(req.user!, limit, offset);
@@ -60,7 +60,7 @@ router.get(
       // fetch + unvirtualized-render freeze risk already fixed for
       // bookings/tasks/site-visits, missed here since this page doesn't use
       // the shared DataTable component.
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 1000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       const { refunds, total } = await ExpenseRefundService.listQueue(req.user!, limit, offset);

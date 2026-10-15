@@ -55,7 +55,7 @@ router.get('/', requireAuthz(Permissions.COMPLAINTS_READ as any), async (req: an
     // handles both a bare array and `{complaints, total}` (`Array.isArray(data)
     // ? data : data.complaints`), so this response shape change is backward
     // compatible with no frontend edit needed.
-    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 1000);
     const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
     const complaints = await ComplaintService.list(
       req.user,

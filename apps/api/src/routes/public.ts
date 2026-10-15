@@ -320,7 +320,7 @@ router.get('/:brand/properties', async (req: any, res: Response) => {
 
     // WR-7: Validation — page >= 1, limit >= 1, max limit 50
     const page = pageNum !== undefined && pageNum >= 1 ? pageNum : 1;
-    let limit = limitNum !== undefined && limitNum >= 1 ? limitNum : 20;
+    let limit = Math.min(limitNum !== undefined && limitNum >= 1 ? limitNum : 20, 100);
     if (limit > 50) {
       return res.status(400).json({ error: 'Limit must not exceed 50' });
     }

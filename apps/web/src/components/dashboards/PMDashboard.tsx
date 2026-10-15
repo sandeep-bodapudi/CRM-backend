@@ -28,7 +28,7 @@ export const PMDashboard: React.FC = () => {
         fetchWithAuth(`${API_BASE_URL}/properties?status=PENDING_VERIFICATION`),
         // Explicit high limit: the backend default (previously 50, now 2000)
         // silently truncated this PM's project list once it passed that.
-        fetchWithAuth(`${API_BASE_URL}/projects?limit=100000`),
+        fetchWithAuth(`${API_BASE_URL}/projects?limit=1000`),
         fetchWithAuth(`${API_BASE_URL}/site-visits`),
       ]);
 

@@ -19,6 +19,7 @@ export { AppError } from './lead/errors';
 
 import {
   getLeads,
+  getLeadSummary,
   getLeadById,
   getDistributionMonitor,
   getMatches,
@@ -40,6 +41,7 @@ import {
 
 export class LeadService {
   static getLeads = getLeads;
+  static getLeadSummary = getLeadSummary;
   static getUnclaimedLeads = getUnclaimedLeads;
   static claimLead = claimLead;
   static getLeadById = getLeadById;

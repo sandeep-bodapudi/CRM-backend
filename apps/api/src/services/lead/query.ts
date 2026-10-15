@@ -32,8 +32,68 @@ export async function getUnclaimedLeads(user: TokenPayload) {
   });
 }
 
-export async function getLeads(user: TokenPayload, take: number = 20, skip: number = 0) {
-  const whereCondition = await buildLeadScope(user);
+export interface LeadListFilters {
+  status?: string;
+  source?: string;
+  q?: string;
+  assigned_to_id?: number;
+  created_by_id?: number;
+  /** Only leads nobody owns yet. */
+  unassigned?: boolean;
+  /** Only leads created at or after this instant. */
+  created_from?: Date;
+}
+
+/**
+ * The caller's scope AND the user-chosen filters. Combined with AND (never
+ * spread together) because buildLeadScope can itself return an OR, and a
+ * spread would let a filter key silently overwrite part of the scope.
+ */
+async function buildFilteredLeadWhere(user: TokenPayload, filters: LeadListFilters) {
+  const scope = await buildLeadScope(user);
+  const extra: Record<string, unknown>[] = [];
+  if (filters.status) {
+    const statuses = filters.status.split(',').filter(Boolean);
+    extra.push({ status: statuses.length > 1 ? { in: statuses } : statuses[0] });
+  }
+  if (filters.source) extra.push({ source: filters.source });
+  if (filters.assigned_to_id) extra.push({ assigned_to_id: filters.assigned_to_id });
+  if (filters.created_by_id) extra.push({ created_by_id: filters.created_by_id });
+  if (filters.unassigned) extra.push({ assigned_to_id: null });
+  if (filters.created_from) extra.push({ created_at: { gte: filters.created_from } });
+  const q = filters.q?.trim();
+  if (q) {
+    extra.push({
+      OR: [
+        { customer_name: { contains: q } },
+        { phone: { contains: q } },
+        { lead_code: { contains: q } },
+      ],
+    });
+  }
+  return extra.length ? { AND: [scope, ...extra] } : scope;
+}
+
+/** Lead counts by status for the caller's scope -- real totals, not page lengths. */
+export async function getLeadSummary(user: TokenPayload, filters: LeadListFilters = {}) {
+  const where = await buildFilteredLeadWhere(user, { ...filters, status: undefined });
+  const rows = await p.lead.groupBy({ by: ['status'], where, _count: { _all: true } });
+  const byStatus: Record<string, number> = {};
+  let total = 0;
+  for (const r of rows) {
+    byStatus[r.status] = r._count._all;
+    total += r._count._all;
+  }
+  return { total, byStatus };
+}
+
+export async function getLeads(
+  user: TokenPayload,
+  take: number = 50,
+  skip: number = 0,
+  filters: LeadListFilters = {},
+) {
+  const whereCondition = await buildFilteredLeadWhere(user, filters);
 
   // `total` (of the full scoped set, not just this page) lets a caller with
   // more leads than fit in one response show real "Showing X of Y" text and
@@ -57,7 +117,9 @@ export async function getLeads(user: TokenPayload, take: number = 20, skip: numb
         preferred_locations: { orderBy: { sort_order: 'asc' } },
         converted_customer: { select: { customer_code: true } },
       },
-      orderBy: { created_at: 'desc' },
+      // id as a tie-breaker so offset paging never skips or repeats rows that
+      // share a created_at (bulk imports create hundreds in the same second).
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
     }),
     p.lead.count({ where: whereCondition }),
   ]);

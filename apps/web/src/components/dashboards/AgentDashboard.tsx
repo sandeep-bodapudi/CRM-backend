@@ -34,7 +34,7 @@ export const AgentDashboard: React.FC = () => {
         // that — same class of bug fixed in TelecallerDashboard/
         // LeadManagement. No render-side pagination needed here since
         // individual leads are never rendered as cards, just counted.
-        fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
+        fetchWithAuth(`${API_BASE_URL}/leads/summary?assigned_to_id=me`),
       ]);
       if (!visitsRes.ok) throw new Error('Failed to load site visits');
 
@@ -58,9 +58,7 @@ export const AgentDashboard: React.FC = () => {
       let myLeadsCount = 0;
       if (leadsRes.ok) {
         const leadsData = await leadsRes.json();
-        myLeadsCount = (leadsData.leads || []).filter(
-          (l: any) => l.assigned_to_id === user?.id,
-        ).length;
+        myLeadsCount = leadsData.total ?? 0;
       }
 
       const upcomingItems: ListItem[] = upcoming

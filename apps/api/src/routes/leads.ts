@@ -12,6 +12,7 @@ import {
 } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
 import { LeadService, AppError } from '../services/lead.service';
+import type { LeadListFilters } from '../services/lead/query';
 import { syncLeadPreferredLocations } from '../services/lead/shared';
 import { OpportunityService } from '../services/opportunity.service';
 import prisma from '../lib/prisma';
@@ -37,6 +38,33 @@ const handleServiceError = (error: any, res: Response) => {
   }
   logger.error('Unhandled route error:', error);
   return res.status(500).json({ error: 'Internal Server Error' });
+};
+
+const queryString = (v: unknown): string | undefined =>
+  typeof v === 'string' && v.trim() ? v.trim().slice(0, 100) : undefined;
+const queryId = (v: unknown): number | undefined => {
+  const n = typeof v === 'string' ? parseInt(v, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+};
+
+const parseDate = (v: unknown): Date | undefined => {
+  if (typeof v !== 'string') return undefined;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+};
+
+// `created_by_id=me` / `assigned_to_id=me` are shortcuts for the caller.
+const parseLeadFilters = (req: AuthenticatedRequest): LeadListFilters => {
+  const idOrMe = (v: unknown) => (v === 'me' ? req.user!.employeeId : queryId(v));
+  return {
+    status: queryString(req.query.status),
+    source: queryString(req.query.source),
+    q: queryString(req.query.q),
+    assigned_to_id: idOrMe(req.query.assigned_to_id),
+    created_by_id: idOrMe(req.query.created_by_id),
+    unassigned: req.query.unassigned === 'true',
+    created_from: parseDate(req.query.created_from),
+  };
 };
 
 // GET /api/v1/leads - Fetch leads list (Role-aware)
@@ -72,11 +100,36 @@ router.get(
       // it explicitly via ?limit=, rather than every dashboard paying for
       // a 100k-row fetch by default. `total` (below) tells any caller
       // whether they got everything or should ask for more.
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+      // Explicit page size: default 50, never more than 100 per request.
+      // Callers page with ?offset= and read the real `total`; the old
+      // limit=100000 requests were silently clamped to 100 by the global
+      // pagination middleware anyway, so this makes the real limit visible.
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 100);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
-      const { leads, total } = await LeadService.getLeads(req.user!, limit, offset);
+      const { leads, total } = await LeadService.getLeads(
+        req.user!,
+        limit,
+        offset,
+        parseLeadFilters(req),
+      );
       return res.status(200).json({ leads, total, pagination: { limit, offset, total } });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
+// GET /api/v1/leads/summary - counts by status for the caller's scope. Dashboards
+// and the Leads page tiles read this instead of counting a truncated page.
+router.get(
+  '/summary',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_READ),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const summary = await LeadService.getLeadSummary(req.user!, parseLeadFilters(req));
+      return res.status(200).json(summary);
     } catch (error: any) {
       return handleServiceError(error, res);
     }

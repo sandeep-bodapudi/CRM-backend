@@ -79,7 +79,7 @@ export const CustomerManagement: React.FC = () => {
       // Explicit high limit: the backend default (previously 50, now 2000)
       // silently truncated the list for any company with more customers than
       // that — every booking creates one, so this accumulates over time.
-      const res = await fetchWithAuth(`${API_BASE_URL}/customers?limit=100000`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/customers?limit=1000`);
       const data = await res.json();
       if (res.ok) {
         setCustomers(data.customers || []);

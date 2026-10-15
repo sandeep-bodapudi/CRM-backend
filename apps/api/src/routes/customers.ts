@@ -36,7 +36,7 @@ router.get(
       // limit override — every booking creates a customer record, so this
       // silently caps at 50-100 with zero indication of truncation. Same bug
       // class as leads, fixed the same way.
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 100000);
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 2000, 1), 1000);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       const { customers, total } = await CustomerService.getCustomers(req.user!, limit, offset);

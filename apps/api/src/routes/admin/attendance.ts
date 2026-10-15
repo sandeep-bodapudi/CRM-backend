@@ -22,7 +22,9 @@ router.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { search, status, startDate, endDate, page = '1', limit = '50' } = req.query;
-      const skip = (Number(page) - 1) * Number(limit);
+      // Explicit page-size cap (this route used to rely on the global 100-row clamp).
+      const pageSize = Math.min(Math.max(Number(limit) || 50, 1), 100);
+      const skip = (Math.max(Number(page) || 1, 1) - 1) * pageSize;
 
       const whereClause: any = {
         employee: { company_id: req.user!.companyId },
@@ -58,7 +60,7 @@ router.get(
           where: whereClause,
           orderBy: { check_in_at: 'desc' },
           skip,
-          take: Number(limit),
+          take: pageSize,
           include: {
             employee: {
               select: {
@@ -121,8 +123,8 @@ router.get(
         pagination: {
           total,
           page: Number(page),
-          limit: Number(limit),
-          totalPages: Math.ceil(total / Number(limit)),
+          limit: pageSize,
+          totalPages: Math.ceil(total / pageSize),
         },
       });
     } catch (error) {

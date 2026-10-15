@@ -101,7 +101,7 @@ export const FinanceHub: React.FC = () => {
       // Explicit high limit: the backend previously had no limit at all
       // (now defaults to 2000). Scoped to one employee so lower risk than
       // the accountant queue, but the same unguarded pattern.
-      const res = await fetchWithAuth(`${API_BASE_URL}/expense-refunds/my?limit=100000`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/expense-refunds/my?limit=1000`);
       const data = await res.json();
       if (res.ok) {
         setMyRefunds(data.refunds || []);

@@ -17,6 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 import { CallOutcomeModal } from '../leads/CallOutcomeModal';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
+import { fetchAllLeads } from '../../utils/fetchAllLeads';
 import { LeadListItem } from '../../types';
 import { PerformanceScoreWidget } from '../performance/PerformanceScoreWidget';
 import { TaskManager } from '../tasks/TaskManager';
@@ -110,7 +111,11 @@ export const TelecallerDashboard: React.FC = () => {
         // the backend default alone (2000) isn't enough to guarantee "all
         // of mine". Rendering is separately capped below (visibleLeadCount)
         // so the DOM never has to hold that many cards at once.
-        fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
+        // Only this telecaller's active leads, every page of them.
+        fetchAllLeads(fetchWithAuth, API_BASE_URL, {
+          assigned_to_id: 'me',
+          status: 'NEW,ASSIGNED,CONTACTED,QUALIFIED,SITE_VISIT_SCHEDULED',
+        }),
         fetchWithAuth(`${API_BASE_URL}/site-visits`),
         fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`),
         fetchWithAuth(`${API_BASE_URL}/leads/call-queue`),

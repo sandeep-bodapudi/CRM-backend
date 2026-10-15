@@ -116,7 +116,7 @@ export const ProjectManagement: React.FC = () => {
       // silently truncated the list for any company with more projects than
       // that — same bug class as leads/properties/customers.
       const qs = statusFilter !== 'ALL' ? `&status=${statusFilter}` : '';
-      const res = await fetchWithAuth(`${API_BASE_URL}/projects?limit=100000${qs}`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/projects?limit=1000${qs}`);
       if (!res.ok) throw new Error('Failed to load projects');
       return res.json();
     },

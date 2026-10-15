@@ -149,10 +149,6 @@ app.use(compression({ threshold: 0 }) as any);
 // (the cap bulk-upload enforces per request) with headroom.
 app.use(express.json({ limit: '10mb' }));
 
-// Enforce max pagination cap of 100 globally
-import { enforceMaxPagination } from './middleware/pagination';
-app.use(enforceMaxPagination);
-
 import { setupSwagger } from './utils/swagger';
 setupSwagger(app);
 

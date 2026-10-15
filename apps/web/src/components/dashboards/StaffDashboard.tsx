@@ -22,7 +22,7 @@ export const StaffDashboard: React.FC = () => {
           // that — same class of bug fixed in TelecallerDashboard/
           // LeadManagement. No render-side pagination needed here since
           // individual leads are never rendered as cards, just counted.
-          fetchWithAuth(`${API_BASE_URL}/leads?limit=100000`),
+          fetchWithAuth(`${API_BASE_URL}/leads/summary?assigned_to_id=me`),
           fetchWithAuth(`${API_BASE_URL}/site-visits`),
           fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`),
         ]);
@@ -31,10 +31,10 @@ export const StaffDashboard: React.FC = () => {
         if (leadsRes.ok) {
           const leadsData = await leadsRes.json();
           // Filter leads assigned to this user and not yet BOOKED or DEAD
-          leadsCount = (leadsData.leads || []).filter(
-            (l: any) =>
-              l.assigned_to_id === user?.id && !['BOOKED', 'DEAD', 'LOST'].includes(l.status),
-          ).length;
+          const byStatus: Record<string, number> = leadsData.byStatus || {};
+          leadsCount =
+            (leadsData.total ?? 0) -
+            ['BOOKED', 'DEAD', 'LOST'].reduce((n, s) => n + (byStatus[s] || 0), 0);
         }
 
         let visitsCount = 0;

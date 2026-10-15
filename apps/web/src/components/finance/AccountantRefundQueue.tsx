@@ -93,7 +93,7 @@ export const AccountantRefundQueue: React.FC<Props> = ({ isMD }) => {
       // Explicit high limit: the backend previously had no limit at all
       // (now defaults to 2000) — refund requests accumulate continuously
       // company-wide with no date filter.
-      const res = await fetchWithAuth(`${API_BASE_URL}/expense-refunds/queue?limit=100000`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/expense-refunds/queue?limit=1000`);
       const data = await res.json();
       setRefunds(data.refunds || []);
       setVisibleRefundCount(REFUNDS_PAGE_SIZE);

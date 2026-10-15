@@ -381,7 +381,7 @@ export const PropertyManagement: React.FC = () => {
       // silently truncated inventory for any company with more properties
       // than that — individual plots/units routinely exceed it. See the
       // "All Inventory (N)" header below, now sourced from backend `total`.
-      const res = await fetchWithAuth(`${API_BASE_URL}/properties?limit=100000`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/properties?limit=1000`);
       const data = await res.json();
       if (res.ok) {
         setProperties(data.properties || []);
