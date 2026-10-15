@@ -21,9 +21,19 @@ const withPoolSize = (url: string, size: number) =>
 const poolSize = Number(process.env.DB_CONNECTION_LIMIT) || 10;
 const mainDbUrl = withPoolSize(dbUrl, poolSize);
 
-export const prisma = new PrismaClient(
-  mainDbUrl ? { datasources: { db: { url: mainDbUrl } } } : undefined,
-);
+// Prisma's default interactive-transaction limit is 5 s. With the database in
+// another region every query is a full network round trip, so ordinary
+// multi-step writes (reassigning a lead, moving it to Negotiation, completing
+// a visit) ran past it and failed with "Transaction already closed" -- seen
+// at 5.1 s, 5.2 s and 7.1 s on staging. 88 transactions rely on the default,
+// so raise it once here instead of per call. maxWait is how long a
+// transaction may queue for a free connection.
+export const TRANSACTION_OPTIONS = { maxWait: 10000, timeout: 30000 };
+
+export const prisma = new PrismaClient({
+  ...(mainDbUrl ? { datasources: { db: { url: mainDbUrl } } } : {}),
+  transactionOptions: TRANSACTION_OPTIONS,
+});
 
 const publicDbUrl = dbUrl.includes('connection_limit=')
   ? dbUrl.replace(/connection_limit=\d+/, 'connection_limit=3')
@@ -37,6 +47,7 @@ export const publicPrisma = new PrismaClient({
       url: publicDbUrl,
     },
   },
+  transactionOptions: TRANSACTION_OPTIONS,
 });
 
 export default prisma;
