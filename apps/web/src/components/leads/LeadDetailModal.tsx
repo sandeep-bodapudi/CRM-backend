@@ -673,7 +673,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 </span>
                 {lead.can_edit !== false && (
                   <button
-                    onClick={() => setShowQualifyModal(true)}
+                    onClick={() => setShowQualificationModal(true)}
                     className="px-2 py-0.5 text-[10px] font-bold bg-navy-50 text-navy-600 hover:bg-navy-100 rounded-md transition-colors"
                   >
                     Edit

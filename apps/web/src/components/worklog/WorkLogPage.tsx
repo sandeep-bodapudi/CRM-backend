@@ -45,7 +45,8 @@ export const WorkLogPage: React.FC = () => {
   const [kind, setKind] = useState<string>(roleLog.defaultKind);
   const [associateName, setAssociateName] = useState('');
   const [associateId, setAssociateId] = useState('');
-  const [count, setCount] = useState(1);
+  const [countText, setCountText] = useState('1');
+  const clampCount = (v: string) => Math.max(1, Math.min(100, parseInt(v, 10) || 1));
   const [link, setLink] = useState('');
   const [note, setNote] = useState('');
   const [title, setTitle] = useState('');
@@ -91,7 +92,7 @@ export const WorkLogPage: React.FC = () => {
           kind,
           note,
           link: link.trim(),
-          count,
+          count: clampCount(countText),
           ...(kind === 'OTHER' ? { title: title.trim() } : {}),
           ...(isAssociateKind(kind)
             ? { associate_name: associateName.trim(), associate_id: associateId.trim() }
@@ -107,7 +108,7 @@ export const WorkLogPage: React.FC = () => {
         setAssociateId('');
         queryClient.invalidateQueries({ queryKey: ['myAssociates'] });
         setLink('');
-        setCount(1);
+        setCountText('1');
         queryClient.invalidateQueries({ queryKey: ['myWorkLog'] });
       } else {
         const detail = body.details?.[0]?.message || body.error;
@@ -180,11 +181,15 @@ export const WorkLogPage: React.FC = () => {
           <label className="text-xs font-semibold text-slate-700">
             How many
             <input
-              type="number"
-              min={1}
-              max={100}
-              value={count}
-              onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={countText}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^[0-9]+$/.test(v)) setCountText(v);
+              }}
+              onBlur={() => setCountText(String(clampCount(countText)))}
               className="mt-1 w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl"
             />
           </label>
@@ -226,7 +231,7 @@ export const WorkLogPage: React.FC = () => {
         )}
         {kind === 'OTHER' && (
           <label className="block text-xs font-semibold text-slate-700">
-            What did you do?
+            Describe it
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -249,12 +254,10 @@ export const WorkLogPage: React.FC = () => {
           />
         </label>
         <label className="block text-xs font-semibold text-slate-700">
-          Note
+          Note (optional)
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            required
-            minLength={3}
             maxLength={500}
             rows={2}
             placeholder="e.g. Reel for Nagadhara Grand launch, 3 versions"

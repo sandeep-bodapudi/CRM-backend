@@ -48,7 +48,7 @@ export const WORK_LOG_KINDS = [
 const WorkLogSchema = z
   .object({
     kind: z.enum(WORK_LOG_KINDS),
-    note: z.string().trim().min(3, 'Add a short note').max(500),
+    note: z.string().trim().max(500).optional().default(''),
     link: z
       .string()
       .trim()
