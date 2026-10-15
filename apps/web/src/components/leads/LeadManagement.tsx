@@ -18,10 +18,12 @@ import {
   UserCircle2,
   Download,
   Building2,
+  MessageCircle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
+import { buildWhatsAppUrl } from '../../utils/phone';
 import { getLeadStatusLabel, getLeadSourceLabel, getRelativeAge } from '../../constants/leadStatus';
 import { getPropertyTypeLabel } from '../../constants/propertyTypes';
 import { Roles, Permissions } from '../../shared';
@@ -184,6 +186,18 @@ const LeadCard: React.FC<LeadCardProps> = ({
             <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold uppercase tracking-wider border border-slate-200">
               View Only
             </span>
+          )}
+          {lead.phone && (
+            <a
+              href={buildWhatsAppUrl(lead.phone)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="Chat on WhatsApp"
+              className="text-emerald-600 hover:text-emerald-700 p-1 -m-1"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+            </a>
           )}
           <ChevronRight className="w-4 h-4 text-slate-300" />
         </div>
@@ -647,6 +661,18 @@ export const LeadManagement: React.FC = () => {
           <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1 mt-0.5">
             <PhoneCall className="w-3 h-3 text-slate-400" />
             {l.phone}
+            {l.phone && (
+              <a
+                href={buildWhatsAppUrl(l.phone)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title="Chat on WhatsApp"
+                className="text-emerald-600 hover:text-emerald-700 ml-1"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+              </a>
+            )}
           </div>
         </div>
       ),

@@ -4,6 +4,7 @@ import { can } from '../../authz/authorization';
 import { Permissions } from '../../shared';
 import { MessageTemplateService } from '../messageTemplate.service';
 import { AppError } from './errors';
+import { normalizeIndianPhone } from '../../utils/phone';
 
 const p = prisma;
 
@@ -100,8 +101,7 @@ export async function sendWhatsAppProposal(
 
   const text = resolved.body_text;
 
-  const cleanPhone = lead.phone.replace(/[^0-9]/g, '');
-  const whatsAppUrl = `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : '91' + cleanPhone}?text=${encodeURIComponent(text)}`;
+  const whatsAppUrl = `https://wa.me/${normalizeIndianPhone(lead.phone)}?text=${encodeURIComponent(text)}`;
 
   // §3: emit WHATSAPP_SENT with the template key embedded in notes
   // (the spec §3 registry item: "WHATSAPP_SENT (with which template key)").

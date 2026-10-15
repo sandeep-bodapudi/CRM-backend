@@ -2,6 +2,8 @@
  * Reusable WhatsApp utility for generating pre-filled wa.me links based on standardized templates.
  */
 
+import { normalizeIndianPhone } from './phone';
+
 export type WhatsAppTemplateId =
   | 'PM_CONTACT_RELAY'
   | 'RESCHEDULE_REQUEST'
@@ -26,13 +28,7 @@ const WHATSAPP_TEMPLATES: Record<WhatsAppTemplateId, string> = {
  * Sanitizes a phone number for WhatsApp links (removes non-digits).
  */
 export function sanitizePhoneForWhatsApp(phone: string): string {
-  // Remove any character that is not a digit
-  const cleaned = phone.replace(/\D/g, '');
-  // Default to 91 if no country code provided and length is 10
-  if (cleaned.length === 10) {
-    return `91${cleaned}`;
-  }
-  return cleaned;
+  return normalizeIndianPhone(phone);
 }
 
 /**

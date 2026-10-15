@@ -31,6 +31,7 @@ import { API_BASE_URL } from '../../config';
 import { useToast } from '../../context/ToastContext';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
 import { getPanFormatError, getAadhaarFormatError } from '../../utils/idValidation';
+import { buildWhatsAppUrl } from '../../utils/phone';
 
 // Mirrors apps/api/src/shared/employee.ts's initial_password Zod schema
 // exactly, so a weak password is caught here instead of failing late after
@@ -822,14 +823,13 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
         );
 
       case 6:
-        const whatsappText = encodeURIComponent(
+        const whatsappText =
           `Hi ${fullName},\n\nWelcome to Radha Real Homes! Your CRM account has been created.\n\n` +
-            `*Login URL:* https://crm.radharealhomeproperties.com\n` +
-            `*Employee Code:* ${createdEmployeeCode}\n` +
-            `*Temporary Password:* ${initialPassword}\n\n` +
-            `Please log in. You will be required to change this password on your first login for security purposes.\n\nBest Regards,\nHR Team`,
-        );
-        const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '').slice(-10)}?text=${whatsappText}`;
+          `*Login URL:* https://crm.radharealhomeproperties.com\n` +
+          `*Employee Code:* ${createdEmployeeCode}\n` +
+          `*Temporary Password:* ${initialPassword}\n\n` +
+          `Please log in. You will be required to change this password on your first login for security purposes.\n\nBest Regards,\nHR Team`;
+        const whatsappUrl = buildWhatsAppUrl(phone, whatsappText);
 
         return (
           <div className="flex flex-col items-center justify-center space-y-6 animate-fadeIn py-10">

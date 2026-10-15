@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { MessageTemplateService } from '../services/messageTemplate.service';
+import { normalizeIndianPhone } from './phone';
 
 const p = prisma;
 
@@ -260,8 +261,7 @@ export const findMatchingPropertiesForLead = async (
 };
 
 function buildWhatsAppUrl(leadPhone: string, text: string): string {
-  const cleanPhone = leadPhone.replace(/[^0-9]/g, '');
-  return `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : '91' + cleanPhone}?text=${encodeURIComponent(text)}`;
+  return `https://wa.me/${normalizeIndianPhone(leadPhone)}?text=${encodeURIComponent(text)}`;
 }
 
 /**

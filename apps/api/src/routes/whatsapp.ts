@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { MessageTemplateService, TemplateContext } from '../services/messageTemplate.service';
 import { MessageTemplateKey } from '../shared';
+import { normalizeIndianPhone } from '../utils/phone';
 
 const router = Router();
 
@@ -34,9 +35,7 @@ router.post(
       // Resolve using the fallback mechanism so it always succeeds even if admin hasn't created it
       const resolved = await MessageTemplateService.resolveWithFallback(template_key, ctx);
 
-      // Clean phone number and ensure 91 prefix
-      const cleanPhone = phone.replace(/[^0-9]/g, '');
-      const formattedPhone = cleanPhone.startsWith('91') ? cleanPhone : '91' + cleanPhone;
+      const formattedPhone = normalizeIndianPhone(phone);
 
       const whatsAppUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(resolved.body_text)}`;
 

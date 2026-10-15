@@ -14,6 +14,7 @@ import {
   Send,
   IndianRupee,
   Clock,
+  MessageCircle,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +23,7 @@ import { useWhatsApp } from '../../hooks/useWhatsApp';
 import { API_BASE_URL } from '../../config';
 import { Permissions } from '../../shared';
 import { formatEmployeeLabel } from '../../utils/employeeLabel';
+import { buildWhatsAppUrl } from '../../utils/phone';
 import {
   LeadActivity,
   MatchItem,
@@ -593,8 +595,21 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
           <div className="flex items-start justify-between mb-5">
             <div>
               <h3 className="font-bold text-navy-900 text-2xl">{lead.customer_name}</h3>
-              <p className="text-sm text-slate-500 font-mono mt-1">
-                {lead.phone} {lead.email ? `• ${lead.email}` : ''}
+              <p className="text-sm text-slate-500 font-mono mt-1 flex items-center gap-2">
+                <span>
+                  {lead.phone} {lead.email ? `• ${lead.email}` : ''}
+                </span>
+                {lead.phone && (
+                  <a
+                    href={buildWhatsAppUrl(lead.phone)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Chat on WhatsApp"
+                    className="text-emerald-600 hover:text-emerald-700"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                  </a>
+                )}
               </p>
             </div>
             {lead.lead_score !== undefined && (
