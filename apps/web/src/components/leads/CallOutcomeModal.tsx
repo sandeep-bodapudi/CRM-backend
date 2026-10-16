@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
 import { toUserFacingError } from '../../utils/userFacingError';
+import { CALL_REASONS_BY_OUTCOME, CALL_REASON_LABELS } from '../../shared';
 
 const OUTCOMES: { value: string; label: string; tone: string }[] = [
   { value: 'CONNECTED_INTERESTED', label: 'Spoke — interested', tone: 'emerald' },
@@ -30,7 +31,7 @@ const defaultFollowUp = () => {
  * finally visible in the CRM instead of only in a typed daily report.
  */
 export const CallOutcomeModal: React.FC<{
-  lead: { id: number; customer_name: string; phone?: string | null };
+  lead: { id: number; customer_name: string; phone?: string | null; status?: string };
   onClose: () => void;
   onLogged: () => void;
 }> = ({ lead, onClose, onLogged }) => {
@@ -40,6 +41,27 @@ export const CallOutcomeModal: React.FC<{
   const [notes, setNotes] = useState('');
   const [followUpAt, setFollowUpAt] = useState(defaultFollowUp());
   const [saving, setSaving] = useState(false);
+  const [reason, setReason] = useState('');
+  const [dropLead, setDropLead] = useState(false);
+
+  // "Not interested" and "wrong number" must say why. A lead still in NEW
+  // cannot be dropped, so the option is not offered for it.
+  const reasonOptions = CALL_REASONS_BY_OUTCOME[outcome] || [];
+  const needsReason = reasonOptions.length > 0;
+  const canDrop = lead.status !== 'NEW';
+  const doNotCall = reason === 'DO_NOT_CALL_AGAIN';
+
+  const pickOutcome = (value: string) => {
+    setOutcome(value);
+    setReason('');
+    setDropLead(false);
+  };
+  const pickReason = (value: string) => {
+    setReason(value);
+    // Wrong numbers and "do not call again" almost always mean the lead is
+    // finished; other reasons leave the choice to the telecaller.
+    setDropLead(['WRONG_PERSON', 'NOT_IN_SERVICE', 'DO_NOT_CALL_AGAIN'].includes(value));
+  };
 
   // A call-back always needs a time; for "interested" a follow-up is offered
   // but optional; for the rest there's nothing to schedule.
@@ -54,6 +76,9 @@ export const CallOutcomeModal: React.FC<{
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           outcome,
+          ...(needsReason && reason
+            ? { reason, drop_lead: canDrop && (dropLead || doNotCall) }
+            : {}),
           notes: notes.trim() || undefined,
           follow_up_at: askFollowUp && followUpAt ? new Date(followUpAt).toISOString() : undefined,
         }),
@@ -63,7 +88,9 @@ export const CallOutcomeModal: React.FC<{
         showToast({ ...toUserFacingError({ status: res.status, body: data }), type: 'error' });
         return;
       }
-      showToast(data.task ? 'Call logged and call-back scheduled' : 'Call logged', 'success');
+      if (data.dropped) showToast('Call logged and lead dropped', 'success');
+      else if (data.drop_error) showToast(`Call logged. ${data.drop_error}`, 'info');
+      else showToast(data.task ? 'Call logged and call-back scheduled' : 'Call logged', 'success');
       onLogged();
       onClose();
     } finally {
@@ -106,13 +133,48 @@ export const CallOutcomeModal: React.FC<{
           {OUTCOMES.map((o) => (
             <button
               key={o.value}
-              onClick={() => setOutcome(o.value)}
+              onClick={() => pickOutcome(o.value)}
               className={`px-3 py-3 rounded-2xl border-2 text-xs font-bold text-left transition-colors ${toneClass(o.tone, outcome === o.value)}`}
             >
               {o.label}
             </button>
           ))}
         </div>
+
+        {needsReason && (
+          <div className="space-y-2">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase">
+              {outcome === 'WRONG_NUMBER' ? 'What was wrong? *' : 'Why not interested? *'}
+            </label>
+            <select
+              value={reason}
+              onChange={(e) => pickReason(e.target.value)}
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm bg-white text-slate-800"
+            >
+              <option value="">Choose a reason...</option>
+              {reasonOptions.map((r) => (
+                <option key={r} value={r}>
+                  {CALL_REASON_LABELS[r]}
+                </option>
+              ))}
+            </select>
+            {reason && canDrop && (
+              <label className="flex items-start gap-2 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={dropLead || doNotCall}
+                  disabled={doNotCall}
+                  onChange={(e) => setDropLead(e.target.checked)}
+                />
+                <span>
+                  Also drop this lead
+                  {doNotCall ? ' (always, so nobody calls this number again)' : ''}
+                </span>
+              </label>
+            )}
+          </div>
+        )}
 
         {askFollowUp && (
           <div>
@@ -144,7 +206,12 @@ export const CallOutcomeModal: React.FC<{
 
         <button
           onClick={save}
-          disabled={!outcome || saving || (outcome === 'CALL_BACK' && !followUpAt)}
+          disabled={
+            !outcome ||
+            saving ||
+            (outcome === 'CALL_BACK' && !followUpAt) ||
+            (needsReason && !reason)
+          }
           className="w-full py-3 rounded-2xl bg-navy-900 text-white font-black text-sm disabled:opacity-40"
         >
           {saving ? 'Saving…' : 'Save call'}

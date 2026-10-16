@@ -51,6 +51,7 @@ export const TaskManager: React.FC = () => {
     id: number;
     customer_name: string;
     phone?: string | null;
+    status?: string;
   } | null>(null);
   const [employees, setEmployees] = useState<EmployeeListItem[]>([]);
   const [activeTab, setActiveTab] = useState<'my_tasks' | 'team_tasks'>('my_tasks');
@@ -458,6 +459,7 @@ export const TaskManager: React.FC = () => {
                     id: t.lead!.id,
                     customer_name: t.lead!.customer_name || 'Customer',
                     phone,
+                    status: t.lead!.status,
                   };
                   setTimeout(() => setCallLead(lead), 400);
                 }}

@@ -9,6 +9,7 @@ import {
   LeadReassignSchema,
   Permissions,
   AddPropertyInterestSchema,
+  CALL_REASON_VALUES,
 } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
 import { LeadService, AppError } from '../services/lead.service';
@@ -419,6 +420,10 @@ const LogCallSchema = z.object({
     'BUSY_OR_SWITCHED_OFF',
     'WRONG_NUMBER',
   ]),
+  // Why the call ended as "not interested" / "wrong number" (see CALL_REASONS_BY_OUTCOME).
+  reason: z.enum(CALL_REASON_VALUES).optional(),
+  // Also drop the lead, using the exit reason that matches `reason`.
+  drop_lead: z.boolean().optional(),
   notes: z.string().max(1000).optional(),
   follow_up_at: z.string().optional(),
 });

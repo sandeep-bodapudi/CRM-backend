@@ -2,7 +2,13 @@ import { prisma } from '../../lib/prisma';
 import { TokenPayload } from '../../utils/jwt';
 import { can } from '../../authz/authorization';
 import { buildLeadScope } from '../../authz/dataScope';
-import { Permissions } from '../../shared';
+import {
+  Permissions,
+  CALL_REASONS_BY_OUTCOME,
+  CALL_REASON_LABELS,
+  CALL_REASON_EXIT_REASON,
+  CallReasonType,
+} from '../../shared';
 import { AppError } from './errors';
 import { updateLeadStatus } from './status';
 import { closeCallBackTasks } from './callBacks';
@@ -37,7 +43,13 @@ const CONNECTED: CallOutcome[] = ['CONNECTED_INTERESTED', 'CONNECTED_NOT_INTERES
 export async function logCall(
   user: TokenPayload,
   leadId: number,
-  input: { outcome: CallOutcome; notes?: string; follow_up_at?: string },
+  input: {
+    outcome: CallOutcome;
+    notes?: string;
+    follow_up_at?: string;
+    reason?: string;
+    drop_lead?: boolean;
+  },
 ) {
   const scope = await buildLeadScope(user);
   const lead = await p.lead.findFirst({ where: { id: leadId, ...scope } });
@@ -46,7 +58,20 @@ export async function logCall(
     throw new AppError(403, 'Only the telecaller this lead is assigned to can log calls on it');
   }
 
-  const followUpAt = input.follow_up_at ? new Date(input.follow_up_at) : null;
+  // The reason is optional for the API (older apps do not send one) but must
+  // fit the outcome when given. "Asked not to be called again" always drops the
+  // lead: nobody should keep calling that number.
+  if (input.reason) {
+    const allowed = CALL_REASONS_BY_OUTCOME[input.outcome] || [];
+    if (!allowed.includes(input.reason as CallReasonType)) {
+      throw new AppError(400, 'That reason does not apply to this call outcome');
+    }
+  }
+  const reason = input.reason as CallReasonType | undefined;
+  const doNotCall = reason === 'DO_NOT_CALL_AGAIN';
+  const wantsDrop = !!reason && (input.drop_lead === true || doNotCall);
+
+  const followUpAt = input.follow_up_at && !doNotCall ? new Date(input.follow_up_at) : null;
   if (followUpAt && Number.isNaN(followUpAt.getTime())) {
     throw new AppError(400, 'Invalid follow-up date');
   }
@@ -58,7 +83,7 @@ export async function logCall(
   }
 
   const note = input.notes?.trim();
-  const activityNotes = `[${CALL_OUTCOMES[input.outcome]}]${note ? ` ${note}` : ''}`;
+  const activityNotes = `[${CALL_OUTCOMES[input.outcome]}]${reason ? ` ${CALL_REASON_LABELS[reason]}.` : ''}${note ? ` ${note}` : ''}`;
 
   const { activity, task } = await p.$transaction(
     async (tx) => {
@@ -68,6 +93,8 @@ export async function logCall(
           actor_id: user.employeeId,
           activity_type: 'CALL_LOGGED',
           notes: activityNotes,
+          call_outcome: input.outcome,
+          call_reason: reason ?? null,
         },
       });
       await tx.lead.update({ where: { id: leadId }, data: { last_contacted_at: new Date() } });
@@ -76,6 +103,8 @@ export async function logCall(
       // they neither stay pending nor turn overdue (and cost points) for a call
       // that was in fact made. A new date below then creates the next one.
       await closeCallBackTasks(tx, leadId, { outcome: 'COMPLETED', assigneeId: user.employeeId });
+      // Do-not-call-again: no call-back may remain for ANYONE on this lead.
+      if (doNotCall) await closeCallBackTasks(tx, leadId, { outcome: 'CANCELLED' });
 
       const task = followUpAt
         ? await tx.task.create({
@@ -110,15 +139,40 @@ export async function logCall(
     );
   }
 
-  return { activity, task, lead: updatedLead };
+  // Optional drop. A failure here (e.g. the lead is still NEW, which cannot be
+  // dropped) must not undo the logged call, so it is reported, not thrown.
+  let dropped = false;
+  let dropError: string | undefined;
+  if (wantsDrop && reason) {
+    const exit = CALL_REASON_EXIT_REASON[reason];
+    try {
+      updatedLead = await updateLeadStatus(
+        user,
+        leadId,
+        'DROPPED',
+        `Dropped after call: ${CALL_REASON_LABELS[reason]}`,
+        { exit_reason: exit.exit_reason, exit_reason_detail: exit.detail },
+      );
+      dropped = true;
+    } catch (e: any) {
+      dropError = e?.message || 'The call was logged, but the lead could not be dropped';
+    }
+  }
+
+  return { activity, task, lead: updatedLead, dropped, drop_error: dropError };
 }
 
 const OUTCOME_BY_LABEL = new Map<string, CallOutcome>(
   (Object.entries(CALL_OUTCOMES) as [CallOutcome, string][]).map(([k, v]) => [v, k]),
 );
 /** CALL_LOGGED notes start with "[<outcome label>]" (see logCall). */
-const outcomeOf = (notes: string | null): CallOutcome | null =>
-  OUTCOME_BY_LABEL.get(/^\[([^\]]+)\]/.exec(notes || '')?.[1] || '') || null;
+const outcomeOf = (a: {
+  notes: string | null;
+  call_outcome?: string | null;
+}): CallOutcome | null =>
+  a.call_outcome && a.call_outcome in CALL_OUTCOMES
+    ? (a.call_outcome as CallOutcome)
+    : OUTCOME_BY_LABEL.get(/^\[([^\]]+)\]/.exec(a.notes || '')?.[1] || '') || null;
 
 /**
  * Splits an employee's calls in [start, end) into first calls on a lead
@@ -162,7 +216,7 @@ export async function getCallQueueMeta(user: TokenPayload, activeStatuses: strin
   const [calls, callBacks] = await Promise.all([
     p.leadActivity.findMany({
       where: { activity_type: 'CALL_LOGGED', lead: mine },
-      select: { lead_id: true, notes: true, created_at: true },
+      select: { lead_id: true, notes: true, call_outcome: true, created_at: true },
       orderBy: { id: 'asc' },
     }),
     p.task.findMany({
@@ -191,7 +245,7 @@ export async function getCallQueueMeta(user: TokenPayload, activeStatuses: strin
     const m = entry(c.lead_id);
     m.calls += 1;
     m.last_call_at = c.created_at;
-    m.last_outcome = outcomeOf(c.notes);
+    m.last_outcome = outcomeOf(c);
   }
   for (const t of callBacks) {
     if (!t.lead_id || !t.target_date) continue;

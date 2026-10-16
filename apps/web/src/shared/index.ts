@@ -639,6 +639,8 @@ export const LeadExitReason = {
   NEGOTIATION_FAILED: 'NEGOTIATION_FAILED',
   OUT_OF_SERVICE_AREA: 'OUT_OF_SERVICE_AREA',
   OTHER: 'OTHER',
+  MARKETING_CALL: 'MARKETING_CALL',
+  BROKER_OR_AGENT: 'BROKER_OR_AGENT',
 } as const;
 
 export type LeadExitReasonType = (typeof LeadExitReason)[keyof typeof LeadExitReason];
@@ -662,4 +664,90 @@ export const LEAD_EXIT_REASON_LABELS: Record<LeadExitReasonType, string> = {
   NEGOTIATION_FAILED: 'Could not agree on price or terms',
   OUT_OF_SERVICE_AREA: 'Out of station / unable to visit',
   OTHER: 'Other (please specify)',
+  MARKETING_CALL: 'Marketing / promotional call, not a real enquiry',
+  BROKER_OR_AGENT: 'Broker / agent, not a buyer',
+};
+
+// ---------------------------------------------------------------------------
+// Call reasons: WHY a call ended as "not interested" or "wrong number".
+// Stored in its own column (LeadActivity.call_reason) instead of inside the
+// note text, so reports can count them. Each maps to the exit reason used if
+// the telecaller also drops the lead.
+// ---------------------------------------------------------------------------
+export const CallReason = {
+  MARKETING_CALL: 'MARKETING_CALL',
+  ALREADY_BOUGHT: 'ALREADY_BOUGHT',
+  NOT_NOW: 'NOT_NOW',
+  BUDGET_LOW: 'BUDGET_LOW',
+  LOCATION_NOT_SUITABLE: 'LOCATION_NOT_SUITABLE',
+  BROKER_OR_AGENT: 'BROKER_OR_AGENT',
+  COMPETITOR: 'COMPETITOR',
+  LOAN_PROBLEM: 'LOAN_PROBLEM',
+  FAMILY_DECISION: 'FAMILY_DECISION',
+  OUT_OF_STATION: 'OUT_OF_STATION',
+  LANGUAGE_PROBLEM: 'LANGUAGE_PROBLEM',
+  DO_NOT_CALL_AGAIN: 'DO_NOT_CALL_AGAIN',
+  WRONG_PERSON: 'WRONG_PERSON',
+  NOT_IN_SERVICE: 'NOT_IN_SERVICE',
+} as const;
+
+export type CallReasonType = (typeof CallReason)[keyof typeof CallReason];
+
+export const CALL_REASON_VALUES = Object.values(CallReason) as [string, ...string[]];
+
+export const CALL_REASON_LABELS: Record<CallReasonType, string> = {
+  MARKETING_CALL: 'Thought it was a marketing / spam call',
+  ALREADY_BOUGHT: 'Already bought elsewhere',
+  NOT_NOW: 'Not looking right now',
+  BUDGET_LOW: 'Budget too low',
+  LOCATION_NOT_SUITABLE: 'Location not suitable',
+  BROKER_OR_AGENT: 'Broker / agent, not a buyer',
+  COMPETITOR: 'Dealing with a competitor',
+  LOAN_PROBLEM: 'Loan problem',
+  FAMILY_DECISION: 'Family decision pending',
+  OUT_OF_STATION: 'Out of station',
+  LANGUAGE_PROBLEM: 'Language problem',
+  DO_NOT_CALL_AGAIN: 'Asked not to be called again',
+  WRONG_PERSON: 'Number belongs to someone else',
+  NOT_IN_SERVICE: 'Number not in service',
+};
+
+/** Which reasons can be given for which call outcome. */
+export const CALL_REASONS_BY_OUTCOME: Record<string, CallReasonType[]> = {
+  CONNECTED_NOT_INTERESTED: [
+    'MARKETING_CALL',
+    'ALREADY_BOUGHT',
+    'NOT_NOW',
+    'BUDGET_LOW',
+    'LOCATION_NOT_SUITABLE',
+    'BROKER_OR_AGENT',
+    'COMPETITOR',
+    'LOAN_PROBLEM',
+    'FAMILY_DECISION',
+    'OUT_OF_STATION',
+    'LANGUAGE_PROBLEM',
+    'DO_NOT_CALL_AGAIN',
+  ],
+  WRONG_NUMBER: ['WRONG_PERSON', 'NOT_IN_SERVICE'],
+};
+
+/** The exit reason used when a call reason leads to dropping the lead. */
+export const CALL_REASON_EXIT_REASON: Record<
+  CallReasonType,
+  { exit_reason: LeadExitReasonType; detail?: string }
+> = {
+  MARKETING_CALL: { exit_reason: 'MARKETING_CALL' },
+  ALREADY_BOUGHT: { exit_reason: 'ALREADY_PURCHASED' },
+  NOT_NOW: { exit_reason: 'NOT_READY' },
+  BUDGET_LOW: { exit_reason: 'BUDGET_MISMATCH' },
+  LOCATION_NOT_SUITABLE: { exit_reason: 'LOCATION_MISMATCH' },
+  BROKER_OR_AGENT: { exit_reason: 'BROKER_OR_AGENT' },
+  COMPETITOR: { exit_reason: 'CHOSE_COMPETITOR' },
+  LOAN_PROBLEM: { exit_reason: 'FINANCING_ISSUE' },
+  FAMILY_DECISION: { exit_reason: 'NOT_READY' },
+  OUT_OF_STATION: { exit_reason: 'OUT_OF_SERVICE_AREA' },
+  LANGUAGE_PROBLEM: { exit_reason: 'OTHER', detail: 'Language problem' },
+  DO_NOT_CALL_AGAIN: { exit_reason: 'DO_NOT_CONTACT' },
+  WRONG_PERSON: { exit_reason: 'INVALID_CONTACT' },
+  NOT_IN_SERVICE: { exit_reason: 'INVALID_CONTACT' },
 };

@@ -37,6 +37,8 @@ enum LeadExitReason {
   NEGOTIATION_FAILED
   OUT_OF_SERVICE_AREA
   OTHER
+  MARKETING_CALL
+  BROKER_OR_AGENT
 }
 
 enum SiteVisitStatus {
@@ -900,6 +902,11 @@ model LeadActivity {
   actor_id      Int
   activity_type String // (§3 extended) LEAD_CREATED, ASSIGNED_TO_AGENT, RECOVERED_TO_POOL, CALL_LOGGED, STATUS_CHANGED, NOTE_ADDED, SITE_VISIT_BOOKED, PROPERTY_INTEREST_ADDED, PROPERTY_INTEREST_REMOVED, WHATSAPP_PROPOSAL_SENT | DEMO_SCHEDULED, DEMO_COMPLETED, SITE_VISIT_REQUESTED, SITE_VISIT_REASSIGNED, SITE_VISIT_ESCALATED, SITE_VISIT_ACCEPTED, SITE_VISIT_RESCHEDULE_REQUESTED, SITE_VISIT_COMPLETED, LEAD_DROPPED, LEAD_RECOVERED
   notes         String? @db.Text
+  // CALL_LOGGED only: the outcome key (e.g. CONNECTED_NOT_INTERESTED) and the
+  // reason behind it (e.g. ALREADY_BOUGHT). Older call activities have neither
+  // and keep their outcome in the note text.
+  call_outcome String? @db.VarChar(40)
+  call_reason  String? @db.VarChar(40)
 
   lead  Lead     @relation(fields: [lead_id], references: [id], onDelete: Cascade)
   actor Employee @relation(fields: [actor_id], references: [id])
