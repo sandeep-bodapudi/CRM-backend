@@ -7,6 +7,13 @@ import { DailyTargetSetSchema, Roles, Permissions } from '../shared';
 import { requireAuthz } from '../middleware/authz';
 import { can } from '../authz/authorization';
 import { getDownstreamEmployeeIds } from '../utils/hierarchy';
+import {
+  TARGET_METRICS,
+  TARGET_PERIODS,
+  METRIC_LABELS,
+  progressFor,
+  TargetMetric,
+} from '../services/targets.service';
 
 const router = Router();
 
@@ -277,9 +284,11 @@ router.post(
             company_id: req.user!.companyId,
             role_name,
             employee_id: employee_id || null,
-            calls_target: targets_json?.callsMade || 50,
-            site_visits_target: targets_json?.siteVisits || 3,
-            closed_deals_target: targets_json?.closedDeals || 1,
+            // A number that was not given means "no target" (0), not 50 / 3 / 1:
+            // those defaults used to be judged against roles that never do that work.
+            calls_target: Number(targets_json?.callsMade) || 0,
+            site_visits_target: Number(targets_json?.siteVisits) || 0,
+            closed_deals_target: Number(targets_json?.closedDeals) || 0,
             form_schema_json: form_schema_json || null,
           },
         });
@@ -300,6 +309,252 @@ router.post(
     } catch (error) {
       logger.error('Set target error:', error);
       return res.status(500).json({ error: 'Failed to set target' });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Measured targets (F-9): day / week / month, counted from what the system
+// recorded. The DailyTarget routes above stay for the daily-report form.
+// ---------------------------------------------------------------------------
+const isTopManagement = (roles: string[]) =>
+  roles.some((r) => [Roles.MD, Roles.ADMIN, Roles.MARKETING_DIRECTOR].includes(r as any));
+
+// GET /api/v1/targets/progress - my targets and how far along I am
+router.get('/progress', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const progress = await progressFor({
+      id: req.user!.employeeId,
+      company_id: req.user!.companyId,
+      roles: req.user!.roles,
+    });
+    return res.status(200).json({ progress });
+  } catch (error) {
+    logger.error('Target progress error:', error);
+    return res.status(500).json({ error: 'Failed to load your targets' });
+  }
+});
+
+// GET /api/v1/targets/progress/team - progress of the people I manage (everyone, for top management)
+router.get(
+  '/progress/team',
+  authenticateToken,
+  requireAuthz(Permissions.REPORTS_TARGETS_CONFIGURE),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const where: any = { company_id: req.user!.companyId, status: 'ACTIVE', deleted_at: null };
+      if (!isTopManagement(req.user!.roles)) {
+        where.id = {
+          in: await getDownstreamEmployeeIds(req.user!.companyId, req.user!.employeeId),
+        };
+      }
+      const people = await p.employee.findMany({
+        where,
+        select: {
+          id: true,
+          full_name: true,
+          employee_code: true,
+          roles: { select: { role: { select: { name: true } } } },
+        },
+        take: 200,
+        orderBy: { full_name: 'asc' },
+      });
+      const employees: any[] = [];
+      for (const person of people) {
+        const progress = await progressFor({
+          id: person.id,
+          company_id: req.user!.companyId,
+          roles: person.roles.map((r) => r.role.name),
+        });
+        if (progress.length > 0) {
+          employees.push({
+            id: person.id,
+            name: person.full_name || person.employee_code,
+            employee_code: person.employee_code,
+            roles: person.roles.map((r) => r.role.name),
+            progress,
+          });
+        }
+      }
+      return res.status(200).json({ employees });
+    } catch (error) {
+      logger.error('Team target progress error:', error);
+      return res.status(500).json({ error: 'Failed to load team targets' });
+    }
+  },
+);
+
+// GET /api/v1/targets/rules - the active measured targets
+router.get(
+  '/rules',
+  authenticateToken,
+  requireAuthz(Permissions.REPORTS_TARGETS_CONFIGURE),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const rules = await p.performanceTarget.findMany({
+        where: { company_id: req.user!.companyId, is_active: true },
+        orderBy: [{ role_name: 'asc' }, { employee_id: 'asc' }, { metric: 'asc' }],
+      });
+      const ids = [...new Set(rules.map((r) => r.employee_id).filter((x): x is number => !!x))];
+      const people = ids.length
+        ? await p.employee.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, full_name: true, employee_code: true },
+          })
+        : [];
+      const byId = new Map(people.map((x) => [x.id, x.full_name || x.employee_code]));
+      return res.status(200).json({
+        rules: rules.map((r) => ({
+          ...r,
+          metric_label: METRIC_LABELS[r.metric as TargetMetric] || r.metric,
+          employee_name: r.employee_id ? byId.get(r.employee_id) || null : null,
+        })),
+        metrics: TARGET_METRICS.map((m) => ({ key: m, label: METRIC_LABELS[m] })),
+        periods: TARGET_PERIODS,
+      });
+    } catch (error) {
+      logger.error('List target rules error:', error);
+      return res.status(500).json({ error: 'Failed to load targets' });
+    }
+  },
+);
+
+// POST /api/v1/targets/rules - set a target for a role or a person
+// ({ role_name | employee_id, metric, period, value, valid_from?, valid_to? });
+// it replaces the current one for the same role/person, metric and period.
+router.post(
+  '/rules',
+  authenticateToken,
+  requireAuthz(Permissions.REPORTS_TARGETS_CONFIGURE),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { role_name, employee_id, metric, period, value, valid_from, valid_to } =
+        req.body || {};
+      if (!TARGET_METRICS.includes(metric)) {
+        return res.status(400).json({ error: 'Choose what to measure.' });
+      }
+      if (!TARGET_PERIODS.includes(period)) {
+        return res.status(400).json({ error: 'Choose day, week or month.' });
+      }
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 1 || n > 100000) {
+        return res.status(400).json({ error: 'The target must be a whole number of 1 or more.' });
+      }
+      if (!!role_name === !!employee_id) {
+        return res
+          .status(400)
+          .json({ error: 'Set a target for a role or for one person, not both.' });
+      }
+      const from = valid_from ? new Date(valid_from) : new Date();
+      const to = valid_to ? new Date(valid_to) : null;
+      if (isNaN(from.getTime()) || (to && (isNaN(to.getTime()) || to < from))) {
+        return res.status(400).json({ error: 'The end date must come after the start date.' });
+      }
+
+      const top = isTopManagement(req.user!.roles);
+      if (role_name) {
+        if (!top) {
+          return res
+            .status(403)
+            .json({ error: 'Only the MD or Marketing Director sets a role-wide target.' });
+        }
+        const role = await p.role.findFirst({ where: { name: role_name } });
+        if (!role) return res.status(404).json({ error: 'That role does not exist.' });
+      } else {
+        const person = await p.employee.findFirst({
+          where: { id: Number(employee_id), company_id: req.user!.companyId },
+          select: { id: true },
+        });
+        if (!person) return res.status(404).json({ error: 'Employee not found.' });
+        if (!top) {
+          const downstream = await getDownstreamEmployeeIds(
+            req.user!.companyId,
+            req.user!.employeeId,
+          );
+          if (!downstream.includes(person.id)) {
+            return res.status(403).json({ error: 'That person is not in your reporting line.' });
+          }
+        }
+      }
+
+      const scope = role_name
+        ? { role_name: String(role_name), employee_id: null }
+        : { role_name: null, employee_id: Number(employee_id) };
+      const created = await p.$transaction(async (tx) => {
+        await tx.performanceTarget.updateMany({
+          where: { company_id: req.user!.companyId, is_active: true, metric, period, ...scope },
+          data: { is_active: false },
+        });
+        const row = await tx.performanceTarget.create({
+          data: {
+            company_id: req.user!.companyId,
+            ...scope,
+            metric,
+            period,
+            value: n,
+            valid_from: from,
+            valid_to: to,
+            created_by_id: req.user!.employeeId,
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            actor_id: req.user!.employeeId,
+            action: 'PERFORMANCE_TARGET_SET',
+            entity_type: 'PERFORMANCE_TARGET',
+            entity_id: row.id,
+            new_value: JSON.stringify({ ...scope, metric, period, value: n }),
+          },
+        });
+        return row;
+      });
+      return res.status(201).json({ message: 'Target saved', target: created });
+    } catch (error) {
+      logger.error('Set target rule error:', error);
+      return res.status(500).json({ error: 'Failed to save the target' });
+    }
+  },
+);
+
+// DELETE /api/v1/targets/rules/:id - stop using a target (kept for history)
+router.delete(
+  '/rules/:id',
+  authenticateToken,
+  requireAuthz(Permissions.REPORTS_TARGETS_CONFIGURE),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const rule = await p.performanceTarget.findFirst({
+        where: { id, company_id: req.user!.companyId, is_active: true },
+      });
+      if (!rule) return res.status(404).json({ error: 'Target not found.' });
+      if (!isTopManagement(req.user!.roles)) {
+        const downstream = await getDownstreamEmployeeIds(
+          req.user!.companyId,
+          req.user!.employeeId,
+        );
+        if (!rule.employee_id || !downstream.includes(rule.employee_id)) {
+          return res.status(403).json({ error: 'You cannot remove this target.' });
+        }
+      }
+      await p.performanceTarget.update({ where: { id }, data: { is_active: false } });
+      await p.auditEvent.create({
+        data: {
+          actor_id: req.user!.employeeId,
+          action: 'PERFORMANCE_TARGET_REMOVED',
+          entity_type: 'PERFORMANCE_TARGET',
+          entity_id: id,
+          old_value: JSON.stringify({
+            metric: rule.metric,
+            period: rule.period,
+            value: rule.value,
+          }),
+        },
+      });
+      return res.status(200).json({ message: 'Target removed' });
+    } catch (error) {
+      logger.error('Remove target rule error:', error);
+      return res.status(500).json({ error: 'Failed to remove the target' });
     }
   },
 );

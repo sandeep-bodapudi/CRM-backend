@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MyTargetsCard } from '../targets/MyTargetsCard';
 import { useNavigate } from 'react-router-dom';
 import {
   PhoneCall,
@@ -448,6 +449,10 @@ export const TelecallerDashboard: React.FC = () => {
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="px-4 pt-4 sm:px-0 sm:pt-0">
+        <MyTargetsCard />
       </div>
 
       {/* ─── QUALIFICATION MODAL ─── */}

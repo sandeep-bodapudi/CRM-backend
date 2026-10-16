@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MyTargetsCard } from '../targets/MyTargetsCard';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import {
@@ -108,6 +109,7 @@ export const SalesManagerDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <MyTargetsCard />
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="text-2xl font-bold text-navy-900 tracking-tight">

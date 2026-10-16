@@ -7,6 +7,7 @@ import { DailyReportSchema, Roles } from '../shared';
 import { getISTComponents } from '../utils/time';
 import { WORK_LOG_ACTION, parseWorkLog, countByKind, WorkLogEntry } from './workLog';
 import { splitCalls } from '../services/lead/calls';
+import { measureMetric, periodRange } from '../services/targets.service';
 
 const router = Router();
 
@@ -100,8 +101,21 @@ router.post(
       const reportedCalls = parseInt(metrics?.callsMade || metrics?.call_count || '0', 10);
       const verified = await verifiedActivityToday(employeeId);
       const calls = verified.calls;
-      const visits = parseInt(metrics?.siteVisits || metrics?.site_visit_count || '0', 10);
-      const deals = parseInt(metrics?.leadsQualified || metrics?.closed_deal_count || '0', 10);
+      // Visits and deals are judged on what the system recorded today, like calls
+      // (they used to follow the typed number). What was typed is still stored.
+      const reportedVisits = parseInt(metrics?.siteVisits || metrics?.site_visit_count || '0', 10);
+      const reportedDeals = parseInt(
+        metrics?.leadsQualified || metrics?.closed_deal_count || '0',
+        10,
+      );
+      const { start: todayStart, end: todayEnd } = periodRange('DAY', now);
+      const [visitsBooked, visitsRun, dealsConfirmed] = await Promise.all([
+        measureMetric(employeeId, 'VISITS_BOOKED', todayStart, todayEnd),
+        measureMetric(employeeId, 'VISITS_COMPLETED', todayStart, todayEnd),
+        measureMetric(employeeId, 'BOOKINGS_CONFIRMED', todayStart, todayEnd),
+      ]);
+      const visits = visitsBooked + visitsRun;
+      const deals = dealsConfirmed;
 
       // Resolve Active Target for employee/role safely
       let activeTarget: any = null;
@@ -123,15 +137,16 @@ router.post(
       const missedMetrics: string[] = [];
 
       if (activeTarget) {
-        if (calls < activeTarget.calls_target) {
+        // A target of 0 means "no target for this": never judged.
+        if (activeTarget.calls_target > 0 && calls < activeTarget.calls_target) {
           isBelowTarget = true;
           missedMetrics.push(`Calls logged in CRM: ${calls}/${activeTarget.calls_target}`);
         }
-        if (visits < activeTarget.site_visits_target) {
+        if (activeTarget.site_visits_target > 0 && visits < activeTarget.site_visits_target) {
           isBelowTarget = true;
           missedMetrics.push(`Site Visits: ${visits}/${activeTarget.site_visits_target}`);
         }
-        if (deals < activeTarget.closed_deals_target) {
+        if (activeTarget.closed_deals_target > 0 && deals < activeTarget.closed_deals_target) {
           isBelowTarget = true;
           missedMetrics.push(`Deals: ${deals}/${activeTarget.closed_deals_target}`);
         }
@@ -170,6 +185,10 @@ router.post(
             ...(metrics || {}),
             verified_calls: verified.calls,
             verified_leads_worked: verified.leads_worked,
+            verified_visits: visits,
+            verified_deals: deals,
+            reported_visits: reportedVisits,
+            reported_deals: reportedDeals,
           },
         },
       });

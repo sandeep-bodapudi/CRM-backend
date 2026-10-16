@@ -762,6 +762,30 @@ model Notification {
   @@index([employee_id])
 }
 
+// A measured target (F-9): "N of <metric> per day / week / month" for a role or
+// one person. Progress is always counted from what the system recorded, never
+// typed. A person's target overrides their role's for the same metric+period.
+// DailyTarget (above) stays for the daily-report form only.
+model PerformanceTarget {
+  id            Int       @id @default(autoincrement())
+  company_id    Int
+  role_name     String? // applies to everyone holding this role...
+  employee_id   Int? // ...or to one person (wins over the role)
+  metric        String // CALLS | VISITS_BOOKED | VISITS_COMPLETED | BOOKINGS_CONFIRMED
+  period        String // DAY | WEEK | MONTH (IST; the week starts on Monday)
+  value         Int
+  valid_from    DateTime
+  valid_to      DateTime? // null = until changed
+  is_active     Boolean   @default(true)
+  created_by_id Int
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@index([company_id, is_active])
+  @@index([employee_id])
+  @@index([role_name])
+}
+
 model DailyTarget {
   id                  Int      @id @default(autoincrement())
   company_id          Int

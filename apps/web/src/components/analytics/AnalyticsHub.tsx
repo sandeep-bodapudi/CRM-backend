@@ -14,6 +14,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { TargetConfigurator } from '../targets/TargetConfigurator';
+import { MeasuredTargetsPanel } from '../targets/MeasuredTargetsPanel';
 import { useAuth } from '../../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
@@ -544,7 +545,12 @@ export const AnalyticsHub: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'targets' && canManageTargets && <TargetConfigurator />}
+        {activeTab === 'targets' && canManageTargets && (
+          <div className="space-y-6">
+            <MeasuredTargetsPanel />
+            <TargetConfigurator />
+          </div>
+        )}
       </div>
     </div>
   );
