@@ -1302,8 +1302,9 @@ export const EmployeeManagement: React.FC = () => {
 
             <p className="text-xs text-slate-500 font-medium mb-4">
               Live attendance code for {qrBadgeEmp.fullName} ({qrBadgeEmp.employeeCode}) - changes
-              in {qrSecondsLeft}s and works for 2 minutes. Printed badges no longer work; the
-              employee shows the live code from Profile in their own app.
+              in {qrSecondsLeft}s and works for 2 minutes. Old printed badges no longer work; the
+              employee shows the live code from Profile in their own app (or, with no phone, the
+              printed badge + PIN below).
             </p>
             <KioskBadgePanel employee={qrBadgeEmp} />
           </div>

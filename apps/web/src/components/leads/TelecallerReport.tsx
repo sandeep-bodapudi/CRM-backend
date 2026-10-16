@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { BarChart3, PhoneCall, History, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
-import { Permissions, LEAD_EXIT_REASON_LABELS } from '../../shared';
+import { Permissions, LEAD_EXIT_REASON_LABELS, CALL_REASON_LABELS } from '../../shared';
 import { LEAD_STATUS_LABELS, getLeadSourceLabel, getRelativeAge } from '../../constants/leadStatus';
 
 type ListName = 'all' | 'active' | 'not_called' | 'booked' | 'dropped' | 'moved';
@@ -25,6 +25,7 @@ interface Report {
   counts: Record<'total' | 'active' | 'not_called' | 'booked' | 'dropped' | 'moved', number>;
   status: Record<string, number>;
   dropped_reasons: { reason: string; count: number }[];
+  call_reasons: { reason: string; count: number }[];
   sources: { source: string; count: number }[];
   calls: {
     total: number;
@@ -234,6 +235,24 @@ export const TelecallerReport: React.FC = () => {
                             style={{ width: `${(r.count / droppedTotal) * 100}%` }}
                           />
                         </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="p-3 rounded-xl border border-slate-200">
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">
+                    What customers said on calls
+                  </p>
+                  {(shown.call_reasons || []).length === 0 ? (
+                    <p className="text-xs text-slate-400">No reasons recorded yet</p>
+                  ) : (
+                    (shown.call_reasons || []).map((r) => (
+                      <div key={r.reason} className="flex justify-between text-sm py-0.5">
+                        <span className="text-slate-600">
+                          {(CALL_REASON_LABELS as Record<string, string>)[r.reason] || r.reason}
+                        </span>
+                        <span className="font-bold text-navy-900">{r.count}</span>
                       </div>
                     ))
                   )}

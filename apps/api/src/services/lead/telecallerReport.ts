@@ -111,6 +111,7 @@ export async function getTelecallerReport(
     calls7,
     calls30,
     callsToday,
+    callReasons,
   ] = await Promise.all([
     p.lead.groupBy({ by: ['status'], where: mine, _count: { _all: true } }),
     p.lead.groupBy({
@@ -125,6 +126,13 @@ export async function getTelecallerReport(
     p.leadActivity.count({ where: callWhere(new Date(todayStart.getTime() - 6 * DAY)) }),
     p.leadActivity.count({ where: callWhere(new Date(todayStart.getTime() - 29 * DAY)) }),
     splitCalls(employeeId, todayStart, new Date(todayStart.getTime() + DAY)),
+    // The reason the customer gave on calls ("not interested" / "wrong number"), read from
+    // the call_reason column; older calls that only have it in their note are not counted.
+    p.leadActivity.groupBy({
+      by: ['call_reason'],
+      where: { ...callWhere(), call_reason: { not: null } },
+      _count: { _all: true },
+    }),
   ]);
 
   const status: Record<string, number> = {};
@@ -200,6 +208,9 @@ export async function getTelecallerReport(
     status,
     dropped_reasons: dropReasons
       .map((r) => ({ reason: r.exit_reason || 'NOT_RECORDED', count: r._count._all }))
+      .sort((a, b) => b.count - a.count),
+    call_reasons: callReasons
+      .map((r) => ({ reason: r.call_reason as string, count: r._count._all }))
       .sort((a, b) => b.count - a.count),
     sources: sources
       .map((s) => ({ source: s.source, count: s._count._all }))
