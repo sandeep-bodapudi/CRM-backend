@@ -197,3 +197,30 @@ export async function applyTransition(
     return updated;
   });
 }
+
+/**
+ * Turn what the customer said about the visited properties into a real
+ * LeadExitReason. Outcome reasons are free text, so match on common words and
+ * fall back to OTHER (with the text kept as the detail) instead of recording
+ * a reason that may be untrue.
+ */
+export function dropReasonFromOutcomes(reasons: Array<string | null | undefined>): {
+  exit_reason: string;
+  exit_reason_detail?: string;
+} {
+  const text = reasons
+    .map((r) => (r || '').trim())
+    .filter(Boolean)
+    .join('; ');
+  const t = text.toLowerCase();
+  if (/budget|price|expensive|costly|afford/.test(t)) return { exit_reason: 'BUDGET_MISMATCH' };
+  if (/location|far|distance|area/.test(t)) return { exit_reason: 'LOCATION_MISMATCH' };
+  if (/competitor|other builder|another builder|chose|bought elsewhere/.test(t))
+    return { exit_reason: 'CHOSE_COMPETITOR' };
+  if (/loan|finance|financing/.test(t)) return { exit_reason: 'FINANCING_ISSUE' };
+  if (/not ready|later|postpone|wait/.test(t)) return { exit_reason: 'NOT_READY' };
+  return {
+    exit_reason: 'OTHER',
+    exit_reason_detail: (text || 'Not interested after the site visit').slice(0, 500),
+  };
+}

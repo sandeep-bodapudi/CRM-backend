@@ -73,12 +73,18 @@ export class SiteVisitWorkflow implements DomainWorkflow {
       CANCEL: 'CANCELLED',
       RESCHEDULE: 'RESCHEDULE_REQUESTED',
     },
+    // START straight from ACCEPTED / PENDING_CUSTOMER_RECONFIRMATION is for a
+    // visit that is happening today and was never reconfirmed (booked the same
+    // day, or after the 09:00 reminder). The service refuses it before the
+    // scheduled day; a future visit still goes through reconfirmation.
     ACCEPTED: {
       RECONFIRM_CUSTOMER: 'PENDING_CUSTOMER_RECONFIRMATION',
+      START: 'ACTIVE',
       CANCEL: 'CANCELLED',
       RESCHEDULE: 'RESCHEDULE_REQUESTED',
     },
     PENDING_CUSTOMER_RECONFIRMATION: {
+      START: 'ACTIVE',
       HOLD: 'ON_HOLD',
       RESCHEDULE: 'RESCHEDULE_REQUESTED',
       CONFIRM: 'CONFIRMED',

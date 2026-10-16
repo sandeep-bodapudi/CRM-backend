@@ -6,7 +6,7 @@ import { getISTComponents } from '../../utils/time';
 import { logger } from '../../utils/logger';
 import { LeadService } from '../lead.service';
 import { createFeedbackRequest, dispatchFeedbackRequestNotification } from '../feedback.service';
-import { generateNextBookingCode } from './shared';
+import { generateNextBookingCode, dropReasonFromOutcomes } from './shared';
 
 const p = prisma;
 
@@ -193,7 +193,9 @@ export async function recordWalkIn(user: TokenPayload, input: WalkInInput) {
             : step === 'NEGOTIATION'
               ? 'Auto-advanced to Negotiation: the customer walked in and showed interest.'
               : undefined,
-          step === 'DROPPED' ? { exit_reason: 'NO_MATCHING_INVENTORY' } : undefined,
+          step === 'DROPPED'
+            ? dropReasonFromOutcomes([notes, 'not interested after walking in'])
+            : undefined,
           { skipPermissionCheck: true },
         );
       }

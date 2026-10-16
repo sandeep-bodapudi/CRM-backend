@@ -5,7 +5,7 @@ import { can } from '../../authz/authorization';
 import { WorkflowEngine } from '../../workflows/workflowEngine';
 import { WorkflowDomain } from '../../workflows/types';
 import { SiteVisitPolicy } from '../../policies/siteVisit.policy';
-import { applyTransition } from './shared';
+import { applyTransition, dropReasonFromOutcomes } from './shared';
 import { createFeedbackRequest, dispatchFeedbackRequestNotification } from '../feedback.service';
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import { logger } from '../../utils/logger';
@@ -476,11 +476,22 @@ export async function startVisit(user: TokenPayload, visitId: number) {
   if (!can(user, Permissions.SITE_VISITS_COMPLETE, visit)) {
     throw { status: 403, message: 'Forbidden: Missing site_visits.complete permission' };
   }
+  const todayIST = getISTComponents(new Date()).dateString;
+  const scheduledDayIST = getISTComponents(visit.scheduled_date).dateString;
+  // A visit nobody reconfirmed with the customer (booked the same day, or after
+  // the 09:00 reminder ran) may still be started once its day has come; a
+  // future visit must go through reconfirmation first.
+  if (visit.status !== 'CONFIRMED' && todayIST < scheduledDayIST) {
+    throw {
+      status: 409,
+      message: `This visit is scheduled for ${scheduledDayIST}; reconfirm it with the customer first.`,
+    };
+  }
   // A visit can't be started before its scheduled (IST) day; MD/Admin may
   // override for genuine early starts.
   if (!user.roles.includes(Roles.MD) && !user.roles.includes(Roles.ADMIN)) {
-    const today = getISTComponents(new Date()).dateString;
-    const scheduledDay = getISTComponents(visit.scheduled_date).dateString;
+    const today = todayIST;
+    const scheduledDay = scheduledDayIST;
     if (today < scheduledDay) {
       throw {
         status: 409,
@@ -585,7 +596,6 @@ export async function completeVisit(
     throw { status: 409, message: transition.reason || 'Invalid state transition' };
   }
 
-  const anyInterested = outcomes.some((o: any) => o.outcome === 'INTERESTED');
   // Array.prototype.every() is vacuously true on an empty array — guard
   // against that so a visit with no linked properties (outcomes: []) isn't
   // misreported as "all not interested".
@@ -654,11 +664,15 @@ export async function completeVisit(
       // The Lead status move is driven by the lead workflow; the service that
       // owns the lead transition will enforce it. Here we record the outcome
       // branch so the caller (route) can advance the Lead accordingly.
-      (updated as any)._outcomeBranch = allNotInterested
-        ? 'DROP'
-        : anyInterested
-          ? 'NEGOTIATE'
-          : 'NEGOTIATE';
+      // With nothing marked "interested" and not everything "not interested"
+      // (e.g. a project visit where no unit was picked), the lead still goes
+      // to Negotiation on an estimate -- decision D9, deliberate.
+      (updated as any)._outcomeBranch = allNotInterested ? 'DROP' : 'NEGOTIATE';
+      (updated as any)._dropReason = allNotInterested
+        ? dropReasonFromOutcomes(
+            outcomes.map((o: any) => o.outcome_reason).concat([feedback_notes]),
+          )
+        : undefined;
 
       // § Phase 7 — a completed visit always has someone who actually ran it
       // (agent takes priority over PM when both are set, matching how the

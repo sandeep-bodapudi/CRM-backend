@@ -501,7 +501,21 @@ router.post(
       // swallowed, so a telecaller had no idea the lead was still stuck at
       // SITE_VISIT_COMPLETED after seeing a plain "completed" success toast.
       let cascadeNote: string | undefined;
-      if (outcomeBranch) {
+      // Other visits of this lead still to happen: the lead moves on when the
+      // last one is completed (the workflow needs every live visit completed),
+      // so this is not a failure and must not look like one.
+      const openSiblingVisits = outcomeBranch
+        ? await prisma.siteVisitBooking.count({
+            where: {
+              lead_id: visit.lead_id,
+              id: { not: visit.id },
+              status: { notIn: ['COMPLETED', 'CANCELLED'] },
+            },
+          })
+        : 0;
+      if (outcomeBranch && openSiblingVisits > 0) {
+        cascadeNote = `Visit recorded. This lead has ${openSiblingVisits} more site visit(s) to complete; it moves on after the last one.`;
+      } else if (outcomeBranch) {
         try {
           await LeadService.updateLeadStatus(
             req.user!,
@@ -519,9 +533,9 @@ router.post(
               ? 'Auto-dropped: every property outcome from the completed site visit was Not Interested.'
               : 'Auto-advanced to Negotiation: the completed site visit had at least one Interested property outcome.',
             // Any -> DROPPED requires a non-empty exit_reason (lead.workflow.ts
-            // §1 row 10) — NO_MATCHING_INVENTORY is the closest fit for "visited,
-            // but nothing shown matched what they wanted."
-            outcomeBranch === 'DROP' ? { exit_reason: 'NO_MATCHING_INVENTORY' } : undefined,
+            // §1 row 10). Taken from what the customer said (budget, location,
+            // ...), or OTHER with that text -- never a reason nobody gave.
+            outcomeBranch === 'DROP' ? (visit as any)._dropReason : undefined,
             { skipPermissionCheck: true },
           );
         } catch (cascadeError: any) {

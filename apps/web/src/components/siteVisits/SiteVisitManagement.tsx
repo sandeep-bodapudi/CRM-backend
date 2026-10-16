@@ -302,6 +302,10 @@ export const SiteVisitManagement: React.FC = () => {
   // person running THIS visit may start or complete it (see canRunVisit).
   const canComplete = !!user?.permissions?.includes(Permissions.SITE_VISITS_COMPLETE);
   const canAssign = !!user?.permissions?.includes(Permissions.SITE_VISITS_ASSIGN_AGENT);
+  const istDay = (d: string | Date) =>
+    new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const isTodayOrPastIST = (d: string | Date) => istDay(d) <= istDay(new Date());
+
   const canRunVisit = (v: SiteVisit) =>
     canComplete &&
     (isMD || v.assigned_agent?.id === user?.id || v.project_manager?.id === user?.id);
@@ -1340,16 +1344,21 @@ export const SiteVisitManagement: React.FC = () => {
 
                 {/* COMPLETE is only valid from ACTIVE (siteVisit.workflow.ts),
                     never directly from CONFIRMED — START is the missing step. */}
-                {visit.status === 'CONFIRMED' && canRunVisit(visit) && (
-                  <button
-                    onClick={() => handleStartVisit(visit.id)}
-                    disabled={isSubmitting}
-                    className="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Start Visit</span>
-                  </button>
-                )}
+                {/* An unreconfirmed visit can still be started once its day has come. */}
+                {(visit.status === 'CONFIRMED' ||
+                  ((visit.status === 'ACCEPTED' ||
+                    visit.status === 'PENDING_CUSTOMER_RECONFIRMATION') &&
+                    isTodayOrPastIST(visit.scheduled_date))) &&
+                  canRunVisit(visit) && (
+                    <button
+                      onClick={() => handleStartVisit(visit.id)}
+                      disabled={isSubmitting}
+                      className="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Start Visit</span>
+                    </button>
+                  )}
 
                 {/* Day-before WA for CONFIRMED status as well */}
                 {visit.status === 'CONFIRMED' && (

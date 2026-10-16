@@ -569,7 +569,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
     if (current === 'DEMO_SCHEDULED') valid.push('DEMO_COMPLETED');
     if (current === 'DEMO_COMPLETED') valid.push('SITE_VISIT_SCHEDULED');
     if (current === 'SITE_VISIT_SCHEDULED') valid.push('SITE_VISIT_COMPLETED');
-    if (current === 'SITE_VISIT_COMPLETED') valid.push('NEGOTIATION');
+    if (current === 'SITE_VISIT_COMPLETED') valid.push('NEGOTIATION', 'SITE_VISIT_SCHEDULED');
     if (current === 'NEGOTIATION') valid.push('BOOKING_INITIATED');
     if (current === 'BOOKING_INITIATED') valid.push('BOOKED');
     if (current === 'DROPPED') valid.push('RECOVERED_TO_POOL');

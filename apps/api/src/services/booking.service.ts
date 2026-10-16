@@ -6,6 +6,8 @@ import { BookingPolicy } from '../policies/booking.policy';
 import { Roles } from '../shared';
 import { randomBytes } from 'crypto';
 import { WorkflowEngine } from '../workflows/workflowEngine';
+import { WorkflowDomain } from '../workflows/types';
+import { logger } from '../utils/logger';
 import { notifyEmployee } from '../utils/notifyEmployee';
 import {
   assertClaimable,
@@ -511,29 +513,73 @@ export class BookingService {
     // Cancelling the booking and releasing the inventory it holds must succeed or
     // fail together: previously these were two independent writes, so a failure
     // between them left a cancelled booking still holding a locked property.
-    const updated = await prisma.$transaction(async (tx) => {
-      const cancelled = await tx.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
-      const cancelRef = refFromRecord(booking);
-      if (cancelRef) {
-        await releaseInventoryLock(tx, cancelRef, id);
-      }
-      return cancelled;
-    });
-    // Cancelled bookings don't directly manipulate Opportunity.stage since it no longer exists.
-    // Instead we transition the lead status.
+    // The lead is dropped together with the cancellation (same transaction), so
+    // a failure can no longer leave a cancelled booking behind an error
+    // response, a still-"Booked" lead and no notification. The lookup and the
+    // permission-free workflow check happen BEFORE the transaction because every
+    // extra query inside it counts toward the remote database's time limit.
+    // exit_reason is an enum: the free-text reason goes in exit_reason_detail.
     const opp = await p.opportunity.findFirst({
       where: { booking_id: id },
       include: { lead: true },
     });
-    if (opp && opp.lead && opp.lead.status !== 'DROPPED') {
-      await WorkflowEngine.transitionLead(
-        p,
-        opp.lead_id,
-        'DROPPED',
-        { actor: user, entity: { ...opp.lead, exit_reason: reason } },
-        { exit_reason: reason },
+    const dropEntity = opp?.lead
+      ? { ...opp.lead, exit_reason: 'OTHER', booking_cancelled: true }
+      : null;
+    const dropCheck =
+      opp?.lead && opp.lead.status !== 'DROPPED' && dropEntity
+        ? WorkflowEngine.canTransition({
+            domain: WorkflowDomain.LEAD,
+            currentState: opp.lead.status,
+            action: 'DROPPED',
+            actor: user,
+            entity: dropEntity,
+          })
+        : null;
+    if (dropCheck && !dropCheck.allowed) {
+      logger.warn(
+        `[booking] Booking ${booking.booking_code} cancelled; lead ${opp?.lead_id} left at ${opp?.lead?.status}: ${dropCheck.reason}`,
       );
     }
+
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        const cancelled = await tx.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
+        const cancelRef = refFromRecord(booking);
+        if (cancelRef) {
+          await releaseInventoryLock(tx, cancelRef, id);
+        }
+        if (opp?.lead && dropEntity && dropCheck?.allowed) {
+          await WorkflowEngine.transitionLead(
+            tx,
+            opp.lead_id,
+            'DROPPED',
+            { actor: user, entity: dropEntity },
+            {
+              exit_reason: 'OTHER',
+              exit_reason_detail: `Booking ${booking.booking_code} cancelled: ${reason}`.slice(
+                0,
+                500,
+              ),
+              exited_from_status: opp.lead.status,
+            },
+          );
+          await tx.leadActivity.create({
+            data: {
+              lead: { connect: { id: opp.lead_id } },
+              actor: { connect: { id: user.employeeId } },
+              activity_type: 'LEAD_DROPPED',
+              notes: `Dropped: booking ${booking.booking_code} was cancelled (${reason}).`.slice(
+                0,
+                1000,
+              ),
+            },
+          });
+        }
+        return cancelled;
+      },
+      { maxWait: 10000, timeout: 30000 },
+    );
 
     if (booking.assigned_employee_id) {
       await notifyEmployee(booking.assigned_employee_id, {

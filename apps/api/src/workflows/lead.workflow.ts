@@ -96,8 +96,11 @@ export class LeadWorkflow implements DomainWorkflow {
       LeadStatus.BOOKED,
     ],
 
+    // SITE_VISIT_SCHEDULED again: the customer wants to see another project
+    // after the first visit (needs a new open visit -- guarded below).
     [LeadStatus.SITE_VISIT_COMPLETED]: [
       LeadStatus.NEGOTIATION,
+      LeadStatus.SITE_VISIT_SCHEDULED,
       LeadStatus.DROPPED,
       LeadStatus.BOOKED,
     ],
@@ -106,7 +109,10 @@ export class LeadWorkflow implements DomainWorkflow {
 
     [LeadStatus.BOOKING_INITIATED]: [LeadStatus.BOOKED, LeadStatus.DROPPED],
 
-    [LeadStatus.BOOKED]: [], // Terminal won state
+    // Won state. The only way out is the cancellation of its booking, which
+    // drops the lead (guarded below: entity.booking_cancelled must be set by
+    // BookingService.cancelBooking; no manual route can use it).
+    [LeadStatus.BOOKED]: [LeadStatus.DROPPED],
 
     [LeadStatus.DROPPED]: [LeadStatus.RECOVERED_TO_POOL],
 
@@ -161,13 +167,35 @@ export class LeadWorkflow implements DomainWorkflow {
       }
     }
 
+    // BOOKED -> DROPPED is only for a cancelled booking.
+    if (currentState === LeadStatus.BOOKED && !(entity && entity.booking_cancelled === true)) {
+      return {
+        allowed: false,
+        reason: 'A booked lead can only be dropped by cancelling its booking',
+      };
+    }
+
+    // A cancelled visit is not a visit: it neither schedules nor blocks the lead.
+    const liveVisits: any[] = ((entity && entity.site_visits) || []).filter(
+      (v: any) => v.status !== 'CANCELLED',
+    );
+
     // §1 row 6: SITE_VISIT_SCHEDULED requires at least one linked SiteVisitBooking.
     if (newStatus === LeadStatus.SITE_VISIT_SCHEDULED) {
-      const visits = (entity && (entity.site_visits || [])) || [];
-      if (visits.length === 0) {
+      if (liveVisits.length === 0) {
         return {
           allowed: false,
           reason: 'Transition to SITE_VISIT_SCHEDULED requires at least one SiteVisitBooking',
+        };
+      }
+      // Going back for another visit needs a visit that has not happened yet.
+      if (
+        currentState === LeadStatus.SITE_VISIT_COMPLETED &&
+        !liveVisits.some((v: any) => v.status !== 'COMPLETED')
+      ) {
+        return {
+          allowed: false,
+          reason: 'Book the new site visit first; every existing visit is already completed',
         };
       }
     }
@@ -175,7 +203,7 @@ export class LeadWorkflow implements DomainWorkflow {
     // §1 row 6: SITE_VISIT_COMPLETED requires ALL linked SiteVisitBooking rows
     // to reach COMPLETED (not just one).
     if (newStatus === LeadStatus.SITE_VISIT_COMPLETED) {
-      const visits = (entity && (entity.site_visits || [])) || [];
+      const visits = liveVisits;
       if (visits.length === 0) {
         return {
           allowed: false,
@@ -269,7 +297,10 @@ export class LeadWorkflow implements DomainWorkflow {
 
     // §1 row 10: Any → DROPPED requires non-empty exit_reason + exited_from_status auto-recorded.
     if (newStatus === LeadStatus.DROPPED) {
-      if (!LeadWorkflow.DROPPABLE_FROM.has(currentState)) {
+      if (
+        !LeadWorkflow.DROPPABLE_FROM.has(currentState) &&
+        !(currentState === LeadStatus.BOOKED && entity && entity.booking_cancelled === true)
+      ) {
         return {
           allowed: false,
           reason: `Cannot drop a lead from ${currentState}`,
