@@ -22,6 +22,7 @@ import { getTimeBasedGreeting } from '../../utils/greeting';
 import { UnassignedPropertiesWidget } from '../md/UnassignedPropertiesWidget';
 import { MDEscalationQueue } from '../md/MDEscalationQueue';
 import { LeadPipelineTabs } from '../md/LeadPipelineTabs';
+import { NeedsYourActionStrip } from '../md/NeedsYourActionStrip';
 
 const ClockWidget: React.FC = () => {
   const [time, setTime] = useState(new Date());
@@ -210,6 +211,8 @@ export const MDExecutiveDashboard: React.FC = () => {
           Unable to load some executive metrics. Please try again later.
         </div>
       )}
+
+      <NeedsYourActionStrip />
 
       {/* Top Banner Row: Clock and Quick Links */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-2">

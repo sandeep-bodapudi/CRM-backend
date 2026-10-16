@@ -8,6 +8,7 @@ import { WORK_LOG_ACTION, parseWorkLog, WorkLogEntry } from './workLog';
 import { requireAuthz } from '../middleware/authz';
 import { Roles, Permissions } from '../shared';
 import { AnalyticsService } from '../services/analytics.service';
+import { OPEN_TASK_STATUSES } from '../services/taskOverdue';
 
 const router = Router();
 
@@ -489,6 +490,17 @@ router.get(
         p.complaint.count({ where: { ...co, status: { in: ['OPEN', 'REOPENED'] } } }),
       ]);
 
+      // Tasks past their deadline (count only; the Tasks page lists them).
+      const overdueTasksN = await p.task.count({
+        where: {
+          ...(isAdmin ? {} : { assignee: { company_id: { in: companyIds } } }),
+          OR: [
+            { status: 'OVERDUE' },
+            { status: { in: OPEN_TASK_STATUSES }, target_date: { lt: now } },
+          ],
+        },
+      });
+
       type ProposalRow = (typeof proposals)[number];
       const proposalGroups: { first: ProposalRow; last: ProposalRow; days: number }[] = [];
       const groupIndex = new Map<string, number>();
@@ -584,6 +596,13 @@ router.get(
           link: '/complaints',
           count: complaintsN,
           items: complaints.map((x) => ({ id: x.id, title: x.title, since: x.created_at })),
+        },
+        {
+          key: 'overdue_tasks',
+          label: 'Overdue tasks',
+          link: '/tasks',
+          count: overdueTasksN,
+          items: [],
         },
       ];
 

@@ -38,6 +38,8 @@ import {
   getISTComponents,
   getISTMidnightInstant,
   getISTMonthRange,
+  getISTDayOfWeek,
+  toHolidayDateKey,
   calculateAttendancePoints,
 } from '../utils/time';
 import { TokenPayload } from '../utils/jwt';
@@ -258,19 +260,44 @@ export class AnalyticsService {
     companyId: number,
   ): Promise<{ exceptions: number; active: number }> {
     // IST midnight (setHours used the server's UTC clock -> 05:30 IST).
-    const startOfDay = getISTMidnightInstant(getISTComponents(new Date()).dateString);
+    const now = getISTComponents(new Date());
+    const startOfDay = getISTMidnightInstant(now.dateString);
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 3600 * 1000);
+    const active = await this.countActiveEmployees(companyId);
 
+    // Not an exception: Sundays, company holidays, and the morning before the
+    // 10:30 cut-off (nobody can be late yet). This used to count everyone who
+    // had not checked in, so at 8 am and on every Sunday it showed the whole company.
+    if (getISTDayOfWeek(now.dateString) === 0) return { exceptions: 0, active };
+    const holiday = await p.companyHoliday.findFirst({
+      where: { company_id: companyId, date: toHolidayDateKey(now.dateString) },
+      select: { id: true },
+    });
+    if (holiday) return { exceptions: 0, active };
+    if (now.hours * 60 + now.minutes < 10 * 60 + 30) return { exceptions: 0, active };
+
+    // Excused: not required to attend, checked in, or on approved leave / field work today.
     const res: any = await p.$queryRaw`
       SELECT COUNT(DISTINCT e.id) as count
       FROM Employee e
       LEFT JOIN AttendanceLog a ON a.employee_id = e.id AND a.check_in_at >= ${startOfDay}
       WHERE e.status = 'ACTIVE'
         AND e.company_id = ${companyId}
-        AND (e.attendance_required = false OR a.id IS NOT NULL)
+        AND (
+          e.attendance_required = false
+          OR a.id IS NOT NULL
+          OR EXISTS (
+            SELECT 1 FROM AttendanceProposal ap
+            WHERE ap.employee_id = e.id
+              AND ap.status = 'APPROVED'
+              AND ap.type IN ('LEAVE', 'FIELD_WORK')
+              AND ap.target_date >= ${startOfDay}
+              AND ap.target_date < ${endOfDay}
+          )
+        )
     `;
-    const totalExemptOrStamped = Number(res[0]?.count || 0);
-    const active = await this.countActiveEmployees(companyId);
-    const exceptions = Math.max(0, active - totalExemptOrStamped);
+    const totalExcused = Number(res[0]?.count || 0);
+    const exceptions = Math.max(0, active - totalExcused);
     return { exceptions, active };
   }
 
@@ -419,13 +446,20 @@ export class AnalyticsService {
       select: { id: true },
     });
 
-    const res = await p.attendanceProposal.count({
+    const rows = await p.attendanceProposal.findMany({
       where: {
         status: 'PENDING',
         employee_id: { in: employees.map((e: any) => e.id) },
       },
+      select: { employee_id: true, type: true, created_at: true },
     });
-    return res;
+    // A multi-day leave is one row per day but ONE request: count it once, the
+    // same way the approvals inbox does, so the number matches the list it opens.
+    const requests = new Set<string>();
+    rows.forEach((r, i) =>
+      requests.add(r.type === 'LEAVE' ? `L:${r.employee_id}:${r.created_at.getTime()}` : `R:${i}`),
+    );
+    return requests.size;
   }
 
   /**
