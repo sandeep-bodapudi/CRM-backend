@@ -109,6 +109,7 @@ export async function getLeads(
         assigned_to: { select: { id: true, employee_code: true, full_name: true, phone: true } },
         created_by: { select: { id: true, employee_code: true, full_name: true } },
         introduced_by: { select: { id: true, employee_code: true, full_name: true } },
+        referral_employee: { select: { id: true, employee_code: true, full_name: true } },
         activities: {
           orderBy: { created_at: 'desc' },
           take: 5,
@@ -155,6 +156,7 @@ export async function getLeadById(user: TokenPayload, leadId: number) {
       assigned_to: { select: { id: true, employee_code: true, full_name: true, phone: true } },
       created_by: { select: { id: true, employee_code: true, full_name: true } },
       introduced_by: { select: { id: true, employee_code: true, full_name: true } },
+      referral_employee: { select: { id: true, employee_code: true, full_name: true } },
       activities: {
         orderBy: { created_at: 'desc' },
         include: { actor: { select: { id: true, employee_code: true, full_name: true } } },

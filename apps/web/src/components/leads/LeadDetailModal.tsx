@@ -58,6 +58,7 @@ interface Lead {
   budget_min?: number;
   budget_max?: number;
   assigned_to?: { id: number; employee_code: string; full_name: string; phone: string };
+  referral_employee?: { id: number; employee_code: string; full_name: string } | null;
   created_by?: { id: number; employee_code: string; full_name: string };
   created_at: string;
   activities?: LeadActivity[];
@@ -613,6 +614,14 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                   </a>
                 )}
               </p>
+              {lead.referral_employee && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Referred by{' '}
+                  <span className="font-semibold text-slate-700">
+                    {lead.referral_employee.full_name || lead.referral_employee.employee_code}
+                  </span>
+                </p>
+              )}
             </div>
             {lead.lead_score !== undefined && (
               <div className="flex flex-col items-end">

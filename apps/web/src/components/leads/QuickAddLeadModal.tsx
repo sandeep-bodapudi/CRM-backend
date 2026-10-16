@@ -45,6 +45,17 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
   // Channel Partner Managers: most leads come from an associate (external
   // agent) -- only then are the associate's details asked for.
   const isCpm = activeRole === Roles.CHANNEL_PARTNER_MANAGER;
+  // Operations roles hand leads to the auto-distribution pool; everyone else keeps
+  // the lead or gives it to a named colleague.
+  const canUsePool = (
+    [
+      Roles.DIGITAL_LEAD_OPERATOR,
+      Roles.MD,
+      Roles.ADMIN,
+      Roles.MARKETING_DIRECTOR,
+      Roles.SALES_MANAGER,
+    ] as string[]
+  ).includes(activeRole);
   const [agentName, setAgentName] = useState('');
   const [agentPhone, setAgentPhone] = useState('');
   const [agentId, setAgentId] = useState('');
@@ -73,10 +84,22 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   const [source, setSource] = useState(isCpm ? 'ASSOCIATE' : 'ORGANIC_SEARCH');
-  // CPMs must choose Me or Pool explicitly; others keep the old default.
-  const [ownershipType, setOwnershipType] = useState<'POOL' | 'DIRECT' | null>(
-    isCpm ? null : 'POOL',
+  // CPMs must choose explicitly. Pool roles keep the old default (Pool); the rest default to Me.
+  const [ownershipType, setOwnershipType] = useState<'POOL' | 'DIRECT' | 'COLLEAGUE' | null>(
+    isCpm ? null : canUsePool ? 'POOL' : 'DIRECT',
   );
+  const [colleagueId, setColleagueId] = useState('');
+  const [colleagues, setColleagues] = useState<
+    { id: number; fullName: string; employeeCode: string }[]
+  >([]);
+  useEffect(() => {
+    if (ownershipType !== 'COLLEAGUE' || colleagues.length > 0) return;
+    fetchWithAuth(`${API_BASE_URL}/leads/assignees`)
+      .then((r) => (r.ok ? r.json() : { employees: [] }))
+      .then((d) => setColleagues(d.employees || []))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownershipType]);
   const fromAssociate = isCpm && source === 'ASSOCIATE';
 
   // Stage the lead is added at (CPM keeping the lead only) and its details.
@@ -123,8 +146,8 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
 
   const validate = () => {
     if (!customerName || !phone) return fail('Name and Phone are required');
-    if (isCpm && !ownershipType)
-      return fail('Choose whether the lead is yours or goes to the pool');
+    if (!ownershipType) return fail('Choose who the lead is assigned to');
+    if (ownershipType === 'COLLEAGUE' && !colleagueId) return fail('Choose the colleague');
     if (fromAssociate && (!agentName.trim() || !agentPhone.trim() || !agentId.trim())) {
       return fail("Enter the associate's name, phone and associate ID");
     }
@@ -164,7 +187,10 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
           customer_name: customerName,
           phone,
           source,
-          ownership_type: ownershipType,
+          ownership_type: ownershipType === 'COLLEAGUE' ? 'DIRECT' : ownershipType,
+          ...(ownershipType === 'COLLEAGUE'
+            ? { assign_to_employee_id: parseInt(colleagueId, 10) }
+            : {}),
           ...(fromAssociate
             ? {
                 external_agent_name: agentName.trim(),
@@ -231,12 +257,13 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
       <label className="text-sm font-semibold text-slate-700">
         Assign this lead to {isCpm && <span className="text-red-500">*</span>}
       </label>
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid gap-3 ${canUsePool ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {(
           [
             ['DIRECT', 'Me', 'Keep this lead.'],
-            ['POOL', 'Pool', 'Auto-distribute.'],
-          ] as const
+            ['COLLEAGUE', 'A colleague', 'Hand it over now.'],
+            ...(canUsePool ? [['POOL', 'Pool', 'Auto-distribute.']] : []),
+          ] as ['DIRECT' | 'COLLEAGUE' | 'POOL', string, string][]
         ).map(([val, title, hint]) => (
           <button
             key={val}
@@ -253,6 +280,26 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
           </button>
         ))}
       </div>
+      {ownershipType === 'COLLEAGUE' && (
+        <div className="space-y-1">
+          <select
+            value={colleagueId}
+            onChange={(e) => setColleagueId(e.target.value)}
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm bg-white text-slate-800"
+          >
+            <option value="">Choose a colleague...</option>
+            {colleagues.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.fullName || c.employeeCode} ({c.employeeCode})
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-slate-500">
+            They are told straight away. The lead keeps its real source and shows you as
+            &quot;Referred by&quot;; you can still see it.
+          </p>
+        </div>
+      )}
     </div>
   );
 

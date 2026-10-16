@@ -180,6 +180,8 @@ export const LeadCreateSchema = z.object({
   customer_name: z.string().min(2, 'Customer name is required'),
   ownership_type: z.enum(['POOL', 'DIRECT']).default('POOL'),
   introduced_by_id: z.number().int().optional().nullable(),
+  // Hand the lead straight to this colleague (instead of keeping it or sending it to the pool).
+  assign_to_employee_id: z.number().int().positive().optional().nullable(),
   phone: z.string().min(10, 'Valid phone number is required'),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
   source: z.string().default('MANUAL_ENTRY'),

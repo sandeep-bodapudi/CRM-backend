@@ -1,7 +1,7 @@
 import { resolveInitialStage, applyInitialStage, ResolvedStage } from './stage';
 import { prisma } from '../../lib/prisma';
 import { TokenPayload } from '../../utils/jwt';
-import { Roles } from '../../shared';
+import { Roles, Permissions } from '../../shared';
 import { AppError } from './errors';
 import { generateNextLeadCode, calculateLeadScore, syncLeadPreferredLocations } from './shared';
 import { findBestAssigneeForLead } from '../../utils/distributionService';
@@ -199,7 +199,58 @@ export async function createLead(
     );
   }
 
-  if (!isPublicSubmission && ownershipType === 'DIRECT') {
+  // Hand the lead straight to a named colleague. The real source is kept; the
+  // creator is recorded as "Referred by" (referral_employee_id) and, having
+  // created the lead, still sees it.
+  let colleague: { id: number; name: string; code: string; creator: string } | null = null;
+  if (
+    !isPublicSubmission &&
+    dto.assign_to_employee_id &&
+    dto.assign_to_employee_id !== user.employeeId
+  ) {
+    if (resolvedStage) {
+      throw new AppError(400, 'A lead handed to a colleague cannot be added at a later stage.');
+    }
+    const target = await p.employee.findFirst({
+      where: {
+        id: dto.assign_to_employee_id,
+        company_id: user.companyId,
+        status: 'ACTIVE',
+        deleted_at: null,
+        roles: {
+          some: {
+            role: {
+              permissions: { some: { permission: { name: Permissions.LEADS_UPDATE } } },
+            },
+          },
+        },
+      },
+      select: { id: true, full_name: true, employee_code: true },
+    });
+    if (!target) {
+      throw new AppError(
+        400,
+        'That colleague cannot take leads (not active, or their role cannot work leads).',
+      );
+    }
+    const creator = await p.employee.findUnique({
+      where: { id: user.employeeId },
+      select: { full_name: true, employee_code: true },
+    });
+    colleague = {
+      id: target.id,
+      name: target.full_name || target.employee_code,
+      code: target.employee_code,
+      creator: creator?.full_name || creator?.employee_code || 'a colleague',
+    };
+  }
+
+  if (colleague) {
+    assignedToId = colleague.id;
+    assignmentType = 'MANUAL_OVERRIDE';
+    status = 'ASSIGNED';
+    ownershipType = 'DIRECT';
+  } else if (!isPublicSubmission && ownershipType === 'DIRECT') {
     assignedToId = user.employeeId;
     assignmentType = 'MANUAL_OVERRIDE';
     status = resolvedStage?.stage || 'ASSIGNED';
@@ -285,7 +336,7 @@ export async function createLead(
         lead_score: leadScore,
         sla_breach_at: slaBreachAt,
         referral_person_name: dto.source === 'REFERRAL' ? dto.referral_person_name || null : null,
-        referral_employee_id: validReferralEmployeeId,
+        referral_employee_id: validReferralEmployeeId ?? (colleague ? user.employeeId : null),
         external_agent_name: fromAssociate ? dto.external_agent_name : null,
         external_agent_phone: fromAssociate ? dto.external_agent_phone : null,
         external_agent_associate_id: fromAssociate ? dto.external_agent_associate_id : null,
@@ -308,6 +359,25 @@ export async function createLead(
     });
 
     if (resolvedStage) await applyInitialStage(tx, user, lead, resolvedStage);
+
+    if (colleague) {
+      await tx.leadActivity.create({
+        data: {
+          lead_id: lead.id,
+          actor_id: user.employeeId,
+          activity_type: 'ASSIGNED_TO_AGENT',
+          notes: `Added by ${colleague.creator} and assigned to ${colleague.name} (${colleague.code}) straight away.`,
+        },
+      });
+      await tx.notification.create({
+        data: {
+          employee_id: colleague.id,
+          type: 'TARGET_ASSIGNED',
+          title: 'A colleague gave you a lead',
+          message: `${colleague.creator} added lead ${lead.customer_name} (${lead.phone}) for you.`,
+        },
+      });
+    }
 
     if (bestAssignee) {
       await tx.leadActivity.create({
@@ -339,6 +409,6 @@ export async function createLead(
       ).catch((err) => logger.error('[WebPush] Lead auto-assign notify:', err));
     }
 
-    return { lead, assignedTo: bestAssignee };
+    return { lead, assignedTo: bestAssignee, assignedToColleague: colleague };
   });
 }

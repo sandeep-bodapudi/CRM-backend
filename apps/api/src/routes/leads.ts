@@ -69,6 +69,48 @@ const parseLeadFilters = (req: AuthenticatedRequest): LeadListFilters => {
   };
 };
 
+// GET /api/v1/leads/assignees - colleagues a lead can be handed to when it is added
+// (company-wide, names only, and only people whose role can work leads).
+router.get(
+  '/assignees',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_CREATE),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employees = await prisma.employee.findMany({
+        where: {
+          company_id: req.user!.companyId,
+          status: 'ACTIVE',
+          deleted_at: null,
+          id: { not: req.user!.employeeId },
+          roles: {
+            some: {
+              role: { permissions: { some: { permission: { name: Permissions.LEADS_UPDATE } } } },
+            },
+          },
+        },
+        select: {
+          id: true,
+          full_name: true,
+          employee_code: true,
+          roles: { select: { role: { select: { name: true } } } },
+        },
+        orderBy: { full_name: 'asc' },
+      });
+      return res.status(200).json({
+        employees: employees.map((e) => ({
+          id: e.id,
+          fullName: e.full_name,
+          employeeCode: e.employee_code,
+          roles: e.roles.map((r) => r.role.name),
+        })),
+      });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
 // GET /api/v1/leads - Fetch leads list (Role-aware)
 router.get(
   '/',
