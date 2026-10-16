@@ -321,8 +321,9 @@ router.get(
           flags.push(`Report claims ${report.call_count} calls; ${calls} logged`);
         }
         // REMOTE = approved work-from-home check-in from the app; PROPOSAL =
-        // created by approving a field-work request. Neither is a hand edit.
-        if (att && !['QR_SCAN', 'REMOTE', 'FIELD', 'PROPOSAL'].includes(att.source)) {
+        // created by approving a field-work request; VISIT = marked present by
+        // completing a site visit with a photo and feedback. None is a hand edit.
+        if (att && !['QR_SCAN', 'REMOTE', 'FIELD', 'PROPOSAL', 'VISIT'].includes(att.source)) {
           flags.push('Attendance entered or edited by hand');
         }
 

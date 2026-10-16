@@ -10,6 +10,7 @@ import { createFeedbackRequest, dispatchFeedbackRequestNotification } from '../f
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import { logger } from '../../utils/logger';
 import { getISTComponents } from '../../utils/time';
+import { markPresentFromVisit } from '../visitAttendance';
 const p = prisma;
 
 /** accept: PM/Agent accepts the routed visit. */
@@ -682,6 +683,9 @@ export async function completeVisit(
   if ((result as any)._feedbackToken) {
     await dispatchFeedbackRequestNotification(visitId, (result as any)._feedbackToken);
   }
+
+  // Running a visit with a photo and feedback counts as being at work that day.
+  await markPresentFromVisit(visitId);
 
   return result;
 }
