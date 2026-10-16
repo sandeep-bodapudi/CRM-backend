@@ -9,6 +9,7 @@ import { OpportunityService } from '../opportunity.service';
 import { CustomerPortalService } from '../customerPortal.service';
 import { findBestAssigneeForLead } from '../../utils/distributionService';
 import { AppError } from './errors';
+import { normaliseLeadSource, LEAD_SOURCE_NAMES } from './sources';
 import { generateNextLeadCode, syncLeadPreferredLocations } from './shared';
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import { logger } from '../../utils/logger';
@@ -684,7 +685,13 @@ function sanitiseBulkLeadRow(raw: any): { row: any; error?: string } {
   };
 }
 
-export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[], assignToSelf = false) {
+export async function bulkUploadLeads(
+  user: TokenPayload,
+  rawLeads: any[],
+  assignToSelf = false,
+  // Chosen once for the whole file; overrides the file's own source column.
+  upload: { source?: string; source_detail?: string } = {},
+) {
   // Phase 2.13: previously unbounded — a CSV/Excel import of any size ran
   // fully inline within one HTTP request (chunked only for the DB writes,
   // not for the request's own duration/memory footprint). Capped at 1000
@@ -722,8 +729,17 @@ export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[], assig
         ...(emails.length > 0 ? [{ email: { in: emails } }] : []),
       ],
     },
-    select: { id: true, phone: true, email: true, status: true },
+    select: { id: true, phone: true, email: true, status: true, source: true },
   });
+
+  // Duplicates are not imported, but if the same person came in again from a
+  // different source (e.g. already a Facebook lead, now also on Housing.com)
+  // that is worth knowing: noted on the lead instead of being lost.
+  const alsoCameFrom: { lead_id: number; notes: string }[] = [];
+  const effectiveSource = (rawSource?: string | null) =>
+    upload.source
+      ? { source: upload.source, detail: upload.source_detail?.trim() || null }
+      : normaliseLeadSource(rawSource);
 
   const existingPhonesMap = new Map();
   const existingEmailsMap = new Map();
@@ -752,6 +768,17 @@ export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[], assig
           existingPhonesMap.get(item.phone) ||
           (item.email ? existingEmailsMap.get(item.email) : undefined);
         if (existingLead) {
+          const incoming = effectiveSource(item.source);
+          if (
+            existingLead.id &&
+            incoming.source !== 'BULK_UPLOAD' &&
+            incoming.source !== existingLead.source
+          ) {
+            alsoCameFrom.push({
+              lead_id: existingLead.id,
+              notes: `Also came in from ${incoming.detail || LEAD_SOURCE_NAMES[incoming.source] || incoming.source} (bulk upload, row ${currentRow}).`,
+            });
+          }
           if (existingLead.status === 'DROPPED') {
             await updateLeadStatus(user, existingLead.id, 'RECOVERED_TO_POOL');
             results.successful_imports++;
@@ -787,7 +814,8 @@ export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[], assig
               customer_name: item.customer_name,
               phone: item.phone,
               email: item.email || null,
-              source: item.source || 'BULK_UPLOAD',
+              source: effectiveSource(item.source).source,
+              source_detail: effectiveSource(item.source).detail,
               status: assignedToId ? 'ASSIGNED' : 'NEW',
               assigned_to_id: assignedToId,
               assigned_at: assignedToId ? new Date() : null,
@@ -846,6 +874,17 @@ export async function bulkUploadLeads(user: TokenPayload, rawLeads: any[], assig
         });
       }
     }
+  }
+
+  if (alsoCameFrom.length > 0) {
+    await p.leadActivity.createMany({
+      data: alsoCameFrom.map((a) => ({
+        lead_id: a.lead_id,
+        actor_id: user.employeeId,
+        activity_type: 'NOTE_ADDED',
+        notes: a.notes,
+      })),
+    });
   }
 
   return results;

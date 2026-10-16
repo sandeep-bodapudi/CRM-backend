@@ -36,10 +36,29 @@ const LEAD_SOURCE_LABELS: Record<string, string> = {
   REFERRAL: 'Referral',
   HOUSING_COM: 'Housing.com',
   ASSOCIATE: 'Associate',
+  OTHER: 'Other',
 };
 
-export const getLeadSourceLabel = (source?: string | null): string => {
+// Sources a person can pick for a bulk upload, and filter the Leads page by.
+export const UPLOAD_SOURCE_OPTIONS = [
+  'HOUSING_COM',
+  'FACEBOOK_ADS',
+  'GOOGLE_ADS',
+  'WEBSITE',
+  'WALK_IN',
+  'REFERRAL',
+  'OTHER',
+] as const;
+export const FILTER_SOURCE_OPTIONS = [
+  ...UPLOAD_SOURCE_OPTIONS,
+  'BULK_UPLOAD',
+  'MANUAL_ENTRY',
+  'ASSOCIATE',
+] as const;
+
+export const getLeadSourceLabel = (source?: string | null, detail?: string | null): string => {
   if (!source) return 'Unknown';
+  if (source === 'OTHER' && detail) return `Other: ${detail}`;
   return LEAD_SOURCE_LABELS[source] || source;
 };
 

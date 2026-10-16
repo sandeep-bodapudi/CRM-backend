@@ -162,7 +162,19 @@ export const LeadSource = {
   WALK_IN: 'WALK_IN',
   REFERRAL: 'REFERRAL',
   HOUSING_COM: 'HOUSING_COM',
+  OTHER: 'OTHER',
 } as const;
+
+// Sources a person can pick for a bulk upload (the file's own column is the fallback).
+export const LEAD_UPLOAD_SOURCES = [
+  'HOUSING_COM',
+  'FACEBOOK_ADS',
+  'GOOGLE_ADS',
+  'WEBSITE',
+  'WALK_IN',
+  'REFERRAL',
+  'OTHER',
+] as const;
 
 export const LeadCreateSchema = z.object({
   customer_name: z.string().min(2, 'Customer name is required'),

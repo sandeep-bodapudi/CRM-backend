@@ -24,7 +24,13 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
 import { buildWhatsAppUrl } from '../../utils/phone';
-import { getLeadStatusLabel, getLeadSourceLabel, getRelativeAge } from '../../constants/leadStatus';
+import {
+  getLeadStatusLabel,
+  getLeadSourceLabel,
+  getRelativeAge,
+  UPLOAD_SOURCE_OPTIONS,
+  FILTER_SOURCE_OPTIONS,
+} from '../../constants/leadStatus';
 import { getPropertyTypeLabel } from '../../constants/propertyTypes';
 import { Roles, Permissions } from '../../shared';
 import { QuickAddLeadModal } from './QuickAddLeadModal';
@@ -52,6 +58,7 @@ interface Lead {
   phone: string;
   email?: string;
   source: string;
+  source_detail?: string | null;
   status: string;
   assignment_type?: string;
   property_type_preference?: string;
@@ -156,7 +163,7 @@ const LeadCard: React.FC<LeadCardProps> = ({
       <div className="mt-auto px-4 py-3 border-t border-slate-100 bg-slate-50/60 rounded-b-2xl flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-semibold shrink-0">
-            {getLeadSourceLabel(lead.source)}
+            {getLeadSourceLabel(lead.source, lead.source_detail)}
           </span>
           {canAssign ? (
             <select
@@ -221,6 +228,7 @@ export const LeadManagement: React.FC = () => {
     searchParams.get('status') || 'ALL',
   );
   const [leadSearchQuery, setLeadSearchQuery] = useState<string>('');
+  const [sourceFilter, setSourceFilter] = useState<string>(searchParams.get('source') || 'ALL');
   // Page size for the server-side list; "Load more" asks for the next page.
   const LEADS_PAGE_SIZE = 50;
   const [totalLeads, setTotalLeads] = useState(0);
@@ -309,6 +317,9 @@ export const LeadManagement: React.FC = () => {
   const [bulkHeaderMatched, setBulkHeaderMatched] = useState(true);
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const [bulkOwnershipType, setBulkOwnershipType] = useState<'POOL' | 'DIRECT' | null>(null);
+  // One source for the whole file ('' = use the file's own source column).
+  const [bulkSource, setBulkSource] = useState('');
+  const [bulkSourceDetail, setBulkSourceDetail] = useState('');
   const [bulkUploadProgress, setBulkUploadProgress] = useState<{
     done: number;
     total: number;
@@ -370,6 +381,8 @@ export const LeadManagement: React.FC = () => {
     setParsedBulkLeads([]);
     setBulkSkippedRows([]);
     setBulkOwnershipType(null);
+    setBulkSource('');
+    setBulkSourceDetail('');
   };
 
   // Backend caps each bulk-upload request at 1000 rows by design (keeps one
@@ -382,6 +395,10 @@ export const LeadManagement: React.FC = () => {
 
   const handleConfirmBulkUpload = async () => {
     if (parsedBulkLeads.length === 0 || !bulkOwnershipType) return;
+    if (bulkSource === 'OTHER' && !bulkSourceDetail.trim()) {
+      showError({ message: 'Enter the name of the source, or choose one from the list.' });
+      return;
+    }
     setIsBulkUploading(true);
 
     const chunks: ParsedBulkLeadRow[][] = [];
@@ -396,7 +413,16 @@ export const LeadManagement: React.FC = () => {
         const res = await fetchWithAuth(`${API_BASE_URL}/leads/bulk-upload`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ leads: chunks[i], ownership_type: bulkOwnershipType }),
+          body: JSON.stringify({
+            leads: chunks[i],
+            ownership_type: bulkOwnershipType,
+            ...(bulkSource
+              ? {
+                  source: bulkSource,
+                  source_detail: bulkSource === 'OTHER' ? bulkSourceDetail.trim() : undefined,
+                }
+              : {}),
+          }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -444,6 +470,7 @@ export const LeadManagement: React.FC = () => {
       const params = new URLSearchParams({ limit: String(LEADS_PAGE_SIZE) });
       params.set('offset', String(append ? leads.length : 0));
       if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (sourceFilter !== 'ALL') params.set('source', sourceFilter);
       if (debouncedQuery) params.set('q', debouncedQuery);
       if (leadViewTab === 'added_by_me') params.set('created_by_id', 'me');
       const res = await fetchWithAuth(`${API_BASE_URL}/leads?${params.toString()}`);
@@ -494,7 +521,7 @@ export const LeadManagement: React.FC = () => {
     if (!user?.permissions?.includes(Permissions.LEADS_READ)) return;
     fetchLeads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, statusFilter, debouncedQuery, leadViewTab]);
+  }, [user, statusFilter, sourceFilter, debouncedQuery, leadViewTab]);
 
   useEffect(() => {
     if (!user?.permissions?.includes(Permissions.LEADS_READ)) return;
@@ -709,7 +736,7 @@ export const LeadManagement: React.FC = () => {
       sortable: true,
       render: (l) => (
         <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold">
-          {getLeadSourceLabel(l.source)}
+          {getLeadSourceLabel(l.source, l.source_detail)}
         </span>
       ),
     },
@@ -1025,6 +1052,19 @@ export const LeadManagement: React.FC = () => {
                 className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm w-56 focus:outline-none focus:border-navy-500"
               />
             </div>
+            <label className="text-xs font-semibold text-slate-500">Source:</label>
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-navy-500"
+            >
+              <option value="ALL">All Sources</option>
+              {FILTER_SOURCE_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {getLeadSourceLabel(s)}
+                </option>
+              ))}
+            </select>
             <label className="text-xs font-semibold text-slate-500">Status:</label>
             <select
               value={statusFilter}
@@ -1186,6 +1226,34 @@ export const LeadManagement: React.FC = () => {
                   </p>
                 </button>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">
+                Where did these leads come from?
+              </label>
+              <select
+                value={bulkSource}
+                onChange={(e) => setBulkSource(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-800"
+              >
+                <option value="">Use the Source column in the file (or Bulk Upload)</option>
+                {UPLOAD_SOURCE_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {getLeadSourceLabel(s)}
+                  </option>
+                ))}
+              </select>
+              {bulkSource === 'OTHER' && (
+                <input
+                  type="text"
+                  value={bulkSourceDetail}
+                  onChange={(e) => setBulkSourceDetail(e.target.value)}
+                  maxLength={80}
+                  placeholder="Name of the source, e.g. MagicBricks"
+                  className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg"
+                />
+              )}
             </div>
 
             <div className="h-60">

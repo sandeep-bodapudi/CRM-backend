@@ -10,6 +10,7 @@ import {
   Permissions,
   AddPropertyInterestSchema,
   CALL_REASON_VALUES,
+  LEAD_UPLOAD_SOURCES,
 } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
 import { LeadService, AppError } from '../services/lead.service';
@@ -356,7 +357,7 @@ router.post(
   requireAuthz(Permissions.LEADS_BULK_UPLOAD),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { leads: rawLeads, ownership_type } = req.body;
+      const { leads: rawLeads, ownership_type, source, source_detail } = req.body;
       if (!Array.isArray(rawLeads) || rawLeads.length === 0) {
         return res.status(400).json({ error: 'Array of lead rows required in body under "leads"' });
       }
@@ -368,7 +369,25 @@ router.post(
       // performance-weighted auto-distribution across telecallers.
       const isDirect = ownership_type === 'DIRECT';
 
-      const result = await LeadService.bulkUploadLeads(req.user!, rawLeads, isDirect);
+      // One source for the whole file (optional; the file's own column is used otherwise).
+      if (source !== undefined && source !== null && source !== '') {
+        if (!(LEAD_UPLOAD_SOURCES as readonly string[]).includes(source)) {
+          return res.status(400).json({ error: 'Unknown source for this upload' });
+        }
+        if (source === 'OTHER' && !(typeof source_detail === 'string' && source_detail.trim())) {
+          return res.status(400).json({ error: 'Enter the name of the source' });
+        }
+      }
+      const uploadSource =
+        source && source !== ''
+          ? {
+              source: String(source),
+              source_detail:
+                source === 'OTHER' ? String(source_detail).trim().slice(0, 80) : undefined,
+            }
+          : {};
+
+      const result = await LeadService.bulkUploadLeads(req.user!, rawLeads, isDirect, uploadSource);
       return res.status(200).json({
         message: `Successfully processed and auto-distributed ${result.successful_imports} leads`,
         count: result.successful_imports,

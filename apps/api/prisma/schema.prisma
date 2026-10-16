@@ -698,6 +698,7 @@ model Task {
   @@index([assignee_id])
   @@index([lead_id])
   @@index([opportunity_id])
+  @@index([assignee_id, status, target_date])
 }
 
 model DailyReport {
@@ -729,6 +730,8 @@ model AuditEvent {
   created_at  DateTime @default(now())
 
   @@index([actor_id])
+  @@index([action, created_at])
+  @@index([actor_id, action, created_at])
 }
 
 model Notification {
@@ -795,7 +798,9 @@ model Lead {
   customer_name            String
   phone                    String
   email                    String?
-  source                   String            @default("MANUAL_ENTRY") // MANUAL_ENTRY, BULK_UPLOAD, WEBSITE, FACEBOOK_ADS, GOOGLE_ADS, WALK_IN, REFERRAL
+  source                   String            @default("MANUAL_ENTRY") // MANUAL_ENTRY, BULK_UPLOAD, WEBSITE, FACEBOOK_ADS, GOOGLE_ADS, WALK_IN, REFERRAL, HOUSING_COM, OTHER
+  // The name when source is OTHER (or the original wording when a file's free-text source was not recognised).
+  source_detail            String?           @db.VarChar(80)
   ownership_type           LeadOwnershipType @default(POOL)
   status                   String            @default("NEW") // NEW, ASSIGNED, CONTACTED, QUALIFIED, DEMO_SCHEDULED, DEMO_COMPLETED, SITE_VISIT_SCHEDULED, SITE_VISIT_COMPLETED, NEGOTIATION, BOOKING_INITIATED, BOOKED, DROPPED, RECOVERED_TO_POOL
   assigned_to_id           Int?
@@ -876,6 +881,10 @@ model Lead {
   @@index([status])
   @@index([company_id, created_at])
   @@index([phone])
+  @@index([assigned_to_id, status])
+  @@index([company_id, status])
+  @@index([created_by_id])
+  @@index([source])
   @@index([email])
 }
 
@@ -915,6 +924,8 @@ model LeadActivity {
 
   @@index([lead_id])
   @@index([actor_id])
+  @@index([lead_id, activity_type])
+  @@index([actor_id, created_at])
 }
 
 model LeadMatchingRequirement {

@@ -359,6 +359,7 @@ export interface LeadListItem {
   phone: string;
   email?: string | null;
   source?: string;
+  source_detail?: string | null;
   status?: string;
   assignment_type?: string | null;
   property_type_preference?: string | null;
