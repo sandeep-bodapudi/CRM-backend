@@ -9,7 +9,7 @@ const verify = async () => {
     'Expired Session Cleanup',
     'Commission Calculation Batch',
     'Backup Verification',
-    'Report Generation'
+    'Report Generation',
   ];
 
   for (const jobName of jobsToTest) {
@@ -34,4 +34,6 @@ const verify = async () => {
   }
 };
 
-verify().then(() => console.log('\nVerification complete.')).catch(console.error);
+verify()
+  .then(() => console.log('\nVerification complete.'))
+  .catch(console.error);

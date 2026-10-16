@@ -180,6 +180,18 @@ router.post(
   async (req: any, res, next) => {
     try {
       const dto = InitiateBookingSchema.parse(req.body);
+      // A backdated "legacy" booking (an old sale entered after the fact) needs its own
+      // permission; booking-form submitters used to be able to set is_legacy freely.
+      if (
+        dto.is_legacy &&
+        !(req.user.permissions || []).includes(Permissions.BOOKINGS_LEGACY_CREATE)
+      ) {
+        return res
+          .status(403)
+          .json({
+            error: 'Entering an old (backdated) booking needs the legacy-booking permission.',
+          });
+      }
       const booking = await BookingService.initiateBooking(req.user, dto as any);
       res.status(201).json(booking);
     } catch (error) {
@@ -198,6 +210,16 @@ router.post(
   async (req: any, res, next) => {
     try {
       const formData = BookingFormSubmitSchema.parse(req.body);
+      if (
+        (formData as any).is_legacy &&
+        !(req.user.permissions || []).includes(Permissions.BOOKINGS_LEGACY_CREATE)
+      ) {
+        return res
+          .status(403)
+          .json({
+            error: 'Entering an old (backdated) booking needs the legacy-booking permission.',
+          });
+      }
       const booking = await BookingService.submitBookingForm(
         req.user,
         parseInt(req.params.id, 10),
