@@ -633,7 +633,8 @@ export async function completeVisit(
         data: {
           status: 'COMPLETED',
           feedback_notes,
-          proof_photo_url: proof_photo_url || null,
+          // Keep the photo uploaded while the visit was running.
+          proof_photo_url: proof_photo_url || visit.proof_photo_url || null,
           rating: rating || null,
           completed_at: new Date(),
         },

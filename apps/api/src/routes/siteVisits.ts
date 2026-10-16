@@ -2,7 +2,11 @@ import { logger } from '../utils/logger';
 import { Router, Response, NextFunction } from 'express';
 import { authenticateToken, AuthenticatedRequest, requirePermission } from '../middleware/auth';
 import { z } from 'zod';
+import multer from 'multer';
 import { Permissions } from '../shared';
+import { can } from '../authz/authorization';
+import { SiteVisitPolicy } from '../policies/siteVisit.policy';
+import { processImageBuffer, getStorageService } from '../services/storage.service';
 import {
   SiteVisitCreateSchema,
   SiteVisitAcceptSchema,
@@ -132,6 +136,101 @@ router.post(
     } catch (error: any) {
       logger.error('Record walk-in error:', error);
       next(error);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Visit proof photo (F-5). Uploaded from the phone while the visit is running,
+// re-encoded (which also drops the location data in the photo's metadata),
+// stored outside the publicly served folders and shown only to people who can
+// see the visit.
+// ---------------------------------------------------------------------------
+const PROOF_PREFIX = '/uploads/visit-proofs/';
+const proofUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) cb(null, true);
+    else cb(Object.assign(new Error('Upload a JPG, PNG or WebP photo.'), { statusCode: 400 }));
+  },
+});
+
+// POST /api/v1/site-visits/:id/proof-photo - multipart field "photo"
+router.post(
+  '/:id/proof-photo',
+  authenticateToken,
+  requirePermission([Permissions.SITE_VISITS_COMPLETE]),
+  proofUpload.single('photo'),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const visitId = parseInt(req.params.id, 10);
+      if (isNaN(visitId)) return res.status(400).json({ error: 'Invalid ID format' });
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: 'Choose a photo to upload.' });
+
+      const visit = await prisma.siteVisitBooking.findFirst({
+        where: { id: visitId, lead: { company_id: req.user!.companyId } },
+        include: { lead: true },
+      });
+      if (!visit) return res.status(404).json({ error: 'Site visit booking not found' });
+      if (!can(req.user!, Permissions.SITE_VISITS_COMPLETE, visit)) {
+        return res
+          .status(403)
+          .json({ error: 'Only the person running this visit can add its photo.' });
+      }
+      if (!['ACTIVE', 'COMPLETED'].includes(visit.status)) {
+        return res.status(409).json({ error: 'Start the visit before adding its photo.' });
+      }
+
+      let processed;
+      try {
+        processed = await processImageBuffer(file.buffer);
+      } catch {
+        return res.status(400).json({ error: 'That file is not a valid photo.' });
+      }
+      const storage = getStorageService('visit-proofs');
+      const url = await storage.upload(processed.processedBuffer, processed.filename, 'image/webp');
+      await prisma.siteVisitBooking.update({
+        where: { id: visitId },
+        data: { proof_photo_url: url },
+      });
+      if (visit.proof_photo_url && visit.proof_photo_url.startsWith(PROOF_PREFIX)) {
+        await storage
+          .delete(visit.proof_photo_url)
+          .catch((e: unknown) => logger.warn('Could not delete the replaced visit photo:', e));
+      }
+      return res.status(201).json({ message: 'Photo saved', proof_photo_url: url });
+    } catch (error: any) {
+      logger.error('Upload visit photo error:', error);
+      next(error);
+    }
+  },
+);
+
+// GET /api/v1/site-visits/:id/proof-photo - the photo, for people who can see this visit
+router.get(
+  '/:id/proof-photo',
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const visitId = parseInt(req.params.id, 10);
+      if (isNaN(visitId)) return res.status(400).json({ error: 'Invalid ID format' });
+      const visit = await prisma.siteVisitBooking.findFirst({
+        where: { id: visitId, ...SiteVisitPolicy.canList(req.user!) },
+        select: { proof_photo_url: true },
+      });
+      if (!visit || !visit.proof_photo_url || !visit.proof_photo_url.startsWith(PROOF_PREFIX)) {
+        return res.status(404).json({ error: 'No photo for this visit.' });
+      }
+      const bytes = await getStorageService('visit-proofs').download(visit.proof_photo_url);
+      res.setHeader('Content-Type', 'image/webp');
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.status(200).send(bytes);
+    } catch (error) {
+      logger.error('Fetch visit photo error:', error);
+      return res.status(404).json({ error: 'The photo could not be loaded.' });
     }
   },
 );
@@ -367,12 +466,15 @@ router.post(
       if (isNaN(visitId))
         return next({ name: 'AppError', statusCode: 400, message: 'Invalid ID format' });
       const { outcomes, feedback_notes, proof_photo_url, rating } = req.body;
+      // The photo is uploaded separately (POST /:id/proof-photo); a URL typed into
+      // the request is ignored.
+      void proof_photo_url;
       const visit = await SiteVisitService.completeVisit(
         req.user!,
         visitId,
         outcomes,
         feedback_notes,
-        proof_photo_url,
+        undefined,
         rating,
       );
 

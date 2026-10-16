@@ -24,6 +24,7 @@ import { Roles, Permissions } from '../../shared';
 import { EmployeeListItem } from '../../types';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
 import { WalkInVisitModal } from './WalkInVisitModal';
+import { VisitPhotoPicker } from './VisitPhotoPicker';
 
 interface ProjectUnitOption {
   id: number;
@@ -277,7 +278,7 @@ export const SiteVisitManagement: React.FC = () => {
   const [projectUnits, setProjectUnits] = useState<ProjectUnitOption[]>([]);
   const [likedUnitIds, setLikedUnitIds] = useState<number[]>([]);
   const [rating, setRating] = useState('HOT_INTERESTED');
-  const [proofPhotoUrl, setProofPhotoUrl] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [propertyOutcome, setPropertyOutcome] = useState<'INTERESTED' | 'NOT_INTERESTED'>(
     'INTERESTED',
   );
@@ -332,6 +333,20 @@ export const SiteVisitManagement: React.FC = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showCompleteModal, selectedVisit?.id]);
+
+  // Visit photos sit behind the login: fetch with the session, then show the bytes.
+  const openVisitPhoto = async (visitId: number) => {
+    const win = window.open('', '_blank');
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/site-visits/${visitId}/proof-photo`);
+      if (!res.ok) throw new Error('missing');
+      const url = URL.createObjectURL(await res.blob());
+      if (win) win.location.href = url;
+    } catch {
+      win?.close();
+      showError(toUserFacingError({ message: 'The photo could not be loaded.', body: {} }));
+    }
+  };
 
   const fetchVisitsData = async () => {
     setIsLoading(true);
@@ -671,7 +686,6 @@ export const SiteVisitManagement: React.FC = () => {
         body: JSON.stringify({
           feedback_notes: feedbackNotes,
           rating,
-          proof_photo_url: proofPhotoUrl,
           outcomes,
         }),
       });
@@ -1003,14 +1017,24 @@ export const SiteVisitManagement: React.FC = () => {
                     )}
                     {visit.proof_photo_url && (
                       <li>
-                        <a
-                          href={mediaUrl(visit.proof_photo_url)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-navy-700 font-bold underline"
-                        >
-                          View visit photo
-                        </a>
+                        {visit.proof_photo_url.startsWith('/uploads/visit-proofs/') ? (
+                          <button
+                            type="button"
+                            onClick={() => openVisitPhoto(visit.id)}
+                            className="text-navy-700 font-bold underline"
+                          >
+                            View visit photo
+                          </button>
+                        ) : (
+                          <a
+                            href={mediaUrl(visit.proof_photo_url)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-navy-700 font-bold underline"
+                          >
+                            View visit photo
+                          </a>
+                        )}
                       </li>
                     )}
                     {visit.cancellation_reason && (
@@ -1646,18 +1670,12 @@ export const SiteVisitManagement: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                  On-Site Proof Photo URL
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. https://images.unsplash.com/photo-1600585154340-be6161a56a0c"
-                  value={proofPhotoUrl}
-                  onChange={(e) => setProofPhotoUrl(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600"
-                />
-              </div>
+              <VisitPhotoPicker
+                key={selectedVisit.id}
+                visitId={selectedVisit.id}
+                alreadyHasPhoto={!!selectedVisit.proof_photo_url}
+                onBusyChange={setPhotoBusy}
+              />
 
               <div className="pt-2 flex justify-end gap-2">
                 <button
@@ -1669,10 +1687,14 @@ export const SiteVisitManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-md"
+                  disabled={isSubmitting || photoBusy}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-md"
                 >
-                  {isSubmitting ? 'Recording...' : 'Complete Visit & Update Lead'}
+                  {isSubmitting
+                    ? 'Recording...'
+                    : photoBusy
+                      ? 'Saving the photo...'
+                      : 'Complete Visit & Update Lead'}
                 </button>
               </div>
             </form>
