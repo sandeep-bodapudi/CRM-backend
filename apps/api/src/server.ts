@@ -182,6 +182,18 @@ if (!fs.existsSync(projectsMediaDir)) fs.mkdirSync(projectsMediaDir, { recursive
 if (!fs.existsSync(projectsDocumentsDir)) fs.mkdirSync(projectsDocumentsDir, { recursive: true });
 if (!fs.existsSync(offersDir)) fs.mkdirSync(offersDir, { recursive: true });
 
+// Everything under /uploads is user-supplied. Never let a browser sniff or run
+// it: nosniff + a locked-down sandbox CSP, and anything that is not a plain
+// raster image or PDF is forced to download (covers files stored before the
+// image-only upload filters existed, e.g. an old .html/.svg profile photo).
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  if (!/\.(pdf|jpe?g|png|webp|gif)$/i.test(req.path)) {
+    res.setHeader('Content-Disposition', 'attachment');
+  }
+  next();
+});
 app.use('/uploads/properties', express.static(propertiesDir));
 app.use('/uploads/profiles', express.static(profilesDir));
 app.use('/uploads/projects-layout', express.static(projectsLayoutDir));

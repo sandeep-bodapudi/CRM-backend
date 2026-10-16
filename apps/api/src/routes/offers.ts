@@ -3,7 +3,11 @@ import { Router, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { Roles } from '../shared';
-import { memoryUpload, getStorageService } from '../services/storage.service';
+import {
+  imageOnlyUpload,
+  processImageBuffer,
+  getStorageService,
+} from '../services/storage.service';
 
 const router = Router();
 
@@ -20,7 +24,7 @@ router.post('/upload-image', async (req: AuthenticatedRequest, res: Response) =>
   if (!isManager(req.user!.roles)) {
     return res.status(403).json({ error: 'Only MD and Admin can manage offers' });
   }
-  (memoryUpload.single('image') as any)(req, res, async (err: any) => {
+  (imageOnlyUpload.single('image') as any)(req, res, async (err: any) => {
     if (err) {
       logger.error('Multer error (offer image upload):', err);
       return res.status(400).json({ error: err.message || 'File upload failed' });
@@ -30,13 +34,20 @@ router.post('/upload-image', async (req: AuthenticatedRequest, res: Response) =>
       if (!file) {
         return res.status(400).json({ error: 'No image file provided.' });
       }
-      // Stored with its original extension and served from the API origin,
-      // so only real image types are accepted (no .html/.svg).
-      if (!/\.(jpe?g|png|webp|gif)$/i.test(file.originalname || '')) {
-        return res.status(400).json({ error: 'Upload a JPG, PNG, WebP or GIF image.' });
+      // Re-encoded to WebP: proves the bytes are a real image and the stored
+      // name/extension is ours, never the client's.
+      let processed;
+      try {
+        processed = await processImageBuffer(file.buffer);
+      } catch {
+        return res.status(400).json({ error: 'That file is not a valid image.' });
       }
       const storageService = getStorageService('offers');
-      const imageUrl = await storageService.upload(file.buffer, file.originalname, file.mimetype);
+      const imageUrl = await storageService.upload(
+        processed.processedBuffer,
+        processed.filename,
+        'image/webp',
+      );
       return res.status(201).json({ image_url: imageUrl });
     } catch (error) {
       logger.error('Error uploading offer image:', error);

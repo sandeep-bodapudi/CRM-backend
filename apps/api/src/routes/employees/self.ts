@@ -12,11 +12,15 @@ import {
   normaliseEmployeePhone,
   normaliseEmployeeEmail,
 } from '../../services/employeeContact.service';
-import { memoryUpload, getStorageService } from '../../services/storage.service';
+import {
+  imageOnlyUpload,
+  processImageBuffer,
+  getStorageService,
+} from '../../services/storage.service';
 
 const router = Router();
 
-const profileUpload = memoryUpload;
+const profileUpload = imageOnlyUpload;
 
 // PATCH /api/v1/employees/me - Self-update for safe profile fields
 router.patch(
@@ -173,10 +177,16 @@ router.post('/me/photo', authenticateToken, async (req: AuthenticatedRequest, re
       });
 
       const storageService = getStorageService('profiles');
+      let processed;
+      try {
+        processed = await processImageBuffer(file.buffer);
+      } catch {
+        return res.status(400).json({ error: 'That file is not a valid image.' });
+      }
       const newImageUrl = await storageService.upload(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
+        processed.processedBuffer,
+        processed.filename,
+        'image/webp',
       );
 
       await prisma.employee.update({

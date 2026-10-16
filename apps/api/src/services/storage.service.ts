@@ -15,10 +15,31 @@ export const UPLOAD_DIR =
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
-export const propertyImageUpload = multer({
+const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+
+/**
+ * Image-only uploader. Rejects anything whose declared type OR extension is not
+ * a raster image (no .html/.svg/.js), so a file is never stored under an
+ * extension the browser would execute when served from the API origin.
+ * Callers must still re-encode through processImageBuffer, which proves the
+ * bytes really are an image.
+ */
+export const imageOnlyUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_SIZE },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ALLOWED_IMAGE_MIME.has(file.mimetype) && ALLOWED_IMAGE_EXT.has(ext)) {
+      cb(null, true);
+    } else {
+      // statusCode lets the global error handler answer 400, not 500.
+      cb(Object.assign(new Error('Upload a JPG, PNG, WebP or GIF image.'), { statusCode: 400 }));
+    }
+  },
 });
+
+export const propertyImageUpload = imageOnlyUpload;
 
 export const memoryUpload = multer({
   storage: multer.memoryStorage(),

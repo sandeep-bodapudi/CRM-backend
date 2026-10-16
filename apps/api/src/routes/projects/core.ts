@@ -14,7 +14,7 @@ import {
 } from '../../shared';
 import { validateRequestBody } from '../../middleware/validate';
 import { ProjectService } from '../../services/project.service';
-import { memoryUpload } from '../../services/storage.service';
+import { memoryUpload, imageOnlyUpload } from '../../services/storage.service';
 import { prisma } from '../../lib/prisma';
 import { buildProjectScope } from '../../authz/dataScope';
 
@@ -444,7 +444,7 @@ router.post(
   '/:id/layout-images',
   authenticateToken,
   requireAuthz(Permissions.PROJECTS_UPDATE, projectInScope()),
-  memoryUpload.single('image') as any,
+  imageOnlyUpload.single('image') as any,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const projectId = parseInt(req.params.id, 10);
@@ -570,7 +570,7 @@ router.post(
   '/:id/media',
   authenticateToken,
   requireAuthz(Permissions.PROJECTS_UPDATE, projectInScope()),
-  memoryUpload.single('file') as any,
+  imageOnlyUpload.single('file') as any,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const projectId = parseInt(req.params.id, 10);
