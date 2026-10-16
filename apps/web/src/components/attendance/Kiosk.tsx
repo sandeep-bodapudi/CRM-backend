@@ -20,7 +20,7 @@ import { ScanResult } from '../../types';
 import jsQR from 'jsqr';
 import { getTimeBasedGreeting } from '../../utils/greeting';
 
-type KioskMode = 'KIOSK_LOGIN' | 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
+type KioskMode = 'KIOSK_LOGIN' | 'IDLE' | 'PIN' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
 
 export const Kiosk: React.FC = () => {
   const [mode, setMode] = useState<KioskMode>('KIOSK_LOGIN');
@@ -28,6 +28,11 @@ export const Kiosk: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [timeIST, setTimeIST] = useState<string>('');
+
+  // Printed badge: after the badge is scanned the person types their PIN.
+  const [pendingBadge, setPendingBadge] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
 
   // Kiosk credential login state
   const [loginUsername, setLoginUsername] = useState('');
@@ -164,6 +169,9 @@ export const Kiosk: React.FC = () => {
   }, [mode]);
 
   const resetKiosk = () => {
+    setPendingBadge(null);
+    setPin('');
+    setPinError(null);
     setMode('IDLE');
     setScanResult(null);
     setErrorMessage(null);
@@ -228,7 +236,7 @@ export const Kiosk: React.FC = () => {
     }
   };
 
-  const handleScan = async (payload: string) => {
+  const handleScan = async (payload: string, pinEntered?: string) => {
     if (!payload.trim()) return;
     if (!kioskToken.current) {
       setErrorMessage('Not authenticated — please log in first.');
@@ -243,20 +251,35 @@ export const Kiosk: React.FC = () => {
       const res = await fetchWithKioskToken(`${API_BASE_URL}/attendance/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qrPayload: payload }),
+        body: JSON.stringify({ qrPayload: payload, ...(pinEntered ? { pin: pinEntered } : {}) }),
       });
 
       const data = await res.json();
 
+      // A printed badge was scanned: ask for the PIN before anything else.
+      if (res.status === 422 && data.code === 'PIN_REQUIRED') {
+        setPendingBadge(payload);
+        setPin('');
+        setPinError(null);
+        setMode('PIN');
+        return;
+      }
+      if (!res.ok && pinEntered && data.code === 'WRONG_PIN') {
+        setPin('');
+        setPinError(data.error);
+        setMode('PIN');
+        return;
+      }
       if (!res.ok) {
         throw new Error(data.error || 'Login failed');
       }
+      setPendingBadge(null);
 
       if (data.alreadyStamped) {
         const outRes = await fetchWithKioskToken(`${API_BASE_URL}/attendance/checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ qrPayload: payload }),
+          body: JSON.stringify({ qrPayload: payload, ...(pinEntered ? { pin: pinEntered } : {}) }),
         });
 
         const outData = await outRes.json();
@@ -473,6 +496,63 @@ export const Kiosk: React.FC = () => {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {mode === 'PIN' && pendingBadge && (
+          <div className="text-center max-w-sm w-full bg-slate-800/80 backdrop-blur-xl rounded-3xl p-8 border border-slate-700 shadow-2xl animate-fade-in-up">
+            <div className="w-16 h-16 mx-auto mb-4 bg-navy-500/20 rounded-full flex items-center justify-center border border-navy-500/30">
+              <Lock className="w-8 h-8 text-navy-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-1">Enter your PIN</h2>
+            <p className="text-slate-400 text-sm mb-5">The 4 digits HR gave you with your badge.</p>
+            <div className="flex justify-center gap-3 mb-4" aria-label="PIN entered">
+              {[0, 1, 2, 3].map((i) => (
+                <span
+                  key={i}
+                  className={`w-4 h-4 rounded-full border-2 ${
+                    i < pin.length ? 'bg-emerald-400 border-emerald-400' : 'border-slate-500'
+                  }`}
+                />
+              ))}
+            </div>
+            {pinError && <p className="text-red-400 text-sm mb-3">{pinError}</p>}
+            <div className="grid grid-cols-3 gap-3">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => pin.length < 4 && setPin(pin + d)}
+                  className="py-4 text-2xl font-bold rounded-2xl bg-slate-700 hover:bg-slate-600 active:bg-slate-500"
+                >
+                  {d}
+                </button>
+              ))}
+              <button
+                onClick={() => setPin('')}
+                className="py-4 text-sm font-bold rounded-2xl bg-slate-900 text-slate-300 border border-slate-700"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => pin.length < 4 && setPin(pin + '0')}
+                className="py-4 text-2xl font-bold rounded-2xl bg-slate-700 hover:bg-slate-600 active:bg-slate-500"
+              >
+                0
+              </button>
+              <button
+                onClick={() => handleScan(pendingBadge, pin)}
+                disabled={pin.length !== 4}
+                className="py-4 text-sm font-bold rounded-2xl bg-emerald-600 disabled:bg-slate-700 disabled:text-slate-500"
+              >
+                OK
+              </button>
+            </div>
+            <button
+              onClick={resetKiosk}
+              className="mt-5 text-slate-400 hover:text-white text-sm underline"
+            >
+              Cancel
+            </button>
           </div>
         )}
 

@@ -311,6 +311,14 @@ model Employee {
   first_login_done    Boolean @default(false)
   report_required     Boolean @default(true) // derived from employment_type at create; overridable per employee
 
+  // Printed badge + PIN at the kiosk (F-12, decision D2): for staff with no phone or
+  // data. Off for everyone; HR turns it on one person at a time. Kiosk-only.
+  static_badge_enabled Boolean   @default(false)
+  badge_version        Int       @default(1) // raise it to kill a lost badge
+  badge_pin_hash       String?
+  badge_pin_failures   Int       @default(0)
+  badge_locked_until   DateTime?
+
   // 1. Personal Details
   full_name         String?
   phone             String?

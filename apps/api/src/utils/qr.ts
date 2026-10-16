@@ -84,3 +84,42 @@ export const verifyLiveQr = (payload: {
   if (age > LIVE_QR_TTL_SECONDS || age < -30) return 'expired';
   return 'ok';
 };
+
+// Printed badge (version 3) for the few people who cannot show a live code: no
+// phone, no data. It identifies the person, but on its own it is not enough --
+// the kiosk also asks for the person's PIN, the employee must have the badge
+// switched on by HR, and the badge version must still be current (HR raises it
+// to cancel a lost badge). It only ever works at a kiosk.
+export const generateBadgeHmac = (employeeId: number, employeeCode: string, badgeVersion: number) =>
+  crypto
+    .createHmac('sha256', QR_HMAC_SECRET)
+    .update(`${employeeId}:${employeeCode}:badge:${badgeVersion}`)
+    .digest('hex');
+
+export const verifyBadgeHmac = (
+  employeeId: number,
+  employeeCode: string,
+  badgeVersion: number,
+  signature: string,
+): boolean => {
+  if (typeof signature !== 'string' || !signature || !Number.isInteger(badgeVersion)) return false;
+  const expected = Buffer.from(generateBadgeHmac(employeeId, employeeCode, badgeVersion));
+  const given = Buffer.from(signature);
+  return expected.length === given.length && crypto.timingSafeEqual(expected, given);
+};
+
+export const buildBadgePayload = (
+  employeeId: number,
+  employeeCode: string,
+  badgeVersion: number,
+) => {
+  const signedToken = generateBadgeHmac(employeeId, employeeCode, badgeVersion);
+  return {
+    employeeId,
+    employeeCode,
+    version: 3,
+    badgeVersion,
+    signedToken,
+    qrData: JSON.stringify({ employeeId, employeeCode, version: 3, badgeVersion, signedToken }),
+  };
+};

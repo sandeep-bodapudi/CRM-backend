@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { KioskBadgePanel } from './KioskBadgePanel';
 import {
   Users,
   UserPlus,
@@ -1304,6 +1305,7 @@ export const EmployeeManagement: React.FC = () => {
               in {qrSecondsLeft}s and works for 2 minutes. Printed badges no longer work; the
               employee shows the live code from Profile in their own app.
             </p>
+            <KioskBadgePanel employee={qrBadgeEmp} />
           </div>
         </div>
       )}

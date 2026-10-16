@@ -52,6 +52,8 @@ export const AttendanceQRPayloadSchema = z.object({
   qrPayload: z.string().optional(),
   qr_token: z.string().optional(),
   payload: z.string().optional(),
+  // PIN for a printed badge (see kioskBadge.service.ts); ignored for live codes.
+  pin: z.string().max(12).optional(),
 });
 
 export const AttendanceHolidaySchema = z.object({

@@ -8,7 +8,8 @@ import {
   authenticateKioskToken,
   KioskAuthenticatedRequest,
 } from '../../middleware/auth';
-import { buildLiveQrPayload, verifyLiveQr, verifyQrHmac } from '../../utils/qr';
+import { buildLiveQrPayload, verifyLiveQr, verifyQrHmac, verifyBadgeHmac } from '../../utils/qr';
+import { checkBadgeAccess } from '../../services/kioskBadge.service';
 import {
   calculateAttendanceStatus,
   getISTComponents,
@@ -178,6 +179,19 @@ const parseAndVerifyQR = (_req: AuthenticatedRequest, qrPayload: any): QrCheck =
     return result === 'ok' ? { payload } : { error: 'Invalid QR Code.' };
   }
 
+  // Printed badge (version 3): the signature proves it is ours; whether it may be
+  // used, and the PIN, are checked against the employee in checkBadgeAccess.
+  if (Number(payload.version) === 3) {
+    return verifyBadgeHmac(
+      Number(payload.employeeId),
+      String(payload.employeeCode),
+      Number(payload.badgeVersion),
+      payload.signedToken,
+    )
+      ? { payload }
+      : { error: 'Invalid QR Code.' };
+  }
+
   const isValid = verifyQrHmac(
     payload.employeeId,
     payload.employeeCode,
@@ -226,6 +240,15 @@ router.post(
       }
       if (scannedEmployee.status !== 'ACTIVE' || !scannedEmployee.attendance_required) {
         return res.status(403).json({ error: 'Not eligible for attendance.' });
+      }
+      if (Number(payload.version) === 3) {
+        const access = await checkBadgeAccess(
+          scannedEmployee,
+          Number(payload.badgeVersion),
+          req.body.pin,
+          req.kiosk!.kioskCredentialId,
+        );
+        if (!access.ok) return res.status(access.status).json(access.body);
       }
 
       const now = new Date();
@@ -351,6 +374,15 @@ router.post(
       const scannedEmployee = await p.employee.findUnique({ where: { id: targetEmployeeId } });
       if (!scannedEmployee || scannedEmployee.company_id !== targetCompanyId) {
         return res.status(403).json({ error: 'Company mismatch.' });
+      }
+      if (Number(payload.version) === 3) {
+        const access = await checkBadgeAccess(
+          scannedEmployee,
+          Number(payload.badgeVersion),
+          req.body.pin,
+          req.kiosk!.kioskCredentialId,
+        );
+        if (!access.ok) return res.status(access.status).json(access.body);
       }
 
       const now = new Date();
