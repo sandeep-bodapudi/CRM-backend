@@ -18,7 +18,6 @@ import { useAuth } from '../../context/AuthContext';
 import { CallOutcomeModal } from '../leads/CallOutcomeModal';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
-import { fetchAllLeads } from '../../utils/fetchAllLeads';
 import { LeadListItem } from '../../types';
 import { PerformanceScoreWidget } from '../performance/PerformanceScoreWidget';
 import { TaskManager } from '../tasks/TaskManager';
@@ -74,10 +73,6 @@ const dayLabel = (iso?: string | null) =>
 const timeLabel = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
 
-/** Leads handed over together: same source, given the same day. */
-const batchKey = (l: LeadListItem) =>
-  `${l.source || 'UNKNOWN'}|${l.assigned_at ? new Date(l.assigned_at).toDateString() : ''}`;
-
 export const TelecallerDashboard: React.FC = () => {
   const { user, fetchWithAuth } = useAuth();
   const navigate = useNavigate();
@@ -105,41 +100,17 @@ export const TelecallerDashboard: React.FC = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['telecallerDashboardData'],
     queryFn: async () => {
-      const [leadsRes, visitsRes, tasksRes, queueRes] = await Promise.all([
-        // Explicit high limit: this is a personal, already-scoped list (see
-        // GET /leads's own comment) that can legitimately run into the tens
-        // of thousands after a large bulk import gets auto-distributed —
-        // the backend default alone (2000) isn't enough to guarantee "all
-        // of mine". Rendering is separately capped below (visibleLeadCount)
-        // so the DOM never has to hold that many cards at once.
-        // Only this telecaller's active leads, every page of them.
-        fetchAllLeads(fetchWithAuth, API_BASE_URL, {
-          assigned_to_id: 'me',
-          status: 'NEW,ASSIGNED,CONTACTED,QUALIFIED,SITE_VISIT_SCHEDULED',
-        }),
+      // The calling list itself comes from GET /leads/my-queue (sorted on the
+      // server, one page at a time) -- see the queue query below.
+      const [visitsRes, tasksRes] = await Promise.all([
         fetchWithAuth(`${API_BASE_URL}/site-visits`),
         fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`),
-        fetchWithAuth(`${API_BASE_URL}/leads/call-queue`),
       ]);
 
-      let callMeta: Record<number, CallMeta> = {};
-      let callsToday = { new_calls: 0, follow_up_calls: 0 };
-      if (queueRes.ok) {
-        const q = await queueRes.json();
-        callMeta = q.leads || {};
-        callsToday = q.today || callsToday;
-      }
-
-      let assignedLeads = [];
       let tomorrowVisits: ListItem[] = [];
       let whatsappTasks = 0;
       let callBacksDue = 0;
       let visitsByLead: Record<number, any[]> = {};
-
-      if (leadsRes.ok) {
-        const data = await leadsRes.json();
-        assignedLeads = data.leads || [];
-      }
 
       if (visitsRes.ok) {
         const data = await visitsRes.json();
@@ -212,26 +183,52 @@ export const TelecallerDashboard: React.FC = () => {
       }
 
       return {
-        assignedLeads,
         tomorrowVisits,
         whatsappTasks,
         callBacksDue,
         demosByLead,
         visitsByLead,
-        callMeta,
-        callsToday,
       };
     },
   });
 
-  const assignedLeads = data?.assignedLeads || [];
+  // The calling list: sorted and counted on the server (GET /leads/my-queue), only
+  // the visible page downloaded. Its key sits under 'telecallerDashboardData', so
+  // every existing refresh of the dashboard refreshes the list too.
+  const { data: queue, isLoading: queueLoading } = useQuery({
+    queryKey: ['telecallerDashboardData', 'queue', leadTab, batchFilter, visibleLeadCount],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: String(visibleLeadCount) });
+      if (leadTab) params.set('tab', leadTab);
+      if (batchFilter) params.set('batch', batchFilter);
+      const res = await fetchWithAuth(`${API_BASE_URL}/leads/my-queue?${params.toString()}`);
+      if (!res.ok) throw new Error('queue unavailable');
+      return (await res.json()) as {
+        tab: 'new' | 'followups' | 'all';
+        counts: { new: number; followups: number; followups_due: number; all: number };
+        total: number;
+        batches: {
+          key: string;
+          source: string;
+          assigned_at: string | null;
+          total: number;
+          left: number;
+        }[];
+        leads: LeadListItem[];
+        call_meta: Record<number, CallMeta>;
+        today: { new_calls: number; follow_up_calls: number };
+      };
+    },
+    placeholderData: (prev) => prev,
+  });
+
   const tomorrowVisits = data?.tomorrowVisits || [];
   const whatsappTasks = data?.whatsappTasks || 0;
   const callBacksDue = data?.callBacksDue || 0;
   const demosByLead = data?.demosByLead || {};
   const visitsByLead = data?.visitsByLead || {};
-  const callMeta: Record<number, CallMeta> = data?.callMeta || {};
-  const callsToday = data?.callsToday || { new_calls: 0, follow_up_calls: 0 };
+  const callMeta: Record<number, CallMeta> = queue?.call_meta || {};
+  const callsToday = queue?.today || { new_calls: 0, follow_up_calls: 0 };
 
   const updateLeadStatusMutation = useMutation({
     mutationFn: async ({
@@ -283,25 +280,11 @@ export const TelecallerDashboard: React.FC = () => {
     return updateLeadStatusMutation.mutateAsync({ leadId, newStatus, qualification });
   };
 
-  // Compute KPIs from existing data
-  const myAssignedLeadsRaw = assignedLeads.filter((l: any) => l.assigned_to?.id === user?.id);
-
-  const activeStatuses = ['NEW', 'ASSIGNED', 'CONTACTED', 'QUALIFIED', 'SITE_VISIT_SCHEDULED'];
-  const myAssignedLeads: LeadListItem[] = myAssignedLeadsRaw.filter(
-    (l: any): l is typeof l & { status: string } =>
-      typeof l.status === 'string' && activeStatuses.includes(l.status),
-  );
-
-  // New call = not called yet and still fresh. Everything else is a
-  // follow-up (including leads moved on before calls were logged).
+  // New call = not called yet and still fresh (same rule as the server's queue).
   const isNewCall = (l: LeadListItem) =>
     !callMeta[l.id]?.calls && (l.status === 'NEW' || l.status === 'ASSIGNED');
   const endOfToday = new Date();
   endOfToday.setHours(23, 59, 59, 999);
-  const isDue = (l: LeadListItem) => {
-    const f = callMeta[l.id]?.follow_up_at;
-    return !!f && new Date(f) <= endOfToday;
-  };
   const isRetry = (l: LeadListItem) => {
     const m = callMeta[l.id];
     return (
@@ -313,56 +296,19 @@ export const TelecallerDashboard: React.FC = () => {
     );
   };
 
-  // Oldest hand-over first, so leads given earlier are finished before the
-  // next upload's (the list used to show the newest leads on top).
-  const newCallLeads = myAssignedLeads
-    .filter(isNewCall)
-    .sort(
-      (a, b) =>
-        new Date(a.assigned_at || a.created_at || 0).getTime() -
-        new Date(b.assigned_at || b.created_at || 0).getTime(),
-    );
-  // Due call-backs (overdue first), then unanswered calls to retry, then the
-  // rest by how long since the last call; later call-backs at the end.
-  const followUpRank = (l: LeadListItem) =>
-    isDue(l) ? 0 : isRetry(l) ? 1 : callMeta[l.id]?.follow_up_at ? 3 : 2;
-  const followUpTime = (l: LeadListItem) => {
-    const m = callMeta[l.id];
-    return new Date((m?.follow_up_at || m?.last_call_at || 0) as any).getTime();
-  };
-  const followUpLeads = myAssignedLeads
-    .filter((l) => !isNewCall(l))
-    .sort((a, b) => followUpRank(a) - followUpRank(b) || followUpTime(a) - followUpTime(b));
-  const followUpsDue = followUpLeads.filter((l) => isDue(l) || isRetry(l)).length;
-
-  // Which hand-overs still have leads waiting for a first call.
-  const batches = Object.values(
-    myAssignedLeads.reduce<
-      Record<string, { key: string; label: string; when: number; total: number; left: number }>
-    >((acc, l) => {
-      const key = batchKey(l);
-      const b = (acc[key] ??= {
-        key,
-        label: `${getLeadSourceLabel(l.source)} · ${dayLabel(l.assigned_at)}`,
-        when: l.assigned_at ? new Date(l.assigned_at).getTime() : 0,
-        total: 0,
-        left: 0,
-      });
-      b.total += 1;
-      if (isNewCall(l)) b.left += 1;
-      return acc;
-    }, {}),
-  )
-    .filter((b) => b.left > 0)
-    .sort((a, b) => a.when - b.when);
-
-  const tab = leadTab ?? (followUpsDue > 0 ? 'followups' : 'new');
-  const shownLeads =
-    tab === 'new'
-      ? newCallLeads.filter((l) => !batchFilter || batchKey(l) === batchFilter)
-      : tab === 'followups'
-        ? followUpLeads
-        : myAssignedLeads;
+  // Counts, order and batches are worked out on the server (GET /leads/my-queue).
+  const counts = queue?.counts || { new: 0, followups: 0, followups_due: 0, all: 0 };
+  const followUpsDue = counts.followups_due;
+  const batches = (queue?.batches || []).map((b) => ({
+    key: b.key,
+    label: `${getLeadSourceLabel(b.source)} · ${dayLabel(b.assigned_at)}`,
+    when: b.assigned_at ? new Date(b.assigned_at).getTime() : 0,
+    total: b.total,
+    left: b.left,
+  }));
+  const tab = leadTab ?? queue?.tab ?? 'new';
+  const shownLeads: LeadListItem[] = queue?.leads || [];
+  const shownTotal = queue?.total ?? 0;
 
   const followUpHint = (l: LeadListItem): { text: string; tone: string } | null => {
     const m = callMeta[l.id];
@@ -420,7 +366,7 @@ export const TelecallerDashboard: React.FC = () => {
             }}
             className="bg-white/10 rounded-2xl p-3 text-center border border-white/10"
           >
-            <p className="text-white font-black text-xl">{newCallLeads.length}</p>
+            <p className="text-white font-black text-xl">{counts.new}</p>
             <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mt-0.5">
               New to call
             </p>
@@ -544,11 +490,11 @@ export const TelecallerDashboard: React.FC = () => {
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-black transition-all ${activeSection === 'leads' ? 'bg-white text-navy-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <Users className="w-4 h-4" /> My Leads
-            {myAssignedLeads.length > 0 && (
+            {counts.all > 0 && (
               <span
                 className={`min-w-[20px] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${activeSection === 'leads' ? 'bg-navy-900 text-white' : 'bg-slate-200 text-slate-600'}`}
               >
-                {myAssignedLeads.length}
+                {counts.all}
               </span>
             )}
           </button>
@@ -574,12 +520,12 @@ export const TelecallerDashboard: React.FC = () => {
           <div className="flex gap-2 overflow-x-auto">
             {(
               [
-                ['new', `New calls (${newCallLeads.length})`],
+                ['new', `New calls (${counts.new})`],
                 [
                   'followups',
-                  `Follow-ups (${followUpLeads.length}${followUpsDue ? `, ${followUpsDue} due` : ''})`,
+                  `Follow-ups (${counts.followups}${followUpsDue ? `, ${followUpsDue} due` : ''})`,
                 ],
-                ['all', `All (${myAssignedLeads.length})`],
+                ['all', `All (${counts.all})`],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -621,18 +567,18 @@ export const TelecallerDashboard: React.FC = () => {
               </div>
             </div>
           )}
-          {isLoading ? (
+          {isLoading || queueLoading ? (
             <div className="py-12 text-center text-sm text-slate-400 flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-2 border-navy-500 border-t-transparent rounded-full animate-spin" />
               Loading your leads...
             </div>
-          ) : myAssignedLeads.length > 0 && shownLeads.length === 0 ? (
+          ) : counts.all > 0 && shownLeads.length === 0 ? (
             <div className="py-10 text-center bg-slate-50 rounded-2xl border border-slate-100">
               <p className="font-bold text-slate-500 text-sm">
                 {tab === 'new' ? 'Every lead has been called at least once' : 'No follow-ups'}
               </p>
             </div>
-          ) : myAssignedLeads.length === 0 ? (
+          ) : counts.all === 0 ? (
             <div className="py-12 text-center bg-slate-50 rounded-2xl border border-slate-100">
               <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Users className="w-7 h-7 text-slate-300" />
@@ -844,12 +790,12 @@ export const TelecallerDashboard: React.FC = () => {
               </div>
             ))
           )}
-          {shownLeads.length > visibleLeadCount && (
+          {shownTotal > shownLeads.length && (
             <button
               onClick={() => setVisibleLeadCount((c) => c + LEADS_PAGE_SIZE)}
               className="w-full py-3 rounded-2xl border border-slate-200 bg-white text-navy-700 font-bold text-sm hover:bg-slate-50 transition-colors"
             >
-              Load More ({shownLeads.length - visibleLeadCount} remaining)
+              Load More ({shownTotal - shownLeads.length} remaining)
             </button>
           )}
         </div>

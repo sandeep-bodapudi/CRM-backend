@@ -21,6 +21,7 @@ import { OpportunityService } from '../services/opportunity.service';
 import prisma from '../lib/prisma';
 import { z } from 'zod';
 import { logCall, getCallQueueMeta, splitCalls } from '../services/lead/calls';
+import { getMyQueue } from '../services/lead/myQueue';
 import { listUploadBatches, moveUploadBatch } from '../services/lead/batches';
 import {
   getTelecallerReport,
@@ -185,6 +186,29 @@ router.get(
 // entirely (no eligible telecaller existed at creation/recovery time) and so
 // were never assigned to anyone. A safety net, not the primary intake path —
 // most leads are auto-assigned instantly and never appear here.
+// GET /api/v1/leads/my-queue?tab=new|followups|all&batch=&limit=&offset= - the caller's
+// calling list sorted on the server, one page of leads (with their call history)
+// plus the tab counts and batches (FIX-1c; replaces fetching every page + call-queue).
+router.get(
+  '/my-queue',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_READ),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const tab = ['new', 'followups', 'all'].includes(String(req.query.tab))
+        ? (String(req.query.tab) as 'new' | 'followups' | 'all')
+        : undefined;
+      const limit = Math.min(Math.max(parseInt(String(req.query.limit || '50'), 10) || 50, 1), 500);
+      const offset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0);
+      const batch =
+        typeof req.query.batch === 'string' && req.query.batch ? req.query.batch : undefined;
+      return res.status(200).json(await getMyQueue(req.user!, { tab, batch, limit, offset }));
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
 // GET /api/v1/leads/call-queue - the caller's own active leads' call history
 // (calls logged, last outcome, next call-back) and today's calls split into
 // new calls vs follow-ups. The telecaller dashboard uses it to separate
