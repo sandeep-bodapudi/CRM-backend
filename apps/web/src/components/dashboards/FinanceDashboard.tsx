@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { MyWorkSummary } from './MyWorkSummary';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { IndianRupee, Clock, FileCheck, Briefcase, ChevronDown, AlertCircle } from 'lucide-react';
@@ -55,6 +56,7 @@ export const FinanceDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-20 sm:pb-6">
+      <MyWorkSummary />
       <div className="flex items-center justify-between mb-2 p-6 rounded-3xl bg-gradient-to-r from-amber-700 to-orange-800 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-3xl"></div>
         <div className="relative z-10">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MyWorkSummary } from './MyWorkSummary';
 import { useAuth } from '../../context/AuthContext';
 import { PerformanceScoreWidget } from '../performance/PerformanceScoreWidget';
 import { TaskManager } from '../tasks/TaskManager';
@@ -70,6 +71,7 @@ export const StaffDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <MyWorkSummary />
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="text-2xl font-bold text-navy-900 tracking-tight">My Workspace</h1>

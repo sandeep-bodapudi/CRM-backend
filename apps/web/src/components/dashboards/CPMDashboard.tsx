@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MyWorkSummary } from './MyWorkSummary';
 import { useNavigate } from 'react-router-dom';
 import { PhoneCall, Calendar, MessageCircle, Users, Clock, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -233,6 +234,7 @@ export const CPMDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <MyWorkSummary />
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="text-2xl font-bold text-navy-900 tracking-tight">

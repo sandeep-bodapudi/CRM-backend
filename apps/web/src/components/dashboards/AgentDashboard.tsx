@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MyTargetsCard } from '../targets/MyTargetsCard';
+import { MyWorkSummary } from './MyWorkSummary';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import {
@@ -99,7 +99,7 @@ export const AgentDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-20 sm:pb-6">
-      <MyTargetsCard />
+      <MyWorkSummary />
       <div className="flex items-center justify-between mb-2 p-6 rounded-3xl bg-gradient-to-r from-emerald-700 to-green-800 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-3xl"></div>
         <div className="relative z-10">

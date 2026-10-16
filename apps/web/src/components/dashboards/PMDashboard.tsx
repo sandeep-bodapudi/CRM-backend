@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MyTargetsCard } from '../targets/MyTargetsCard';
+import { MyWorkSummary } from './MyWorkSummary';
 import { useNavigate } from 'react-router-dom';
 import { Building, CalendarCheck, MapPin, ClipboardList } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -94,7 +94,7 @@ export const PMDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <MyTargetsCard />
+      <MyWorkSummary />
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="text-2xl font-bold text-navy-900 tracking-tight">
