@@ -23,6 +23,7 @@ import { API_BASE_URL, mediaUrl } from '../../config';
 import { Roles, Permissions } from '../../shared';
 import { EmployeeListItem } from '../../types';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
+import { WalkInVisitModal } from './WalkInVisitModal';
 
 interface ProjectUnitOption {
   id: number;
@@ -35,6 +36,7 @@ interface ProjectUnitOption {
 interface SiteVisit {
   id: number;
   booking_code: string;
+  visit_type?: 'SCHEDULED' | 'WALK_IN';
   lead_id: number;
   scheduled_date: string;
   status:
@@ -258,6 +260,7 @@ export const SiteVisitManagement: React.FC = () => {
   const [selectedVisit, setSelectedVisit] = useState<SiteVisit | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [showWalkIn, setShowWalkIn] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [rescheduleSuccess, setRescheduleSuccess] = useState(false);
 
@@ -339,9 +342,14 @@ export const SiteVisitManagement: React.FC = () => {
       if (res.ok) setVisits(data.visits || []);
       else setHasError(true);
 
-      const empRes = await fetchWithAuth(`${API_BASE_URL}/employees`);
-      const empData = await empRes.json();
-      if (empRes.ok) setEmployees(empData.employees || []);
+      // The employee list only feeds the dispatch drop-down; roles without
+      // employees.read (a telecaller, say) would get a "Permission denied"
+      // pop-up on every visit to this page for nothing.
+      if (user?.permissions?.includes(Permissions.EMPLOYEES_READ)) {
+        const empRes = await fetchWithAuth(`${API_BASE_URL}/employees`);
+        const empData = await empRes.json();
+        if (empRes.ok) setEmployees(empData.employees || []);
+      }
     } catch (e) {
       console.error('Fetch site visits error:', e);
       setHasError(true);
@@ -794,6 +802,14 @@ export const SiteVisitManagement: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {user?.permissions?.includes(Permissions.SITE_VISITS_CREATE) && (
+            <button
+              onClick={() => setShowWalkIn(true)}
+              className="px-4 py-2 bg-gold-500 hover:bg-gold-600 text-navy-950 font-black text-xs rounded-2xl"
+            >
+              + Record a walk-in
+            </button>
+          )}
           <div className="px-4 py-2 bg-white/10 rounded-2xl border border-white/10 text-center">
             <span className="text-[10px] uppercase font-bold text-navy-300 block">
               Total Site Visits
@@ -802,6 +818,10 @@ export const SiteVisitManagement: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showWalkIn && (
+        <WalkInVisitModal onClose={() => setShowWalkIn(false)} onDone={fetchVisitsData} />
+      )}
 
       {hasError && (
         <div className="text-sm text-danger-700 bg-danger-50 border border-danger-200 rounded-lg px-4 py-3 flex items-center gap-2">
@@ -854,6 +874,11 @@ export const SiteVisitManagement: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="font-mono font-bold text-navy-900 text-xs">
                     {visit.booking_code}
+                    {visit.visit_type === 'WALK_IN' && (
+                      <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-extrabold uppercase">
+                        Walk-in
+                      </span>
+                    )}
                   </span>
                   <span
                     className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${getStatusBadge(visit.status)}`}

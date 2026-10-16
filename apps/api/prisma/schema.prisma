@@ -466,7 +466,7 @@ model WebAuthnCredential {
 model SiteVisitFeedback {
   id                    Int       @id @default(autoincrement())
   site_visit_id         Int       @unique
-  rated_employee_id     Int // whoever actually ran the visit — snapshotted at creation so a later reassignment can't change who a submitted rating counts against
+  rated_employee_id     Int? // whoever actually ran the visit — snapshotted at creation so a later reassignment can't change who a submitted rating counts against. NULL for a walk-in visit (nobody to rate).
   token_hash            String    @unique
   expires_at            DateTime
   submitted_at          DateTime?
@@ -478,7 +478,7 @@ model SiteVisitFeedback {
   created_at            DateTime  @default(now())
 
   site_visit     SiteVisitBooking @relation(fields: [site_visit_id], references: [id], onDelete: Cascade)
-  rated_employee Employee         @relation("RatedInFeedback", fields: [rated_employee_id], references: [id])
+  rated_employee Employee?        @relation("RatedInFeedback", fields: [rated_employee_id], references: [id])
 
   @@index([rated_employee_id])
   @@index([expires_at])
@@ -1885,6 +1885,7 @@ model SiteVisitBooking {
   rating                          String? // HOT_INTERESTED, WARM, COLD, NOT_INTERESTED
   proof_photo_url                 String?
   completed_at                    DateTime?
+  visit_type                      String          @default("SCHEDULED") // SCHEDULED | WALK_IN (customer came on their own; recorded afterwards by the telecaller)
   opportunity_id                  Int?
 
   lead                         Lead         @relation(fields: [lead_id], references: [id], onDelete: Cascade)

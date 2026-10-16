@@ -12,9 +12,9 @@ const YES_NO_QUESTIONS: {
   key: 'onTime' | 'answeredQuestions' | 'propertyAsDescribed';
   label: string;
 }[] = [
-  { key: 'onTime', label: 'Did the representative arrive on time?' },
-  { key: 'answeredQuestions', label: 'Did they answer your questions properly?' },
-  { key: 'propertyAsDescribed', label: 'Was the property as described?' },
+  { key: 'onTime', label: 'Were you attended to on time?' },
+  { key: 'answeredQuestions', label: 'Did our team answer your questions properly?' },
+  { key: 'propertyAsDescribed', label: 'Was the project or property as described to you?' },
 ];
 
 // § Phase 7 — reached with no login via a WhatsApp link; this page renders

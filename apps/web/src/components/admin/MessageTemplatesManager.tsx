@@ -70,6 +70,18 @@ const TEMPLATE_DEFS: { key: string; name: string; defaultBody: string }[] = [
       "Hi {customer_name}, thank you for visiting {property_name} with us! Let us know if you'd like to move forward with a booking, or if you have any questions — {pm_name} is here to help.",
   },
   {
+    key: 'SITE_VISIT_FEEDBACK',
+    name: 'Feedback request (after a site visit)',
+    defaultBody:
+      'Hi {customer_name}, thank you for visiting with {pm_name}! We would love a minute of your feedback: {feedback_link}',
+  },
+  {
+    key: 'WALK_IN_FEEDBACK',
+    name: 'Feedback request (walk-in visit)',
+    defaultBody:
+      'Hi {customer_name}, thank you for visiting {project_name}! We would love a minute of your feedback: {feedback_link}',
+  },
+  {
     key: 'BOOKING_CONFIRMED',
     name: 'Booking Confirmed',
     defaultBody:

@@ -643,14 +643,31 @@ router.patch(
         },
       );
 
-      // Log activity for qualification update if provided
-      if (updateData.budget_min !== undefined || updateData.property_type_preference) {
+      // Record what changed (old -> new), not just that something did. This is a
+      // plain edit: it never touches the lead's status.
+      const was = existingLead as any;
+      const show = (v: unknown) =>
+        v === null || v === undefined || v === '' ? 'not set' : String(v);
+      const changes: string[] = [];
+      const track = (label: string, before: unknown, after: unknown) => {
+        if (after !== undefined && String(before ?? '') !== String(after ?? '')) {
+          changes.push(`${label}: ${show(before)} → ${show(after)}`);
+        }
+      };
+      track('Budget min', was.budget_min, updated.budget_min);
+      track('Budget max', was.budget_max, updated.budget_max);
+      track('Property type', was.property_type_preference, updated.property_type_preference);
+      track('Location', was.preferred_location, updated.preferred_location);
+      if (updateData.notes !== undefined && (was.notes ?? '') !== (updated.notes ?? '')) {
+        changes.push('Notes edited');
+      }
+      if (changes.length > 0) {
         await prisma.leadActivity.create({
           data: {
             lead_id: leadId,
             actor_id: req.user!.employeeId,
-            activity_type: 'QUALIFIED',
-            notes: 'Lead qualification details updated manually.',
+            activity_type: 'DETAILS_EDITED',
+            notes: `Details edited. ${changes.join('; ')}`.slice(0, 1000),
           },
         });
       }

@@ -20,6 +20,8 @@ export interface TemplatePreviewContext {
   lead_code?: string;
   booking_code?: string;
   company_name?: string;
+  project_name?: string;
+  feedback_link?: string;
 }
 
 export const TEMPLATE_PLACEHOLDERS: (keyof TemplatePreviewContext)[] = [
@@ -38,6 +40,8 @@ export const TEMPLATE_PLACEHOLDERS: (keyof TemplatePreviewContext)[] = [
   'lead_code',
   'booking_code',
   'company_name',
+  'project_name',
+  'feedback_link',
 ];
 
 export const SAMPLE_PREVIEW_CONTEXT: Required<TemplatePreviewContext> = {
@@ -56,6 +60,8 @@ export const SAMPLE_PREVIEW_CONTEXT: Required<TemplatePreviewContext> = {
   lead_code: 'RRH-LD-1042',
   booking_code: 'RRH-BK-0087',
   company_name: 'Radha Real Homes',
+  project_name: 'Nagadhara Grand',
+  feedback_link: 'https://crm.radharealhomeproperties.com/feedback/…',
 };
 
 export function substituteTemplatePreview(

@@ -27,5 +27,7 @@ export const MessageTemplateKey = {
   RESCHEDULE_CONFIRMED: 'RESCHEDULE_CONFIRMED', // new date/time confirmation
   POST_VISIT_INTERESTED: 'POST_VISIT_INTERESTED', // thank-you + next steps toward booking
   BOOKING_CONFIRMED: 'BOOKING_CONFIRMED', // welcome + portal credentials
+  SITE_VISIT_FEEDBACK: 'SITE_VISIT_FEEDBACK', // ask the customer for feedback after a visit (link)
+  WALK_IN_FEEDBACK: 'WALK_IN_FEEDBACK', // same, for a customer who walked in on their own
 } as const;
 export type MessageTemplateKeyType = (typeof MessageTemplateKey)[keyof typeof MessageTemplateKey];

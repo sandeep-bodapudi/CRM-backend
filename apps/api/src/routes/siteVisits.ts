@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
 import { Router, Response, NextFunction } from 'express';
 import { authenticateToken, AuthenticatedRequest, requirePermission } from '../middleware/auth';
+import { z } from 'zod';
 import { Permissions } from '../shared';
 import {
   SiteVisitCreateSchema,
@@ -95,6 +96,41 @@ router.post(
       });
     } catch (error: any) {
       logger.error('Book site visit error:', error);
+      next(error);
+    }
+  },
+);
+
+// POST /api/v1/site-visits/walk-in - record a visit the customer made on their own
+// (already completed): { lead_id | customer_name + phone, project_id, visit_date, rating, feedback_notes }
+const WalkInSchema = z
+  .object({
+    lead_id: z.number().int().positive().optional(),
+    customer_name: z.string().trim().max(120).optional(),
+    phone: z.string().trim().max(20).optional(),
+    project_id: z.number().int().positive(),
+    visit_date: z.string().min(1),
+    rating: z.string().min(1),
+    feedback_notes: z.string().trim().max(1000),
+  })
+  .refine((v) => v.lead_id || (v.customer_name && v.phone), {
+    message: 'Pick a lead, or enter the customer name and phone',
+  });
+
+router.post(
+  '/walk-in',
+  authenticateToken,
+  requirePermission([Permissions.SITE_VISITS_CREATE]),
+  validateRequestBody(WalkInSchema),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const result = await SiteVisitService.recordWalkIn(req.user!, req.body);
+      return res.status(201).json({
+        message: `Walk-in ${result.visit.booking_code} recorded.`,
+        ...result,
+      });
+    } catch (error: any) {
+      logger.error('Record walk-in error:', error);
       next(error);
     }
   },

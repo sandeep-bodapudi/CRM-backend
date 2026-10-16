@@ -5,7 +5,8 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { notifyEmployee } from '../utils/notifyEmployee';
-import { generateWhatsAppLink } from '../utils/whatsapp';
+import { normalizeIndianPhone } from '../utils/phone';
+import { MessageTemplateService } from './messageTemplate.service';
 import { Roles } from '../shared';
 
 const p = prisma;
@@ -25,7 +26,7 @@ const hashToken = (token: string): string =>
 export async function createFeedbackRequest(
   tx: import('@prisma/client').Prisma.TransactionClient,
   siteVisitId: number,
-  ratedEmployeeId: number,
+  ratedEmployeeId: number | null,
 ): Promise<string> {
   const token = crypto.randomUUID();
   await tx.siteVisitFeedback.create({
@@ -59,17 +60,26 @@ export async function dispatchFeedbackRequestNotification(
         telecaller: true,
         project_manager: true,
         assigned_agent: true,
+        project: { select: { name: true } },
       },
     });
     if (!visit) return;
 
     const ratedEmployee = visit.assigned_agent || visit.project_manager;
     const feedbackLink = `${APP_URL}/feedback/${token}`;
-    const waLink = generateWhatsAppLink(visit.lead.phone, 'SITE_VISIT_FEEDBACK', {
-      customer_name: visit.lead.customer_name,
-      pm_name: ratedEmployee?.full_name || 'our team',
-      feedback_link: feedbackLink,
-    });
+    // The wording lives in the editable message templates (Settings -> message
+    // templates); a walk-in has its own version because nobody "visited with"
+    // a project manager.
+    const message = await MessageTemplateService.resolveWithFallback(
+      visit.visit_type === 'WALK_IN' ? 'WALK_IN_FEEDBACK' : 'SITE_VISIT_FEEDBACK',
+      {
+        customer_name: visit.lead.customer_name,
+        pm_name: ratedEmployee?.full_name || 'our team',
+        project_name: visit.project?.name || 'our project',
+        feedback_link: feedbackLink,
+      },
+    );
+    const waLink = `https://wa.me/${normalizeIndianPhone(visit.lead.phone)}?text=${encodeURIComponent(message.body_text)}`;
 
     await notifyEmployee(visit.telecaller_id, {
       type: 'SITE_VISIT_FEEDBACK_READY',
@@ -101,7 +111,7 @@ async function findValidFeedbackByToken(token: string) {
 export async function getPublicFeedbackInfo(token: string): Promise<PublicFeedbackInfo> {
   const feedback = await findValidFeedbackByToken(token);
   return {
-    ratedEmployeeName: feedback.rated_employee.full_name || 'your representative',
+    ratedEmployeeName: feedback.rated_employee?.full_name || 'our team',
     alreadySubmitted: !!feedback.submitted_at,
   };
 }
@@ -138,10 +148,12 @@ export async function submitFeedback(token: string, input: SubmitFeedbackInput):
   // Notify the rated employee's manager + all MDs — the whole point of
   // collecting this is that it reaches someone who can act on it.
   const recipientIds = new Set<number>();
-  const ratedEmployee = await p.employee.findUnique({
-    where: { id: feedback.rated_employee_id },
-    select: { full_name: true, reporting_manager_id: true },
-  });
+  const ratedEmployee = feedback.rated_employee_id
+    ? await p.employee.findUnique({
+        where: { id: feedback.rated_employee_id },
+        select: { full_name: true, reporting_manager_id: true },
+      })
+    : null;
   if (ratedEmployee?.reporting_manager_id) recipientIds.add(ratedEmployee.reporting_manager_id);
 
   const mds = await p.employee.findMany({
@@ -154,7 +166,9 @@ export async function submitFeedback(token: string, input: SubmitFeedbackInput):
     const stars = '⭐'.repeat(input.rating);
     await notifyEmployee(Array.from(recipientIds), {
       type: 'SITE_VISIT_FEEDBACK_SUBMITTED',
-      title: `New feedback for ${ratedEmployee?.full_name || 'an employee'}`,
+      title: ratedEmployee
+        ? `New feedback for ${ratedEmployee.full_name || 'an employee'}`
+        : 'New customer feedback (walk-in visit)',
       message: `${stars} (${input.rating}/5)${input.comment ? ` — "${input.comment}"` : ''}`,
       link: '/settings',
     });
@@ -163,7 +177,7 @@ export async function submitFeedback(token: string, input: SubmitFeedbackInput):
 
 export interface FeedbackListItem {
   id: number;
-  ratedEmployeeId: number;
+  ratedEmployeeId: number | null;
   ratedEmployeeName: string;
   rating: number | null;
   onTime: boolean | null;
@@ -190,7 +204,14 @@ export async function listFeedback(requester: {
   const isMD = requester.roles.includes(Roles.MD);
 
   const where = isMD
-    ? { submitted_at: { not: null }, rated_employee: { company_id: requester.companyId } }
+    ? {
+        submitted_at: { not: null },
+        OR: [
+          { rated_employee: { company_id: requester.companyId } },
+          // A walk-in has nobody to rate; its company comes from the lead.
+          { rated_employee_id: null, site_visit: { lead: { company_id: requester.companyId } } },
+        ],
+      }
     : {
         submitted_at: { not: null },
         rated_employee: { reporting_manager_id: requester.employeeId },
@@ -208,8 +229,10 @@ export async function listFeedback(requester: {
 
   return rows.map((row: (typeof rows)[number]) => ({
     id: row.id,
-    ratedEmployeeId: row.rated_employee.id,
-    ratedEmployeeName: row.rated_employee.full_name || 'Unnamed',
+    ratedEmployeeId: row.rated_employee?.id ?? null,
+    ratedEmployeeName: row.rated_employee
+      ? row.rated_employee.full_name || 'Unnamed'
+      : 'Walk-in (no one rated)',
     rating: row.rating,
     onTime: row.on_time,
     answeredQuestions: row.answered_questions,

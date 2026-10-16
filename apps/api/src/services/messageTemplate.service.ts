@@ -32,6 +32,8 @@ export interface TemplateContext {
   lead_code?: string;
   booking_code?: string;
   company_name?: string;
+  project_name?: string;
+  feedback_link?: string;
 }
 
 function substitute(body: string, ctx: TemplateContext): string {
@@ -50,7 +52,9 @@ function substitute(body: string, ctx: TemplateContext): string {
     .replace(/\{visit_time\}/g, ctx.visit_time ?? '')
     .replace(/\{lead_code\}/g, ctx.lead_code ?? '')
     .replace(/\{booking_code\}/g, ctx.booking_code ?? '')
-    .replace(/\{company_name\}/g, ctx.company_name ?? '');
+    .replace(/\{company_name\}/g, ctx.company_name ?? '')
+    .replace(/\{project_name\}/g, ctx.project_name ?? '')
+    .replace(/\{feedback_link\}/g, ctx.feedback_link ?? '');
 }
 
 /** Placeholders every template supports — shared by the substitute() logic
@@ -71,6 +75,8 @@ export const TEMPLATE_PLACEHOLDERS = [
   'lead_code',
   'booking_code',
   'company_name',
+  'project_name',
+  'feedback_link',
 ] as const;
 
 export class MessageTemplateService {
@@ -130,6 +136,12 @@ export class MessageTemplateService {
         break;
       case 'BOOKING_CONFIRMED':
         fallbackText = `Congratulations {customer_name}! Your booking {booking_code} for {property_name} is confirmed. Welcome to {company_name}.`;
+        break;
+      case 'SITE_VISIT_FEEDBACK':
+        fallbackText = `Hi {customer_name}, thank you for visiting with {pm_name}! We would love a minute of your feedback: {feedback_link}`;
+        break;
+      case 'WALK_IN_FEEDBACK':
+        fallbackText = `Hi {customer_name}, thank you for visiting {project_name}! We would love a minute of your feedback: {feedback_link}`;
         break;
       default:
         fallbackText = `Hello {customer_name}, here is an update regarding {property_name}.`;

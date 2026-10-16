@@ -14,6 +14,7 @@
 // still works identically for every one of this class's external callers,
 // with zero call-site changes required anywhere in the codebase.
 import { listVisits, bookVisit } from './siteVisit/booking';
+import { recordWalkIn } from './siteVisit/walkIn';
 import {
   acceptVisit,
   reassignVisit,
@@ -37,6 +38,7 @@ import {
 export class SiteVisitService {
   static listVisits = listVisits;
   static bookVisit = bookVisit;
+  static recordWalkIn = recordWalkIn;
 
   static acceptVisit = acceptVisit;
   static reassignVisit = reassignVisit;

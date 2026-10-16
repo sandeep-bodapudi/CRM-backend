@@ -197,10 +197,20 @@ export class LeadWorkflow implements DomainWorkflow {
     if (newStatus === LeadStatus.DROPPED && currentState === LeadStatus.SITE_VISIT_COMPLETED) {
       const siteVisitProperties = (entity && (entity.site_visit_properties || [])) || [];
       if (siteVisitProperties.length === 0) {
-        return {
-          allowed: false,
-          reason: 'Cannot drop a lead from SITE_VISIT_COMPLETED without property outcome records',
-        };
+        // A visit to a whole project (no property or unit picked) and a walk-in
+        // have no per-property outcomes; the visit's own "not interested"
+        // rating is the record that the customer said no.
+        const visits: any[] = (entity && entity.site_visits) || [];
+        const completed = visits.filter((v) => v.status === 'COMPLETED');
+        const saidNo =
+          completed.length > 0 && completed.every((v) => v.rating === 'NOT_INTERESTED');
+        if (!saidNo) {
+          return {
+            allowed: false,
+            reason: 'Cannot drop a lead from SITE_VISIT_COMPLETED without property outcome records',
+          };
+        }
+        // fall through: nothing per-property left to check
       }
       const allNotInterested = siteVisitProperties.every(
         (sp: any) => sp.outcome === 'NOT_INTERESTED',
