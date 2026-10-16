@@ -28,6 +28,7 @@ import {
   getUnclaimedLeads,
 } from './lead/query';
 import { calculateLeadScore } from './lead/shared';
+import { transferLead } from './lead/transfer';
 import { createLead } from './lead/create';
 import { reassignLead, updateLeadStatus, bulkUploadLeads, claimLead } from './lead/status';
 import { sendWhatsAppProposal, addPropertyInterest, removePropertyInterest } from './lead/interest';
@@ -42,6 +43,7 @@ import {
 export class LeadService {
   static getLeads = getLeads;
   static getLeadSummary = getLeadSummary;
+  static transferLead = transferLead;
   static getUnclaimedLeads = getUnclaimedLeads;
   static claimLead = claimLead;
   static getLeadById = getLeadById;

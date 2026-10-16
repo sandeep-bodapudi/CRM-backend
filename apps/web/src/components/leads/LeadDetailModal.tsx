@@ -25,6 +25,7 @@ import { Permissions } from '../../shared';
 import { formatEmployeeLabel } from '../../utils/employeeLabel';
 import { buildWhatsAppUrl } from '../../utils/phone';
 import { BookingUnitPickerModal } from './BookingUnitPickerModal';
+import { TransferLeadModal } from './TransferLeadModal';
 import {
   LeadActivity,
   MatchItem,
@@ -114,6 +115,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState('DETAILS');
   const [showQualifyModal, setShowQualifyModal] = useState(false);
   const [showBookingUnitModal, setShowBookingUnitModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const [showDropModal, setShowDropModal] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
 
@@ -792,6 +794,15 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                       <MapPin className="w-4 h-4" />
                       Book Site Visit / Demo
                     </button>
+
+                    {lead.can_edit !== false && !['BOOKED', 'DROPPED'].includes(lead.status) && (
+                      <button
+                        onClick={() => setShowTransferModal(true)}
+                        className="px-4 py-2 bg-white hover:bg-slate-50 text-navy-700 border border-slate-200 font-semibold text-xs rounded-lg transition-colors"
+                      >
+                        Transfer to colleague
+                      </button>
+                    )}
 
                     {lead.status === 'DEMO_SCHEDULED' && (
                       <button
@@ -1807,6 +1818,17 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {showTransferModal && (
+        <TransferLeadModal
+          lead={{ id: lead.id, customer_name: lead.customer_name }}
+          onClose={() => setShowTransferModal(false)}
+          onDone={() => {
+            onRefreshLeads();
+            onClose();
+          }}
+        />
       )}
 
       {showBookingUnitModal && (

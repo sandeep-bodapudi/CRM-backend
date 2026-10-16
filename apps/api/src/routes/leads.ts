@@ -2,6 +2,7 @@ import { logger } from '../utils/logger';
 import { Router, Response } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { requireAuthz } from '../middleware/authz';
+import { requirePermission } from '../middleware/auth';
 import {
   Roles,
   LeadCreateSchema,
@@ -74,7 +75,7 @@ const parseLeadFilters = (req: AuthenticatedRequest): LeadListFilters => {
 router.get(
   '/assignees',
   authenticateToken,
-  requireAuthz(Permissions.LEADS_CREATE),
+  requirePermission([Permissions.LEADS_CREATE, Permissions.LEADS_UPDATE]),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const employees = await prisma.employee.findMany({
@@ -386,6 +387,34 @@ router.post(
         message: 'Lead created successfully',
         ...result,
       });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
+// POST /api/v1/leads/:id/transfer - the owner (or management) hands a lead to a
+// colleague with a reason; call-backs, opportunity owner and open visits move with it.
+const TransferSchema = z.object({
+  to_employee_id: z.number().int().positive(),
+  reason: z.string().trim().min(3).max(500),
+});
+router.post(
+  '/:id/transfer',
+  authenticateToken,
+  requireAuthz(Permissions.LEADS_UPDATE),
+  validateRequestBody(TransferSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const leadId = parseInt(req.params.id, 10);
+      if (isNaN(leadId)) return res.status(400).json({ error: 'Invalid Lead ID' });
+      const lead = await LeadService.transferLead(
+        req.user!,
+        leadId,
+        req.body.to_employee_id,
+        req.body.reason,
+      );
+      return res.status(200).json({ message: 'Lead transferred', lead });
     } catch (error: any) {
       return handleServiceError(error, res);
     }
