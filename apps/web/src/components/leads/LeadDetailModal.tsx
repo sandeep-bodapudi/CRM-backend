@@ -26,6 +26,7 @@ import { formatEmployeeLabel } from '../../utils/employeeLabel';
 import { buildWhatsAppUrl } from '../../utils/phone';
 import { BookingUnitPickerModal } from './BookingUnitPickerModal';
 import { TransferLeadModal } from './TransferLeadModal';
+import { WalkInVisitModal } from '../siteVisits/WalkInVisitModal';
 import {
   LeadActivity,
   MatchItem,
@@ -116,6 +117,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const [showQualifyModal, setShowQualifyModal] = useState(false);
   const [showBookingUnitModal, setShowBookingUnitModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showWalkInModal, setShowWalkInModal] = useState(false);
   const [showDropModal, setShowDropModal] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
 
@@ -794,6 +796,17 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                       <MapPin className="w-4 h-4" />
                       Book Site Visit / Demo
                     </button>
+
+                    {lead.can_edit !== false &&
+                      !['BOOKED', 'DROPPED'].includes(lead.status) &&
+                      user?.permissions?.includes(Permissions.SITE_VISITS_CREATE) && (
+                        <button
+                          onClick={() => setShowWalkInModal(true)}
+                          className="px-4 py-2 bg-white hover:bg-slate-50 text-navy-700 border border-slate-200 font-semibold text-xs rounded-lg transition-colors"
+                        >
+                          Record a walk-in visit
+                        </button>
+                      )}
 
                     {lead.can_edit !== false && !['BOOKED', 'DROPPED'].includes(lead.status) && (
                       <button
@@ -1818,6 +1831,17 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {showWalkInModal && (
+        <WalkInVisitModal
+          presetLead={{ id: lead.id, customer_name: lead.customer_name }}
+          onClose={() => setShowWalkInModal(false)}
+          onDone={() => {
+            onRefreshLeads();
+            onClose();
+          }}
+        />
       )}
 
       {showTransferModal && (
