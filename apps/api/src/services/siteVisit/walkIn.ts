@@ -7,6 +7,8 @@ import { logger } from '../../utils/logger';
 import { LeadService } from '../lead.service';
 import { createFeedbackRequest, dispatchFeedbackRequestNotification } from '../feedback.service';
 import { generateNextBookingCode, dropReasonFromOutcomes } from './shared';
+import { AppError } from '../lead/errors';
+import { findLeadIdByPhone } from '../lead/duplicates';
 
 const p = prisma;
 
@@ -47,34 +49,31 @@ const isManagement = (user: TokenPayload) =>
  */
 export async function recordWalkIn(user: TokenPayload, input: WalkInInput) {
   if (!(WALK_IN_RATINGS as readonly string[]).includes(input.rating)) {
-    throw { status: 400, message: 'Choose how interested the customer was.' };
+    throw new AppError(400, 'Choose how interested the customer was.');
   }
   const notes = (input.feedback_notes || '').trim();
   if (notes.length < 3) {
-    throw { status: 400, message: 'Write what the customer said about the visit.' };
+    throw new AppError(400, 'Write what the customer said about the visit.');
   }
 
   const visitDate = new Date(input.visit_date);
-  if (isNaN(visitDate.getTime())) throw { status: 400, message: 'Enter a valid visit date.' };
+  if (isNaN(visitDate.getTime())) throw new AppError(400, 'Enter a valid visit date.');
   const now = new Date();
   if (visitDate.getTime() > now.getTime() + 5 * 60 * 1000) {
-    throw {
-      status: 400,
-      message: 'A walk-in has already happened: the date cannot be in the future.',
-    };
+    throw new AppError(400, 'A walk-in has already happened: the date cannot be in the future.');
   }
   if (now.getTime() - visitDate.getTime() > MAX_BACKDATE_DAYS * 24 * 3600 * 1000) {
-    throw {
-      status: 400,
-      message: `A walk-in older than ${MAX_BACKDATE_DAYS} days cannot be recorded here. Ask management.`,
-    };
+    throw new AppError(
+      400,
+      `A walk-in older than ${MAX_BACKDATE_DAYS} days cannot be recorded here. Ask management.`,
+    );
   }
 
   const project = await p.project.findFirst({
     where: { id: input.project_id, company_id: user.companyId },
     select: { id: true, name: true },
   });
-  if (!project) throw { status: 404, message: 'Project not found.' };
+  if (!project) throw new AppError(404, 'Project not found.');
 
   // --- the lead: an existing one the user owns, or a new one made together with the visit
   let lead: any;
@@ -82,25 +81,27 @@ export async function recordWalkIn(user: TokenPayload, input: WalkInInput) {
   if (input.lead_id) {
     const scope = await buildLeadScope(user);
     lead = await p.lead.findFirst({ where: { id: input.lead_id, ...scope } });
-    if (!lead) throw { status: 404, message: 'Lead not found.' };
+    if (!lead) throw new AppError(404, 'Lead not found.');
     if (lead.assigned_to_id !== user.employeeId && !isManagement(user)) {
-      throw { status: 403, message: 'You can record a walk-in only for a lead that is yours.' };
+      throw new AppError(403, 'You can record a walk-in only for a lead that is yours.');
     }
   } else {
     const name = (input.customer_name || '').trim();
     const phone = (input.phone || '').trim();
     if (name.length < 2 || !phone) {
-      throw { status: 400, message: "Enter the customer's name and phone number." };
+      throw new AppError(400, "Enter the customer's name and phone number.");
     }
-    const existing = await p.lead.findFirst({
-      where: { company_id: user.companyId, phone },
-      select: { id: true, lead_code: true, status: true, assigned_to_id: true },
-    });
-    if (existing) {
-      throw {
-        status: 409,
-        message: `A lead with this phone number already exists (${existing.lead_code}). Open it and record the walk-in from there.`,
-      };
+    // The same number however it was typed (+91, spaces, a leading 0 ...).
+    const existingId = await findLeadIdByPhone(user.companyId, phone);
+    if (existingId) {
+      const existing = await p.lead.findUnique({
+        where: { id: existingId },
+        select: { lead_code: true },
+      });
+      throw new AppError(
+        409,
+        `A lead with this phone number already exists (${existing?.lead_code}). Open it and record the walk-in from there.`,
+      );
     }
     const made = await LeadService.createLead(user, {
       customer_name: name,
@@ -113,30 +114,32 @@ export async function recordWalkIn(user: TokenPayload, input: WalkInInput) {
   }
 
   if (lead.status === 'BOOKED' || lead.status === 'DROPPED') {
-    throw { status: 409, message: `A ${lead.status.toLowerCase()} lead cannot take a new visit.` };
+    throw new AppError(409, `A ${lead.status.toLowerCase()} lead cannot take a new visit.`);
   }
 
   // The same customer can visit two projects, but not the same project twice in one day.
   const dayStart = new Date(`${getISTComponents(visitDate).dateString}T00:00:00+05:30`);
   const dayEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000);
-  const duplicate = await p.siteVisitBooking.findFirst({
-    where: {
-      lead_id: lead.id,
-      project_id: project.id,
-      scheduled_date: { gte: dayStart, lt: dayEnd },
-      status: { not: 'CANCELLED' },
-    },
-    select: { booking_code: true },
-  });
-  if (duplicate) {
-    throw {
-      status: 409,
-      message: `This customer already has a visit to ${project.name} on that day (${duplicate.booking_code}).`,
-    };
-  }
-
   const visit = await p.$transaction(
     async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+      // Lock the lead's row first, so two people submitting the same walk-in at the same
+      // moment run one after the other and the second one sees the first.
+      await tx.$queryRaw`SELECT id FROM Lead WHERE id = ${lead.id} FOR UPDATE`;
+      const duplicate = await tx.siteVisitBooking.findFirst({
+        where: {
+          lead_id: lead.id,
+          project_id: project.id,
+          scheduled_date: { gte: dayStart, lt: dayEnd },
+          status: { not: 'CANCELLED' },
+        },
+        select: { booking_code: true },
+      });
+      if (duplicate) {
+        throw new AppError(
+          409,
+          `This customer already has a visit to ${project.name} on that day (${duplicate.booking_code}).`,
+        );
+      }
       const created = await tx.siteVisitBooking.create({
         data: {
           booking_code: await generateNextBookingCode(),

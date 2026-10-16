@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { TokenPayload } from '../../utils/jwt';
 import { Roles, Permissions } from '../../shared';
 import { AppError } from './errors';
+import { findLeadIdByPhone } from './duplicates';
 import { generateNextLeadCode, calculateLeadScore, syncLeadPreferredLocations } from './shared';
 import { findBestAssigneeForLead } from '../../utils/distributionService';
 import { notifyEmployee } from '../../utils/notifyEmployee';
@@ -44,21 +45,32 @@ export async function createLead(
   if (!dto.phone) {
     throw new AppError(400, 'Phone number is required for lead creation.');
   }
-  const existingLead = await p.lead.findFirst({
+  const duplicateInclude = {
+    assigned_to: { select: { id: true, full_name: true, employee_code: true } },
+    site_visits: {
+      where: { status: { in: ['CANCELLED' as const] } },
+      include: { property: { select: { title: true, status: true } } },
+      orderBy: { created_at: 'desc' as const },
+      take: 1,
+    },
+  };
+  let existingLead = await p.lead.findFirst({
     where: {
       company_id: user.companyId,
       OR: [{ phone: dto.phone }, ...(dto.email ? [{ email: dto.email }] : [])],
     },
-    include: {
-      assigned_to: { select: { id: true, full_name: true, employee_code: true } },
-      site_visits: {
-        where: { status: { in: ['CANCELLED'] } },
-        include: { property: { select: { title: true, status: true } } },
-        orderBy: { created_at: 'desc' },
-        take: 1,
-      },
-    },
+    include: duplicateInclude,
   });
+  if (!existingLead) {
+    // The same number typed differently ("+91 98765 43210" vs "9876543210") is the same customer.
+    const sameNumberId = await findLeadIdByPhone(user.companyId, dto.phone);
+    if (sameNumberId) {
+      existingLead = await p.lead.findFirst({
+        where: { id: sameNumberId },
+        include: duplicateInclude,
+      });
+    }
+  }
 
   if (existingLead) {
     const isDropped = existingLead.status === 'DROPPED' || existingLead.status === 'CANCELLED';
