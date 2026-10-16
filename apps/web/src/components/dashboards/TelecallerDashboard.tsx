@@ -197,14 +197,14 @@ export const TelecallerDashboard: React.FC = () => {
         endOfToday.setHours(23, 59, 59, 999);
         callBacksDue = tasks.filter(
           (t: any) =>
-            !['COMPLETED', 'CANCELLED'].includes(t.status) &&
+            !['COMPLETED', 'CANCELLED', 'NOT_COMPLETED', 'BLOCKED'].includes(t.status) &&
             typeof t.title === 'string' &&
             t.title.startsWith('Call back ') &&
             new Date(t.target_date) <= endOfToday,
         ).length;
         whatsappTasks = tasks.filter(
           (t: any) =>
-            !['COMPLETED', 'CANCELLED'].includes(t.status) &&
+            !['COMPLETED', 'CANCELLED', 'NOT_COMPLETED', 'BLOCKED'].includes(t.status) &&
             (t.title?.toLowerCase().includes('whatsapp') ||
               t.description?.toLowerCase().includes('whatsapp')),
         ).length;

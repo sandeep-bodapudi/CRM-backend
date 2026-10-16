@@ -53,7 +53,7 @@ export const StaffDashboard: React.FC = () => {
           const tasksData = await tasksRes.json();
           // Filter open tasks
           tasksCount = (tasksData.tasks || []).filter(
-            (t: any) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED',
+            (t: any) => !['COMPLETED', 'CANCELLED', 'NOT_COMPLETED', 'BLOCKED'].includes(t.status),
           ).length;
         }
 

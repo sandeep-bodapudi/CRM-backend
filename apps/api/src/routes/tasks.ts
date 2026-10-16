@@ -3,7 +3,14 @@ import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { validateRequestBody } from '../middleware/validate';
-import { TaskCreateSchema, TaskUpdateStatusSchema, Roles, Permissions } from '../shared';
+import {
+  TaskCreateSchema,
+  TaskUpdateStatusSchema,
+  TaskFinishSchema,
+  TaskReviewSchema,
+  Roles,
+  Permissions,
+} from '../shared';
 import { notifyEmployee } from '../utils/notifyEmployee';
 import { requireAuthz } from '../middleware/authz';
 import { can } from '../authz/authorization';
@@ -11,6 +18,14 @@ import { getDownstreamEmployeeIds } from '../utils/hierarchy';
 import { deriveTaskSlaStatus } from '../services/task-sla.status';
 import { TaskPolicy } from '../policies/task.policy';
 import { isTaskOverdue } from '../services/taskOverdue';
+import {
+  TaskError,
+  finishTask,
+  reviewTask,
+  awardTaskCompletion,
+  FINISHED_TASK_STATUSES,
+  REVIEWABLE_TASK_STATUSES,
+} from '../services/task.service';
 
 const router = Router();
 
@@ -90,22 +105,40 @@ router.get(
       const employeeId = req.user!.employeeId;
       const include = { lead: { select: TASK_LEAD_SELECT } };
 
-      const [open, done] = await Promise.all([
+      const [open, done, toReview] = await Promise.all([
         p.task.findMany({
-          where: { assignee_id: employeeId, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+          where: { assignee_id: employeeId, status: { notIn: FINISHED_TASK_STATUSES } },
           include,
           orderBy: [{ target_date: 'asc' }, { id: 'asc' }],
           take: 2000,
         }),
         p.task.findMany({
-          where: { assignee_id: employeeId, status: { in: ['COMPLETED', 'CANCELLED'] } },
+          where: { assignee_id: employeeId, status: { in: FINISHED_TASK_STATUSES } },
           include,
           orderBy: [{ updated_at: 'desc' }],
           take: 100,
         }),
+        // Reports on tasks THIS person assigned that are waiting for their decision.
+        p.task.findMany({
+          where: {
+            created_by: employeeId,
+            assignee_id: { not: employeeId },
+            status: { in: REVIEWABLE_TASK_STATUSES },
+            reviewed_at: null,
+          },
+          include: {
+            lead: { select: TASK_LEAD_SELECT },
+            assignee: { select: { id: true, employee_code: true, full_name: true } },
+          },
+          orderBy: [{ feedback_at: 'asc' }],
+          take: 200,
+        }),
       ]);
 
-      return res.status(200).json({ tasks: await decorateTasks([...open, ...done]) });
+      return res.status(200).json({
+        tasks: await decorateTasks([...open, ...done]),
+        to_review: await decorateTasks(toReview),
+      });
     } catch (error) {
       logger.error('Fetch tasks error:', error);
       return res.status(500).json({ error: 'Failed to fetch tasks' });
@@ -318,6 +351,13 @@ router.patch(
         return res.status(403).json({ error: 'Forbidden: Cannot update this task' });
       }
 
+      if (REVIEWABLE_TASK_STATUSES.includes(existingTask.status)) {
+        return res.status(409).json({
+          error:
+            'This task was reported as not done. The person who assigned it decides what happens next.',
+        });
+      }
+
       const isCompleting = status === 'COMPLETED' && existingTask.status !== 'COMPLETED';
 
       const updatedTask = await p.task.update({
@@ -328,52 +368,9 @@ router.patch(
         },
       });
 
-      // A task someone assigned to themselves shouldn't earn the same
-      // performance credit as a manager-assigned one — otherwise anyone can
-      // inflate their own score by creating and immediately completing
-      // trivial self-assigned tasks.
-      const isSelfAssigned = existingTask.created_by === existingTask.assignee_id;
-
-      // Award the point once per task, to the person the task belongs to.
-      // Previously: reopening and re-completing a task earned +1 every
-      // time, and the point went to whoever clicked Complete (a manager
-      // closing a subordinate's task took the credit).
-      const alreadyAwarded =
-        isCompleting &&
-        !isSelfAssigned &&
-        (await p.auditEvent.count({
-          where: { action: 'TASK_COMPLETED', entity_type: 'TASK', entity_id: taskId },
-        })) > 0;
-
-      if (isCompleting && !isSelfAssigned && !alreadyAwarded) {
-        await p.auditEvent.create({
-          data: {
-            actor_id: existingTask.assignee_id,
-            action: 'TASK_COMPLETED',
-            entity_type: 'TASK',
-            entity_id: taskId,
-            new_value: JSON.stringify({ points: 1.0, taskTitle: updatedTask.title }),
-          },
-        });
-
-        await p.notification.create({
-          data: {
-            employee_id: existingTask.assignee_id,
-            title: '🎉 Task Completed!',
-            message: `Great job! You completed "${updatedTask.title}" and earned +1.0 performance points!`,
-            type: 'SYSTEM_ALERT',
-          },
-        });
-      } else if (isCompleting && isSelfAssigned) {
-        await p.notification.create({
-          data: {
-            employee_id: employeeId,
-            title: '✅ Task Completed',
-            message: `You completed "${updatedTask.title}". Self-assigned tasks don't count toward performance.`,
-            type: 'SYSTEM_ALERT',
-          },
-        });
-      }
+      // +1.0 once per task for manager-assigned tasks; nothing for self-assigned
+      // ones (see awardTaskCompletion).
+      if (isCompleting) await awardTaskCompletion(existingTask, updatedTask.title, employeeId);
 
       return res.status(200).json({
         message: `Task status updated to ${status}`,
@@ -381,7 +378,51 @@ router.patch(
         cheerUp: isCompleting,
       });
     } catch (error) {
+      logger.error('Update task status error:', error);
       return res.status(500).json({ error: 'Failed to update task status' });
+    }
+  },
+);
+
+const sendTaskError = (error: unknown, res: Response, fallback: string) => {
+  if (error instanceof TaskError) return res.status(error.status).json({ error: error.message });
+  logger.error(fallback, error);
+  return res.status(500).json({ error: fallback });
+};
+
+// POST /api/v1/tasks/:id/finish - finish with an outcome and a note
+// ({ outcome: COMPLETED | NOT_COMPLETED | BLOCKED | NEED_MORE_TIME, feedback, reschedule_to })
+router.post(
+  '/:id/finish',
+  authenticateToken,
+  requireAuthz(Permissions.TASKS_UPDATE),
+  validateRequestBody(TaskFinishSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const taskId = parseInt(req.params.id, 10);
+      if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid ID format' });
+      const { task, cheerUp } = await finishTask(req.user!, taskId, req.body);
+      return res.status(200).json({ message: 'Task updated', task, cheerUp });
+    } catch (error) {
+      return sendTaskError(error, res, 'Failed to finish task');
+    }
+  },
+);
+
+// POST /api/v1/tasks/:id/review - the assigner accepts a "not completed" /
+// "blocked" report or sends the task back ({ action: ACCEPT | REOPEN, note, new_date })
+router.post(
+  '/:id/review',
+  authenticateToken,
+  validateRequestBody(TaskReviewSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const taskId = parseInt(req.params.id, 10);
+      if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid ID format' });
+      const task = await reviewTask(req.user!, taskId, req.body);
+      return res.status(200).json({ message: 'Review saved', task });
+    } catch (error) {
+      return sendTaskError(error, res, 'Failed to review task');
     }
   },
 );

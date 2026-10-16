@@ -15,6 +15,9 @@ export const TaskStatus = {
   IN_PROGRESS: 'IN_PROGRESS',
   COMPLETED: 'COMPLETED',
   OVERDUE: 'OVERDUE',
+  CANCELLED: 'CANCELLED',
+  NOT_COMPLETED: 'NOT_COMPLETED',
+  BLOCKED: 'BLOCKED',
 } as const;
 
 export type TaskStatusType = (typeof TaskStatus)[keyof typeof TaskStatus];
@@ -67,3 +70,53 @@ export const TaskUpdateStatusSchema = z.object({
 });
 
 export type TaskUpdateStatusInput = z.infer<typeof TaskUpdateStatusSchema>;
+
+// ---------------------------------------------------------------------------
+// Task feedback: how a task was finished, and the assigner's review of it.
+// Only COMPLETED earns points. NOT_COMPLETED / BLOCKED reports are neutral
+// until the assigner accepts them (stays neutral) or sends the task back
+// (it becomes an ordinary open task again, overdue if its date has passed).
+// ---------------------------------------------------------------------------
+export const TaskOutcome = {
+  COMPLETED: 'COMPLETED',
+  NOT_COMPLETED: 'NOT_COMPLETED',
+  BLOCKED: 'BLOCKED',
+  NEED_MORE_TIME: 'NEED_MORE_TIME',
+} as const;
+
+export type TaskOutcomeType = (typeof TaskOutcome)[keyof typeof TaskOutcome];
+
+export const TaskFinishSchema = z
+  .object({
+    outcome: z.enum(['COMPLETED', 'NOT_COMPLETED', 'BLOCKED', 'NEED_MORE_TIME']),
+    feedback: z.string().trim().max(1000).optional(),
+    // Required for NEED_MORE_TIME: the new date/time.
+    reschedule_to: z.string().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.outcome !== 'COMPLETED' && (v.feedback || '').length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['feedback'],
+        message: 'Say what happened (at least 3 characters)',
+      });
+    }
+    if (v.outcome === 'NEED_MORE_TIME' && !v.reschedule_to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reschedule_to'],
+        message: 'Choose the new date and time',
+      });
+    }
+  });
+
+export type TaskFinishInput = z.infer<typeof TaskFinishSchema>;
+
+export const TaskReviewSchema = z.object({
+  action: z.enum(['ACCEPT', 'REOPEN']),
+  note: z.string().trim().max(500).optional(),
+  // Optional new date/time when sending the task back.
+  new_date: z.string().optional(),
+});
+
+export type TaskReviewInput = z.infer<typeof TaskReviewSchema>;

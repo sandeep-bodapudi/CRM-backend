@@ -172,7 +172,7 @@ export const CPMDashboard: React.FC = () => {
         // Filter tasks related to WhatsApp follow-ups
         const waTasks = tasks.filter(
           (t: any) =>
-            !['COMPLETED', 'CANCELLED'].includes(t.status) &&
+            !['COMPLETED', 'CANCELLED', 'NOT_COMPLETED', 'BLOCKED'].includes(t.status) &&
             (t.title?.toLowerCase().includes('whatsapp') ||
               t.description?.toLowerCase().includes('whatsapp')),
         ).length;

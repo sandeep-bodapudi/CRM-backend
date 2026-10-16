@@ -681,6 +681,13 @@ export interface TaskItem {
   creator?: { id: number; full_name?: string | null; employee_code?: string } | null;
   /** True once the target time has passed and the task is not finished -- computed by the API. */
   is_overdue?: boolean;
+  /** How it was finished (COMPLETED / NOT_COMPLETED / BLOCKED / NEED_MORE_TIME), the note, and the assigner's review. */
+  outcome?: string | null;
+  feedback?: string | null;
+  feedback_at?: ISODateTime | null;
+  reschedule_to?: ISODateTime | null;
+  reviewed_at?: ISODateTime | null;
+  review_note?: string | null;
   created_at?: ISODateTime;
   updated_at?: ISODateTime;
 }

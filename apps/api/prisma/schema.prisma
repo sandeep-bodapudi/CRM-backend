@@ -681,12 +681,22 @@ model Task {
   description    String?
   assignee_id    Int
   target_date    DateTime
-  status         String    @default("PENDING") // PENDING, COMPLETED, OVERDUE
+  status         String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, OVERDUE, CANCELLED, NOT_COMPLETED, BLOCKED
   created_by     Int
   completed_at   DateTime?
   lead_id        Int?
   opportunity_id Int?
   priority       String    @default("MEDIUM")
+  // How the assignee finished it (COMPLETED / NOT_COMPLETED / BLOCKED / NEED_MORE_TIME),
+  // the note they gave, and when. History stays in AuditEvent (TASK_FINISHED / TASK_REVIEWED).
+  outcome       String?   @db.VarChar(20)
+  feedback      String?   @db.Text
+  feedback_at   DateTime?
+  reschedule_to DateTime?
+  // The assigner's decision on a NOT_COMPLETED / BLOCKED report: accepted (neutral) or sent back.
+  reviewed_at   DateTime?
+  reviewed_by   Int?
+  review_note   String?   @db.Text
 
   assignee    Employee     @relation("AssignedTasks", fields: [assignee_id], references: [id], onDelete: Cascade)
   lead        Lead?        @relation(fields: [lead_id], references: [id], onDelete: Cascade)

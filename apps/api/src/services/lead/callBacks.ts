@@ -25,7 +25,7 @@ export async function closeCallBackTasks(
     where: {
       lead_id: leadId,
       title: { startsWith: CALL_BACK_TITLE_PREFIX },
-      status: { notIn: ['COMPLETED', 'CANCELLED'] },
+      status: { notIn: ['COMPLETED', 'CANCELLED', 'NOT_COMPLETED', 'BLOCKED'] },
       ...(opts.assigneeId !== undefined ? { assignee_id: opts.assigneeId } : {}),
     },
     data: {

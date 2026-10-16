@@ -222,7 +222,7 @@ export async function getCallQueueMeta(user: TokenPayload, activeStatuses: strin
     p.task.findMany({
       where: {
         assignee_id: user.employeeId,
-        status: { notIn: ['COMPLETED', 'CANCELLED'] },
+        status: { notIn: ['COMPLETED', 'CANCELLED', 'NOT_COMPLETED', 'BLOCKED'] },
         title: { startsWith: 'Call back ' },
         lead: mine,
       },

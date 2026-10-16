@@ -30,8 +30,16 @@ import { useToast } from '../../context/ToastContext';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
 import { buildWhatsAppUrl } from '../../utils/phone';
 import { CallOutcomeModal } from '../leads/CallOutcomeModal';
+import { FinishTaskModal, SendBackModal } from './TaskFeedbackModals';
 
-const DONE_STATUSES = ['COMPLETED', 'CANCELLED'];
+// Nothing left for the assignee to do. NOT_COMPLETED / BLOCKED are reports waiting for
+// (or already given) the assigner's decision.
+const DONE_STATUSES = ['COMPLETED', 'CANCELLED', 'NOT_COMPLETED', 'BLOCKED'];
+const STATUS_LABEL: Record<string, string> = {
+  NOT_COMPLETED: 'NOT COMPLETED',
+  BLOCKED: 'BLOCKED',
+  IN_PROGRESS: 'IN PROGRESS',
+};
 const TEAM_PAGE_SIZE = 200;
 
 /** Calendar day (IST) of an instant, as YYYY-MM-DD. */
@@ -44,6 +52,10 @@ export const TaskManager: React.FC = () => {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [teamTasks, setTeamTasks] = useState<TaskItem[]>([]);
   const [teamTotal, setTeamTotal] = useState(0);
+  // Reports on tasks I assigned that wait for my decision.
+  const [toReview, setToReview] = useState<TaskItem[]>([]);
+  const [finishing, setFinishing] = useState<TaskItem | null>(null);
+  const [sendingBack, setSendingBack] = useState<TaskItem | null>(null);
   const [search, setSearch] = useState('');
   // Task whose lead is being called: the outcome form opens when they come
   // back from the dialer, like on the telecaller dashboard.
@@ -99,6 +111,7 @@ export const TaskManager: React.FC = () => {
       const data = await res.json();
       if (res.ok) {
         setTasks(data.tasks || []);
+        setToReview(data.to_review || []);
       } else {
         setHasError(true);
       }
@@ -140,6 +153,23 @@ export const TaskManager: React.FC = () => {
     fetchTasks();
     fetchEmployees();
   }, []);
+
+  const acceptReport = async (taskId: number) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/tasks/${taskId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ACCEPT' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return handleApiError(res, showError, data);
+      setToReview((prev) => prev.filter((t) => t.id !== taskId));
+    } catch (e) {
+      showError(
+        toUserFacingError({ message: e instanceof Error ? e.message : String(e), body: e }),
+      );
+    }
+  };
 
   const loadMoreTeam = async () => {
     try {
@@ -411,10 +441,32 @@ export const TaskManager: React.FC = () => {
                 {t.description}
               </p>
             )}
+            {t.feedback && (
+              <p className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">
+                <span className="font-bold">Report:</span> {t.feedback}
+                {t.review_note ? (
+                  <>
+                    <br />
+                    <span className="font-bold">Assigner:</span> {t.review_note}
+                  </>
+                ) : null}
+              </p>
+            )}
+            {(t.status === 'NOT_COMPLETED' || t.status === 'BLOCKED') && (
+              <p className="text-[11px] font-semibold text-amber-700">
+                {t.reviewed_at ? 'Report accepted' : 'Waiting for the assigner to review'}
+              </p>
+            )}
           </div>
           <StatusPill
-            status={status}
-            type={status === 'COMPLETED' ? 'success' : status === 'OVERDUE' ? 'danger' : 'pending'}
+            status={STATUS_LABEL[status] || status}
+            type={
+              status === 'COMPLETED'
+                ? 'success'
+                : status === 'OVERDUE' || status === 'BLOCKED'
+                  ? 'danger'
+                  : 'pending'
+            }
           />
         </div>
 
@@ -481,7 +533,11 @@ export const TaskManager: React.FC = () => {
             {done ? (
               <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
                 <CheckCircle2 className="w-4 h-4" />{' '}
-                {t.status === 'CANCELLED' ? 'Cancelled' : 'Done'}
+                {t.status === 'CANCELLED'
+                  ? 'Cancelled'
+                  : t.status === 'NOT_COMPLETED' || t.status === 'BLOCKED'
+                    ? 'Reported'
+                    : 'Done'}
               </span>
             ) : (
               <>
@@ -499,11 +555,11 @@ export const TaskManager: React.FC = () => {
                   )}
                 </select>
                 <button
-                  onClick={() => handleUpdateStatus(t.id, 'COMPLETED')}
-                  className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors border border-emerald-200"
-                  title="Mark as Completed"
+                  onClick={() => setFinishing(t)}
+                  className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors border border-emerald-200 text-[11px] font-bold flex items-center gap-1"
+                  title="Finish this task and say how it went"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4" /> Finish
                 </button>
               </>
             )}
@@ -615,6 +671,8 @@ export const TaskManager: React.FC = () => {
               <option value="IN_PROGRESS">IN PROGRESS</option>
               <option value="COMPLETED">COMPLETED</option>
               <option value="OVERDUE">OVERDUE</option>
+              <option value="NOT_COMPLETED">NOT COMPLETED</option>
+              <option value="BLOCKED">BLOCKED</option>
             </select>
           </div>
         </div>
@@ -638,6 +696,55 @@ export const TaskManager: React.FC = () => {
               <div className="py-12 text-center text-sm text-slate-500 bg-slate-50 rounded-2xl border border-slate-100">
                 No tasks found matching your criteria.
               </div>
+            )}
+
+            {activeTab === 'my_tasks' && toReview.length > 0 && (
+              <section className="space-y-3">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-700">
+                  Needs your review <span className="text-slate-400">({toReview.length})</span>
+                </h3>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                  {toReview.map((t) => (
+                    <div
+                      key={t.id}
+                      className="bg-white rounded-2xl border border-amber-200 p-4 space-y-2 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="font-bold text-sm text-slate-800 break-words">
+                          {t.title}
+                        </span>
+                        <StatusPill
+                          status={STATUS_LABEL[t.status || ''] || t.status || ''}
+                          type="pending"
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        {t.assignee ? formatEmployeeLabel(t.assignee) : 'Someone'} reported this as
+                        not done.
+                      </p>
+                      {t.feedback && (
+                        <p className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-words">
+                          {t.feedback}
+                        </p>
+                      )}
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => acceptReport(t.id)}
+                          className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => setSendingBack(t)}
+                          className="flex-1 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-xs rounded-lg"
+                        >
+                          Send back
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
 
             {groups
@@ -664,6 +771,33 @@ export const TaskManager: React.FC = () => {
           </div>
         )}
       </div>
+
+      {finishing && (
+        <FinishTaskModal
+          task={finishing}
+          onClose={() => setFinishing(null)}
+          onDone={(cheerUp) => {
+            if (cheerUp) {
+              setCheerUpToast(
+                `🎉 Fantastic work! Task completed! +1.0 Performance Boost added to your score!`,
+              );
+              setTimeout(() => setCheerUpToast(null), 5000);
+            }
+            fetchTasks();
+          }}
+        />
+      )}
+
+      {sendingBack && (
+        <SendBackModal
+          task={sendingBack}
+          onClose={() => setSendingBack(null)}
+          onDone={() => {
+            setToReview((prev) => prev.filter((t) => t.id !== sendingBack.id));
+            fetchTasks();
+          }}
+        />
+      )}
 
       {callLead && (
         <CallOutcomeModal
