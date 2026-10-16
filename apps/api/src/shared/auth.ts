@@ -224,6 +224,9 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
   ],
 
   [Roles.FINANCE]: [
+    // D10: every role works its own leads (data scope keeps them to their own/team).
+    Permissions.LEADS_CREATE,
+    Permissions.LEADS_UPDATE,
     Permissions.PROJECTS_READ,
     Permissions.PROPERTIES_READ,
     Permissions.EXPENSES_REVIEW,
@@ -292,6 +295,9 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
   ],
 
   [Roles.PROJECT_MANAGER]: [
+    // D10: every role works its own leads (data scope keeps them to their own/team).
+    Permissions.LEADS_CREATE,
+    Permissions.LEADS_UPDATE,
     Permissions.PROJECTS_CREATE,
     Permissions.PROJECTS_READ,
     Permissions.PROJECTS_UPDATE,
@@ -435,6 +441,9 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
   ],
 
   [Roles.AGENT]: [
+    // D10: every role works its own leads (data scope keeps them to their own/team).
+    Permissions.LEADS_CREATE,
+    Permissions.LEADS_UPDATE,
     Permissions.PROJECTS_READ,
     Permissions.PROPERTIES_READ,
     Permissions.SITE_VISITS_READ,
@@ -467,6 +476,8 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
   ],
 
   [Roles.DIGITAL_MARKETING_EXECUTIVE]: [
+    // D10: every role works its own leads (data scope keeps them to their own/team).
+    Permissions.LEADS_CREATE,
     Permissions.PROJECTS_READ,
     Permissions.LEADS_READ,
     Permissions.LEADS_UPDATE,
@@ -492,6 +503,8 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
   ],
 
   [Roles.SALES_MANAGER]: [
+    // D10: every role works its own leads (data scope keeps them to their own/team).
+    Permissions.LEADS_CREATE,
     Permissions.PROJECTS_READ,
     Permissions.PROPERTIES_READ,
     Permissions.TASKS_CREATE,
@@ -552,6 +565,10 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
   // supplied the data still signs it off. Properties likewise still wait
   // for their assigned PM's on-site verification.
   [Roles.INVENTORY_EXECUTIVE]: [
+    // D10: every role works its own leads (data scope keeps them to their own/team).
+    Permissions.LEADS_CREATE,
+    Permissions.LEADS_READ,
+    Permissions.LEADS_UPDATE,
     Permissions.PROJECTS_CREATE,
     Permissions.PROJECTS_READ,
     Permissions.PROJECTS_UPDATE,
@@ -616,6 +633,10 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
   ],
 
   [Roles.STAFF]: [
+    // D10: every role works its own leads (data scope keeps them to their own/team).
+    Permissions.LEADS_CREATE,
+    Permissions.LEADS_READ,
+    Permissions.LEADS_UPDATE,
     Permissions.ATTENDANCE_READ_OWN,
     Permissions.ATTENDANCE_SCAN,
     Permissions.ATTENDANCE_LATE_PROPOSAL,
