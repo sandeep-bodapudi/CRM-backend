@@ -2,6 +2,7 @@ import { logger } from '../utils/logger';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { notifyEmployee } from '../utils/notifyEmployee';
+import { dayInfoMany, creditCompOffIfEarned, ATTENDANCE_CLAIM } from '../services/workCalendar';
 import { Roles } from '../shared';
 import {
   getISTComponents,
@@ -284,23 +285,33 @@ export const dailyAttendanceRollupJob = async (referenceDate: Date = new Date())
   // while verifying the performance formula: UNINFORMED_ABSENT was read in
   // 4 places (routes/performance.ts x3, analytics.service.ts x1) but never
   // written anywhere, so this penalty could never actually fire for anyone.
-  if (getISTDayOfWeek(yesterday.dateString) !== 0) {
+  // Who was expected at work is decided per person (their own weekly off, company
+  // holidays, approved duty days / swaps / comp-off), not "nobody on Sundays".
+  {
     const yesterdayStart = getISTMidnightInstant(yesterday.dateString);
+    // Comp-off days not used within their validity lapse.
+    await prisma.compOffCredit.updateMany({
+      where: { status: 'AVAILABLE', expires_at: { lt: toHolidayDateKey(yesterday.dateString) } },
+      data: { status: 'EXPIRED' },
+    });
     const companiesWithStaff = await prisma.employee.groupBy({
       by: ['company_id'],
       where: { status: 'ACTIVE', attendance_required: true },
     });
 
     for (const { company_id: companyId } of companiesWithStaff) {
-      const holiday = await prisma.companyHoliday.findFirst({
-        where: { company_id: companyId, date: toHolidayDateKey(yesterday.dateString) },
-      });
-      if (holiday) continue; // no attendance expected company-wide on a holiday
-
       const staff = await prisma.employee.findMany({
         where: { company_id: companyId, status: 'ACTIVE', attendance_required: true },
-        select: { id: true, full_name: true, employee_code: true, report_required: true },
+        select: {
+          id: true,
+          full_name: true,
+          employee_code: true,
+          report_required: true,
+          company_id: true,
+          weekly_off_day: true,
+        },
       });
+      const dayOf = await dayInfoMany(staff, yesterday.dateString);
 
       const [loggedIds, approvedLeaveIds] = await Promise.all([
         prisma.attendanceLog.findMany({
@@ -320,9 +331,57 @@ export const dailyAttendanceRollupJob = async (referenceDate: Date = new Date())
           select: { employee_id: true },
         }),
       ]);
+      const loggedSet = new Set(loggedIds.map((l) => l.employee_id));
+      // Off that day (their week off, a holiday, a swap or comp-off): never absent.
+      const offIds = staff.filter((s) => dayOf.get(s.id)?.offDay).map((s) => s.id);
+
+      // Duty day worked: earns a comp-off. Duty day with no check-in but real work
+      // in the CRM (10+ calls, or 2+ hours between first and last activity): a
+      // "present?" request goes to the manager instead of an absence.
+      const claimedIds: number[] = [];
+      for (const s of staff.filter((x) => dayOf.get(x.id)?.duty)) {
+        if (loggedSet.has(s.id)) {
+          await creditCompOffIfEarned(s.id, yesterday.dateString);
+          continue;
+        }
+        const acts = await prisma.leadActivity.findMany({
+          where: { actor_id: s.id, created_at: { gte: yesterdayStart, lt: midnightInstant } },
+          select: { activity_type: true, created_at: true },
+          orderBy: { created_at: 'asc' },
+        });
+        const calls = acts.filter((a) => a.activity_type === 'CALL_LOGGED').length;
+        const spanMin = acts.length
+          ? (acts[acts.length - 1].created_at.getTime() - acts[0].created_at.getTime()) / 60000
+          : 0;
+        if (calls >= 10 || spanMin >= 120) {
+          const already = await prisma.attendanceProposal.findFirst({
+            where: {
+              employee_id: s.id,
+              type: ATTENDANCE_CLAIM,
+              target_date: { gte: yesterdayStart, lt: midnightInstant },
+            },
+            select: { id: true },
+          });
+          if (!already) {
+            await prisma.attendanceProposal.create({
+              data: {
+                employee_id: s.id,
+                type: ATTENDANCE_CLAIM,
+                target_date: yesterdayStart,
+                status: 'PENDING',
+                reason: `Duty day with no check-in, but worked in the CRM: ${calls} calls, ${Math.round(spanMin / 60)} h between first and last activity (${acts[0].created_at.toISOString()} - ${acts[acts.length - 1].created_at.toISOString()}).`,
+              },
+            });
+          }
+          claimedIds.push(s.id);
+        }
+      }
+
       const excusedIds = new Set([
         ...loggedIds.map((l) => l.employee_id),
         ...approvedLeaveIds.map((p) => p.employee_id),
+        ...offIds,
+        ...claimedIds,
       ]);
 
       // ---- Part 3: flag anyone who attended but never submitted a daily

@@ -10,6 +10,8 @@ import { Roles, Permissions } from '../shared';
 import { AnalyticsService } from '../services/analytics.service';
 import { OPEN_TASK_STATUSES } from '../services/taskOverdue';
 
+import { dayInfoMany } from '../services/workCalendar';
+
 const router = Router();
 
 const p = prisma;
@@ -66,12 +68,16 @@ router.get(
           full_name: true,
           employee_code: true,
           attendance_required: true,
+          company_id: true,
+          weekly_off_day: true,
           roles: { select: { role: { select: { name: true } } } },
         },
         orderBy: { full_name: 'asc' },
       });
       const ids = employees.map((e) => e.id);
       if (ids.length === 0) return res.status(200).json({ date: dateString, employees: [] });
+      // Each person's own day: week off / holiday / swap / comp-off, or a duty day.
+      const offToday = await dayInfoMany(employees, dateString);
 
       const [byType, firstLast, attendance, tasksDone, reports, visitsDone, leadsWorked] =
         await Promise.all([
@@ -268,6 +274,9 @@ router.get(
           count(e.id, ['LEAD_CREATED']) > 0;
 
         const flags: string[] = [];
+        const today = offToday.get(e.id);
+        if (today?.offDay && att) flags.push(`Worked on ${today.label}`);
+        if (today?.duty && !att) flags.push('Duty day today, not checked in yet');
         if (att && !anyWork) {
           flags.push(
             kind === 'CALLING'
@@ -323,7 +332,10 @@ router.get(
         // REMOTE = approved work-from-home check-in from the app; PROPOSAL =
         // created by approving a field-work request; VISIT = marked present by
         // completing a site visit with a photo and feedback. None is a hand edit.
-        if (att && !['QR_SCAN', 'REMOTE', 'FIELD', 'PROPOSAL', 'VISIT'].includes(att.source)) {
+        if (
+          att &&
+          !['QR_SCAN', 'REMOTE', 'FIELD', 'PROPOSAL', 'VISIT', 'APP_SELFIE'].includes(att.source)
+        ) {
           flags.push('Attendance entered or edited by hand');
         }
 
@@ -344,6 +356,9 @@ router.get(
               }
             : null,
           attendance_required: e.attendance_required,
+          // Their day off today ("Sunday (week off)", a holiday...), or null when expected at work.
+          off_today: today?.offDay ? today.label : null,
+          duty_today: !!today?.duty,
           calls_logged: calls,
           leads_worked: leads,
           contacted: count(e.id, ['STATUS_CHANGED']),

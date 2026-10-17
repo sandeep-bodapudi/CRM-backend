@@ -3,6 +3,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../../middleware/auth';
 import { getISTComponents, getISTDayOfWeek } from '../../utils/time';
+import { WEEKDAY_NAMES } from '../../services/workCalendar';
 import { Roles, AttendanceHolidaySchema, EmptyBodySchema } from '../../shared';
 import { validateRequestBody } from '../../middleware/validate';
 
@@ -100,10 +101,11 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
 
     const employee = await p.employee.findUnique({
       where: { id: targetEmployeeId },
-      select: { created_at: true },
+      select: { created_at: true, weekly_off_day: true },
     });
 
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
+    const weeklyOff = employee.weekly_off_day;
 
     const logs = await p.attendanceLog.findMany({
       where: {
@@ -123,7 +125,7 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
     const proposals = await p.attendanceProposal.findMany({
       where: {
         employee_id: targetEmployeeId,
-        type: { in: ['LATE_CHECKIN', 'LEAVE'] },
+        type: { in: ['LATE_CHECKIN', 'LEAVE', 'DUTY_DAY', 'SWAP_OFF', 'COMP_OFF'] },
         status: 'APPROVED',
         target_date: { gte: startDate, lt: endDate },
       },
@@ -156,9 +158,12 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
 
       calendarMap[dayStr] = { status: defaultStatus, log: null };
 
-      if (getISTDayOfWeek(dayStr) === 0) {
+      // The person's own weekly off (was: every Sunday for everyone). Shown like a
+      // holiday so existing screens colour it; weekOff tells them apart.
+      if (weeklyOff !== null && getISTDayOfWeek(dayStr) === weeklyOff) {
         calendarMap[dayStr].status = 'HOLIDAY';
-        calendarMap[dayStr].holidayName = 'Sunday';
+        calendarMap[dayStr].holidayName = `${WEEKDAY_NAMES[weeklyOff]} (week off)`;
+        calendarMap[dayStr].weekOff = true;
       }
 
       d.setDate(d.getDate() + 1);
@@ -190,6 +195,17 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
           }
         } else if (p.type === 'LATE_CHECKIN') {
           calendarMap[dayStr].hasApprovedLateProposal = true;
+        } else if (p.type === 'SWAP_OFF' || p.type === 'COMP_OFF') {
+          calendarMap[dayStr].status = 'HOLIDAY';
+          calendarMap[dayStr].holidayName =
+            p.type === 'COMP_OFF' ? 'Comp-off' : 'Week off (swapped)';
+          calendarMap[dayStr].weekOff = true;
+        } else if (p.type === 'DUTY_DAY') {
+          // An off day turned into a working day: expected at work.
+          calendarMap[dayStr].dutyDay = true;
+          if (calendarMap[dayStr].status === 'HOLIDAY') {
+            calendarMap[dayStr].status = dayStr > todayStr ? 'PENDING' : 'ABSENT';
+          }
         }
       }
     }

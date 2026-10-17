@@ -22,6 +22,8 @@ import { notifyEmployee } from '../../utils/notifyEmployee';
 // the app instead of the kiosk; the log is stored with source 'REMOTE'.
 // What they actually did that day is visible on Team Today (calls logged,
 // leads worked), which is the real check on remote work.
+import { dayInfo } from '../../services/workCalendar';
+
 const router = Router();
 const p = prisma;
 
@@ -64,12 +66,6 @@ const approvedWfhFor = (employeeId: number, dateString: string) => {
     orderBy: { reviewed_at: 'desc' },
   });
 };
-
-const isHoliday = async (companyId: number, dateString: string) =>
-  getISTDayOfWeek(dateString) === 0 ||
-  !!(await p.companyHoliday.findFirst({
-    where: { company_id: companyId, date: toHolidayDateKey(dateString) },
-  }));
 
 // GET /api/v1/attendance/wfh/today - is today a WFH day for me, and my log
 router.get('/wfh/today', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -185,7 +181,7 @@ router.post(
           status: 'ACTIVE',
           ...(isAdmin ? {} : { company_id: { in: companyIds } }),
         },
-        select: { id: true, company_id: true },
+        select: { id: true, company_id: true, weekly_off_day: true },
       });
       if (employees.length !== new Set(employee_ids).size) {
         return res
@@ -222,9 +218,10 @@ router.post(
       for (let i = 0; i < days; i++) {
         const day = new Date(first.getTime() + i * DAY_MS);
         const ds = getISTComponents(day).dateString;
-        if (getISTDayOfWeek(ds) === 0) continue;
         for (const e of employees) {
           if (holidayKeys.has(`${e.company_id}:${ds}`) || have.has(`${e.id}:${ds}`)) continue;
+          // Their own weekly off (was: every Sunday for everyone).
+          if (e.weekly_off_day !== null && e.weekly_off_day === getISTDayOfWeek(ds)) continue;
           rows.push({
             employee_id: e.id,
             type: WFH,
@@ -282,8 +279,18 @@ router.post(
       if (!employee || employee.status !== 'ACTIVE') {
         return res.status(403).json({ error: 'Not eligible for attendance.' });
       }
-      if (await isHoliday(employee.company_id, dateString)) {
-        return res.status(400).json({ error: 'Today is a holiday.' });
+      const today = await dayInfo(
+        {
+          id: employee.id,
+          company_id: employee.company_id,
+          weekly_off_day: employee.weekly_off_day,
+        },
+        dateString,
+      );
+      if (today.offDay) {
+        return res.status(400).json({
+          error: `Today is your day off (${today.label}). To work today, ask your manager for a duty day.`,
+        });
       }
       const remoteDay = await approvedWfhFor(employeeId, dateString);
       if (!remoteDay) {
@@ -365,7 +372,8 @@ router.post(
         orderBy: { check_in_at: 'desc' },
       });
       if (!log) return res.status(400).json({ error: 'No open check-in for today.' });
-      if (log.source !== 'REMOTE' && log.source !== 'FIELD') {
+      // App check-ins (work from home, field day, duty-day selfie) check out from the app too.
+      if (log.source !== 'REMOTE' && log.source !== 'FIELD' && log.source !== 'APP_SELFIE') {
         return res
           .status(400)
           .json({ error: 'You checked in at the office. Please check out at the kiosk.' });

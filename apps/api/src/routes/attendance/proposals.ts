@@ -195,17 +195,23 @@ router.post(
         select: { date: true },
       });
       const holidayKeys = new Set(holidays.map((h) => h.date.toISOString().slice(0, 10)));
+      // The person's own weekly off is not a leave day (was: every Sunday).
+      const me = await p.employee.findUnique({
+        where: { id: req.user!.employeeId },
+        select: { weekly_off_day: true },
+      });
+      const myOff = me?.weekly_off_day ?? null;
       const days: Date[] = [];
       for (let i = 0; i < totalDays; i++) {
         const day = new Date(first.getTime() + i * 86400000);
         const key = getISTComponents(day).dateString;
-        if (getISTDayOfWeek(key) === 0 || holidayKeys.has(key)) continue;
+        if ((myOff !== null && getISTDayOfWeek(key) === myOff) || holidayKeys.has(key)) continue;
         days.push(day);
       }
       if (days.length === 0) {
         return res
           .status(400)
-          .json({ error: 'Those dates are all Sundays or holidays -- no leave needed.' });
+          .json({ error: 'Those dates are all your week offs or holidays -- no leave needed.' });
       }
       const overlapping = await p.attendanceProposal.findFirst({
         where: {

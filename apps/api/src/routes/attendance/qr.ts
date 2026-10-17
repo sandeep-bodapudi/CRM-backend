@@ -11,6 +11,11 @@ import {
 import { buildLiveQrPayload, verifyLiveQr, verifyQrHmac, verifyBadgeHmac } from '../../utils/qr';
 import { checkBadgeAccess } from '../../services/kioskBadge.service';
 import {
+  dayInfo,
+  openDutyRequestIfMissing,
+  creditCompOffIfEarned,
+} from '../../services/workCalendar';
+import {
   calculateAttendanceStatus,
   getISTComponents,
   getISTDayOfWeek,
@@ -254,15 +259,18 @@ router.post(
       const now = new Date();
       const { dateString, timeString } = getISTComponents(now);
 
-      if (getISTDayOfWeek(dateString) === 0) {
-        return res.status(400).json({ error: 'Today is a holiday.' });
-      }
-      const holidayCheck = await p.companyHoliday.findFirst({
-        where: { company_id: targetCompanyId, date: toHolidayDateKey(dateString) },
-      });
-      if (holidayCheck) {
-        return res.status(400).json({ error: 'Today is a holiday.' });
-      }
+      // Their own off day (week off, holiday, swap or comp-off): they are here, so the
+      // scan is recorded; a duty-day request then goes to their manager so the extra
+      // day can earn a comp-off. (The kiosk used to refuse every Sunday and holiday.)
+      const today = await dayInfo(
+        {
+          id: scannedEmployee.id,
+          company_id: scannedEmployee.company_id,
+          weekly_off_day: scannedEmployee.weekly_off_day,
+        },
+        dateString,
+      );
+      const offDayNote = today.offDay ? `Worked on ${today.label}` : null;
 
       // Concurrency Protection via Transaction
       const result = await p.$transaction(
@@ -310,6 +318,7 @@ router.post(
               check_in_at: now,
               status: calculatedStatus,
               source: 'QR_SCAN',
+              ...(offDayNote ? { notes: offDayNote } : {}),
               ...(branchId != null ? { branch_id: branchId } : {}), // populate only for kiosk scans
             },
           });
@@ -317,6 +326,18 @@ router.post(
         },
         { isolationLevel: 'Serializable' },
       );
+
+      if (!result.alreadyStamped) {
+        if (offDayNote) {
+          await openDutyRequestIfMissing(
+            targetEmployeeId,
+            dateString,
+            `${offDayNote}: checked in at the kiosk.`,
+          );
+        } else if (today.duty) {
+          await creditCompOffIfEarned(targetEmployeeId, dateString);
+        }
+      }
 
       if (result.alreadyStamped) {
         return res.status(200).json({
@@ -388,15 +409,7 @@ router.post(
       const now = new Date();
       const { dateString, timeString } = getISTComponents(now);
 
-      if (getISTDayOfWeek(dateString) === 0) {
-        return res.status(400).json({ error: 'Today is a holiday.' });
-      }
-      const holidayCheck = await p.companyHoliday.findFirst({
-        where: { company_id: targetCompanyId, date: toHolidayDateKey(dateString) },
-      });
-      if (holidayCheck) {
-        return res.status(400).json({ error: 'Today is a holiday.' });
-      }
+      // Off days never block checking out (the day was recorded at check-in).
 
       // getISTComponents().timeString is "HH:MM" (no seconds) — comparing
       // against "18:00:00" made "18:00" (a valid prefix, but shorter) always

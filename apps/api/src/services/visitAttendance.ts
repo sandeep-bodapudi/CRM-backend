@@ -1,11 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
-import {
-  getISTComponents,
-  getISTDayOfWeek,
-  getISTMidnightInstant,
-  toHolidayDateKey,
-} from '../utils/time';
+import { dayInfo, openDutyRequestIfMissing, creditCompOffIfEarned } from './workCalendar';
+import { getISTComponents, getISTMidnightInstant } from '../utils/time';
 
 const p = prisma;
 
@@ -18,9 +14,11 @@ export const VISIT_ATTENDANCE_SOURCE = 'VISIT';
  * and the feedback they wrote, that is proof enough that they worked the day:
  * mark them present for that day (decision D7).
  *
- * It never overrides anything: no mark on a Sunday or a company holiday, on a
- * day of approved leave, or when any attendance record already exists for the
- * day (a QR scan, a work-from-home or field-work day, a hand entry). It only
+ * It never overrides anything: no mark on a day of approved leave, or when any
+ * attendance record already exists for the day (a QR scan, a work-from-home or
+ * field-work day, a hand entry). On the person's own off day (week off or
+ * holiday) they still worked: they are marked present and a duty-day request
+ * goes to their manager, so the day can earn a comp-off. It only
  * applies to the person who actually ran the visit, never to a walk-in (nobody
  * ran it), and only to people who are required to mark attendance. Several
  * visits in a day produce one mark.
@@ -43,19 +41,26 @@ export async function markPresentFromVisit(visitId: number): Promise<string> {
     if (!runnerId) return 'nobody ran it';
     const runner = await p.employee.findUnique({
       where: { id: runnerId },
-      select: { id: true, status: true, attendance_required: true, company_id: true },
+      select: {
+        id: true,
+        status: true,
+        attendance_required: true,
+        company_id: true,
+        weekly_off_day: true,
+      },
     });
     if (!runner || runner.status !== 'ACTIVE' || !runner.attendance_required) {
       return 'attendance not required';
     }
 
     const { dateString } = getISTComponents(visit.completed_at);
-    if (getISTDayOfWeek(dateString) === 0) return 'sunday';
-    const holiday = await p.companyHoliday.findFirst({
-      where: { company_id: runner.company_id, date: toHolidayDateKey(dateString) },
-      select: { id: true },
-    });
-    if (holiday) return 'holiday';
+    // Their own off day (week off or holiday): they still worked, so they are
+    // marked present and a duty-day request goes to their manager (comp-off on
+    // approval). An approved duty day earns the comp-off straight away.
+    const day = await dayInfo(
+      { id: runner.id, company_id: runner.company_id, weekly_off_day: runner.weekly_off_day },
+      dateString,
+    );
 
     const dayStart = getISTMidnightInstant(dateString);
     const dayEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000);
@@ -96,7 +101,7 @@ export async function markPresentFromVisit(visitId: number): Promise<string> {
         ),
         status: 'PRESENT',
         source: VISIT_ATTENDANCE_SOURCE,
-        notes: `Marked present: completed site visit ${visit.booking_code} with a photo and feedback.`,
+        notes: `Marked present: completed site visit ${visit.booking_code} with a photo and feedback.${day.offDay ? ` Worked on ${day.label}.` : ''}`,
       },
     });
     await p.auditEvent.create({
@@ -108,6 +113,15 @@ export async function markPresentFromVisit(visitId: number): Promise<string> {
         new_value: JSON.stringify({ date: dateString, visit: visit.booking_code }),
       },
     });
+    if (day.offDay) {
+      await openDutyRequestIfMissing(
+        runner.id,
+        dateString,
+        `Worked on ${day.label}: completed site visit ${visit.booking_code}.`,
+      );
+      return 'marked present (off day, duty request opened)';
+    }
+    if (day.duty) await creditCompOffIfEarned(runner.id, dateString);
     return 'marked present';
   } catch (err) {
     logger.error(`[visit-attendance] visit ${visitId} could not be turned into attendance:`, err);

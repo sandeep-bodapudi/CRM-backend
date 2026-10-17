@@ -279,6 +279,9 @@ model Branch {
   id         Int    @id @default(autoincrement())
   company_id Int
   name       String
+  // Office pin: an app check-in far from it is flagged for the manager.
+  latitude   Float?
+  longitude  Float?
 
   company           Company          @relation(fields: [company_id], references: [id])
   employees         Employee[]
@@ -314,6 +317,10 @@ model Employee {
 
   // Printed badge + PIN at the kiosk (F-12, decision D2): for staff with no phone or
   // data. Off for everyone; HR turns it on one person at a time. Kiosk-only.
+  // Weekly off (0 = Sunday ... 6 = Saturday; NULL = no fixed weekly off). Sunday by
+  // default; HR sets each salesperson's own day. Company holidays stay for everyone.
+  weekly_off_day Int? @default(0)
+
   static_badge_enabled Boolean   @default(false)
   badge_version        Int       @default(1) // raise it to kill a lost badge
   badge_pin_hash       String?
@@ -630,6 +637,49 @@ model AttendanceLog {
   @@index([employee_id, check_out_at])
 }
 
+// Proof behind an app check-in on a duty day: a selfie, a photo of the surroundings,
+// and where the phone was. Checked automatically (plain background, distance, and an
+// image check when configured); anything doubtful waits for the manager.
+model AttendanceCheckinProof {
+  id                Int       @id @default(autoincrement())
+  employee_id       Int
+  attendance_log_id Int?
+  place_type        String // OFFICE | FIELD
+  branch_id         Int?
+  project_id        Int?
+  selfie_url        String
+  surroundings_url  String
+  latitude          Float?
+  longitude         Float?
+  accuracy_m        Float?
+  distance_m        Int? // from the office pin / the project
+  flags             String?   @db.Text // JSON array of plain-language reasons
+  ai_note           String?   @db.Text
+  review_status     String    @default("PENDING") // AUTO_OK | PENDING | ACCEPTED | REJECTED
+  reviewed_by       Int?
+  reviewed_at       DateTime?
+  review_note       String?
+  created_at        DateTime  @default(now())
+
+  @@index([employee_id, created_at])
+  @@index([review_status])
+}
+
+// One comp-off day earned by working an approved duty day (week off or holiday).
+model CompOffCredit {
+  id          Int       @id @default(autoincrement())
+  employee_id Int
+  earned_date DateTime  @db.Date
+  expires_at  DateTime  @db.Date
+  status      String    @default("AVAILABLE") // AVAILABLE | USED | EXPIRED
+  used_date   DateTime? @db.Date
+  proposal_id Int? // the COMP_OFF request that used it
+  created_at  DateTime  @default(now())
+
+  @@unique([employee_id, earned_date])
+  @@index([employee_id, status])
+}
+
 model KioskCredential {
   id                 Int      @id @default(autoincrement())
   company_id         Int
@@ -698,14 +748,14 @@ model Task {
   priority       String    @default("MEDIUM")
   // How the assignee finished it (COMPLETED / NOT_COMPLETED / BLOCKED / NEED_MORE_TIME),
   // the note they gave, and when. History stays in AuditEvent (TASK_FINISHED / TASK_REVIEWED).
-  outcome       String?   @db.VarChar(20)
-  feedback      String?   @db.Text
-  feedback_at   DateTime?
-  reschedule_to DateTime?
+  outcome        String?   @db.VarChar(20)
+  feedback       String?   @db.Text
+  feedback_at    DateTime?
+  reschedule_to  DateTime?
   // The assigner's decision on a NOT_COMPLETED / BLOCKED report: accepted (neutral) or sent back.
-  reviewed_at   DateTime?
-  reviewed_by   Int?
-  review_note   String?   @db.Text
+  reviewed_at    DateTime?
+  reviewed_by    Int?
+  review_note    String?   @db.Text
 
   assignee    Employee     @relation("AssignedTasks", fields: [assignee_id], references: [id], onDelete: Cascade)
   lead        Lead?        @relation(fields: [lead_id], references: [id], onDelete: Cascade)
@@ -957,8 +1007,8 @@ model LeadActivity {
   // CALL_LOGGED only: the outcome key (e.g. CONNECTED_NOT_INTERESTED) and the
   // reason behind it (e.g. ALREADY_BOUGHT). Older call activities have neither
   // and keep their outcome in the note text.
-  call_outcome String? @db.VarChar(40)
-  call_reason  String? @db.VarChar(40)
+  call_outcome  String? @db.VarChar(40)
+  call_reason   String? @db.VarChar(40)
 
   lead  Lead     @relation(fields: [lead_id], references: [id], onDelete: Cascade)
   actor Employee @relation(fields: [actor_id], references: [id])

@@ -9,6 +9,7 @@ import reportsRouter from './attendance/reports';
 import holidaysCalendarRouter from './attendance/holidays-calendar';
 import wfhRouter from './attendance/wfh';
 import badgesRouter from './attendance/badges';
+import dutyRouter from './attendance/duty';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/', reportsRouter);
 router.use('/', holidaysCalendarRouter);
 router.use('/', wfhRouter);
 router.use('/', badgesRouter);
+router.use('/', dutyRouter);
 
 export default router;

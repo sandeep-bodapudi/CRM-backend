@@ -265,16 +265,28 @@ export class AnalyticsService {
     const endOfDay = new Date(startOfDay.getTime() + 24 * 3600 * 1000);
     const active = await this.countActiveEmployees(companyId);
 
-    // Not an exception: Sundays, company holidays, and the morning before the
-    // 10:30 cut-off (nobody can be late yet). This used to count everyone who
-    // had not checked in, so at 8 am and on every Sunday it showed the whole company.
-    if (getISTDayOfWeek(now.dateString) === 0) return { exceptions: 0, active };
+    // Not an exception: the morning before the 10:30 cut-off (nobody can be late
+    // yet), a person's own week off / swap / comp-off, and company holidays -- except
+    // people on an approved duty day, who are expected even on their off day.
+    if (now.hours * 60 + now.minutes < 10 * 60 + 30) return { exceptions: 0, active };
+    const weekday = getISTDayOfWeek(now.dateString);
     const holiday = await p.companyHoliday.findFirst({
       where: { company_id: companyId, date: toHolidayDateKey(now.dateString) },
       select: { id: true },
     });
-    if (holiday) return { exceptions: 0, active };
-    if (now.hours * 60 + now.minutes < 10 * 60 + 30) return { exceptions: 0, active };
+    if (holiday) {
+      const dutyNoShow: any = await p.$queryRaw`
+        SELECT COUNT(DISTINCT ap.employee_id) as count
+        FROM AttendanceProposal ap
+        JOIN Employee e ON e.id = ap.employee_id
+        LEFT JOIN AttendanceLog a ON a.employee_id = ap.employee_id AND a.check_in_at >= ${startOfDay}
+        WHERE e.company_id = ${companyId} AND e.status = 'ACTIVE' AND e.attendance_required = true
+          AND ap.type = 'DUTY_DAY' AND ap.status = 'APPROVED'
+          AND ap.target_date >= ${startOfDay} AND ap.target_date < ${endOfDay}
+          AND a.id IS NULL
+      `;
+      return { exceptions: Number(dutyNoShow[0]?.count || 0), active };
+    }
 
     // Excused: not required to attend, checked in, or on approved leave / field work today.
     const res: any = await p.$queryRaw`
@@ -290,9 +302,17 @@ export class AnalyticsService {
             SELECT 1 FROM AttendanceProposal ap
             WHERE ap.employee_id = e.id
               AND ap.status = 'APPROVED'
-              AND ap.type IN ('LEAVE', 'FIELD_WORK')
+              AND ap.type IN ('LEAVE', 'FIELD_WORK', 'SWAP_OFF', 'COMP_OFF')
               AND ap.target_date >= ${startOfDay}
               AND ap.target_date < ${endOfDay}
+          )
+          OR (
+            e.weekly_off_day = ${weekday}
+            AND NOT EXISTS (
+              SELECT 1 FROM AttendanceProposal d
+              WHERE d.employee_id = e.id AND d.type = 'DUTY_DAY' AND d.status = 'APPROVED'
+                AND d.target_date >= ${startOfDay} AND d.target_date < ${endOfDay}
+            )
           )
         )
     `;
