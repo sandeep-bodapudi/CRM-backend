@@ -259,6 +259,7 @@ export interface BookingItem {
   project_unit_id?: number | null;
   assigned_employee_id?: number | null;
   assigned_employee?: EmployeeListItem | null;
+  form_submitted_by_id?: number | null;
   status: string;
   agreed_price: number;
   booking_amount: number;
