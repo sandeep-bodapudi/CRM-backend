@@ -27,6 +27,8 @@ import { buildWhatsAppUrl } from '../../utils/phone';
 import { BookingUnitPickerModal } from './BookingUnitPickerModal';
 import { TransferLeadModal } from './TransferLeadModal';
 import { WalkInVisitModal } from '../siteVisits/WalkInVisitModal';
+import { DirectVisitActions } from '../siteVisits/DirectVisitActions';
+import { CallOutcomeModal } from './CallOutcomeModal';
 import {
   LeadActivity,
   MatchItem,
@@ -124,6 +126,8 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const [matches, setMatches] = useState<MatchItem[]>([]);
   const [savedInterests, setSavedInterests] = useState<SavedInterestItem[]>([]);
   const [leadVisits, setLeadVisits] = useState<LeadVisitItem[]>([]);
+  const [callOpen, setCallOpen] = useState(false);
+  const [scheduleDirect, setScheduleDirect] = useState(false);
   const [leadDemos, setLeadDemos] = useState<LeadDemoItem[]>([]);
   const [leadTasks, setLeadTasks] = useState<LeadTaskItem[]>([]);
   const [leadSalesOpps, setLeadSalesOpps] = useState<LeadSalesOppItem[]>([]);
@@ -606,6 +610,19 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 <span>
                   {lead.phone} {lead.email ? `• ${lead.email}` : ''}
                 </span>
+                {lead.phone && (
+                  <a
+                    href={`tel:${lead.phone}`}
+                    onClick={() => {
+                      // Let the dialer open first; the outcome dialog waits for them.
+                      if (lead.can_edit !== false) setTimeout(() => setCallOpen(true), 400);
+                    }}
+                    title="Call"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold font-sans"
+                  >
+                    <PhoneCall className="w-3.5 h-3.5" /> Call
+                  </a>
+                )}
                 {lead.phone && (
                   <a
                     href={buildWhatsAppUrl(lead.phone)}
@@ -1093,7 +1110,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                     {leadVisits.map((visit: LeadVisitItem) => (
                       <div
                         key={visit.id}
-                        className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex items-center justify-between"
+                        className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm space-y-3"
                       >
                         <div>
                           <div className="flex items-center gap-2 mb-1">
@@ -1101,7 +1118,17 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                               {visit.booking_code}
                             </span>
                             <StatusPill status={visit.status} type={getStatusMap(visit.status)} />
+                            {visit.visit_type === 'DIRECT' && (
+                              <span className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[9px] font-extrabold uppercase">
+                                Direct
+                              </span>
+                            )}
                           </div>
+                          {visit.project?.name && !visit.property && (
+                            <h4 className="font-bold text-navy-900 text-sm mt-1">
+                              {visit.project.name}
+                            </h4>
+                          )}
                           {visit.property && (
                             <h4 className="font-bold text-navy-900 text-sm mt-1">
                               {visit.property.title}
@@ -1112,6 +1139,15 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                             <span>{new Date(visit.scheduled_date).toLocaleString('en-IN')}</span>
                           </div>
                         </div>
+                        {lead.can_edit !== false && (
+                          <DirectVisitActions
+                            visit={{ ...visit, booking_code: visit.booking_code || '' }}
+                            onDone={() => {
+                              fetchLeadVisits(lead.id);
+                              onRefreshLeads();
+                            }}
+                          />
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1465,6 +1501,19 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                   </select>
                 </div>
 
+                <label className="flex items-start gap-2 p-3 rounded-xl border border-teal-200 bg-teal-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scheduleDirect}
+                    onChange={(e) => setScheduleDirect(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-xs text-teal-900">
+                    <b>Direct visit</b> — the customer goes to the site on their own. No project
+                    manager is assigned; you record afterwards whether they came.
+                  </span>
+                </label>
+
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                   <button
                     type="button"
@@ -1512,6 +1561,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                             // project on its own otherwise.
                             project_id:
                               !id && scheduleProjectId ? Number(scheduleProjectId) : undefined,
+                            direct: scheduleDirect || undefined,
                           }),
                         });
                         const data = await res.json();
@@ -1831,6 +1881,14 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {callOpen && (
+        <CallOutcomeModal
+          lead={lead}
+          onClose={() => setCallOpen(false)}
+          onLogged={() => onRefreshLeads()}
+        />
       )}
 
       {showWalkInModal && (

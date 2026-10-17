@@ -460,6 +460,10 @@ export interface LeadVisitItem {
   feedback_notes?: string | null;
   rating?: string | null;
   property?: { id: number; title?: string; property_code?: string } | null;
+  visit_type?: string;
+  telecaller?: { id: number; full_name?: string } | null;
+  lead?: { assigned_to_id?: number | null } | null;
+  project?: { id: number; name?: string } | null;
 }
 
 /** Demo scheduled for a lead (GET /demos?leadId=). */

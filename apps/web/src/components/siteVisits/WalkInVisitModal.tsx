@@ -13,7 +13,7 @@ interface LeadHit {
   assigned_to_id: number | null;
 }
 
-const RATINGS: { value: string; label: string; hint: string }[] = [
+export const RATINGS: { value: string; label: string; hint: string }[] = [
   { value: 'HOT_INTERESTED', label: 'Very interested', hint: 'Ready to move forward' },
   { value: 'WARM', label: 'Interested', hint: 'Liked it, still deciding' },
   { value: 'COLD', label: 'Lukewarm', hint: 'Unsure' },
