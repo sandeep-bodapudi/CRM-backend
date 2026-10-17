@@ -351,6 +351,24 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   // Leave / late / field work / WFH requests, previously only reachable via
   // My Attendance -> "Leave / Late Request".
   { id: 'requests', label: 'Requests', icon: FilePlus, path: '/requests' },
+  // Managers decide their team's duty days, swaps, comp-offs, missed check-ins
+  // and doubtful phone check-ins; HR also sets weekly offs and office locations.
+  {
+    id: 'team-requests',
+    label: 'Team requests',
+    icon: ClipboardCheck,
+    path: '/team-requests',
+    requiredAnyRole: [
+      Roles.MD,
+      Roles.ADMIN,
+      Roles.HR_MANAGER,
+      Roles.MARKETING_DIRECTOR,
+      Roles.SALES_MANAGER,
+      Roles.PROJECT_MANAGER,
+      Roles.DIGITAL_MARKETING_HEAD,
+      Roles.CHANNEL_PARTNER_MANAGER,
+    ],
+  },
   // Work done outside the CRM (posts, reels, meetings) -- shown on Team Today.
   { id: 'work-log', label: 'Work Log', icon: NotebookPen, path: '/work-log' },
   { id: 'my-performance', label: 'My Performance', icon: TrendingUp, path: '/my-performance' },

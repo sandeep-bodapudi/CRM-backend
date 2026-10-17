@@ -5,6 +5,7 @@ import { AlertTriangle, ClipboardCheck, ListTodo, ChevronRight } from 'lucide-re
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 import { MyTargetsCard } from '../targets/MyTargetsCard';
+import { DutyTodayBanner } from '../attendance/WeekOffDutyPanel';
 
 const FINISHED = ['COMPLETED', 'CANCELLED', 'NOT_COMPLETED', 'BLOCKED'];
 
@@ -73,6 +74,7 @@ export const MyTasksStrip: React.FC = () => {
 
 export const MyWorkSummary: React.FC = () => (
   <>
+    <DutyTodayBanner />
     <MyTasksStrip />
     <MyTargetsCard />
   </>

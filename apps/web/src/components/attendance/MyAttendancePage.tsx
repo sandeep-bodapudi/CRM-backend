@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { LateLeaveProposals } from './LateLeaveProposals';
 import { WfhTodayCard } from './WfhTodayCard';
+import { DutyTodayBanner } from './WeekOffDutyPanel';
 import { EmergencyLogoutModal } from '../profile/EmergencyLogoutModal';
 import { proposalTypeLabel } from './proposalLabels';
 import { useAuth } from '../../context/AuthContext';
@@ -85,6 +86,7 @@ export const MyAttendancePage: React.FC = () => {
         </div>
       </div>
 
+      <DutyTodayBanner />
       <WfhTodayCard />
 
       {/* Calendar Component (no employeeId passed so it fetches current user) */}
@@ -114,7 +116,7 @@ export const MyAttendancePage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <span className="w-4 h-4 rounded-full bg-slate-200 border border-slate-300 block"></span>
-              <span className="text-slate-600">Holiday / Sunday</span>
+              <span className="text-slate-600">Holiday / week off</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-4 h-4 rounded-full bg-red-100 border border-red-300 block"></span>

@@ -85,7 +85,6 @@ export const MonthlyAttendanceCalendar: React.FC<CalendarProps> = ({ employeeId 
 
     for (let day = 1; day <= daysInMonth; day++) {
       const dateObj = new Date(year, month, day);
-      const isSunday = dateObj.getDay() === 0;
       const isFuture = (isCurrentMonth && day > currentDay) || dateObj > today;
 
       const dayStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
@@ -129,9 +128,6 @@ export const MonthlyAttendanceCalendar: React.FC<CalendarProps> = ({ employeeId 
           statusColor = 'bg-red-100 border-red-300';
           statusText = 'Absent';
         }
-      } else if (!isFuture && isSunday) {
-        statusColor = 'bg-slate-200 border-slate-300';
-        statusText = 'Sunday';
       } else if (!isFuture) {
         statusColor = 'bg-red-100 border-red-300';
         statusText = 'Absent';

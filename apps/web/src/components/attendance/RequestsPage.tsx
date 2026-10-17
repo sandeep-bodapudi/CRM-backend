@@ -3,6 +3,7 @@ import { AlertTriangle, FileText } from 'lucide-react';
 import { LateLeaveProposals } from './LateLeaveProposals';
 import { MyLeaveRequestsWidget } from './MyAttendancePage';
 import { EmergencyLogoutModal } from '../profile/EmergencyLogoutModal';
+import { WeekOffDutyPanel } from './WeekOffDutyPanel';
 
 /**
  * Requests -- leave, late arrival, field work, work from home and
@@ -34,6 +35,8 @@ export const RequestsPage: React.FC = () => {
           Emergency Early Logout
         </button>
       </div>
+
+      <WeekOffDutyPanel />
 
       <LateLeaveProposals />
 

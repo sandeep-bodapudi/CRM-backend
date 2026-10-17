@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MyTargetsCard } from '../targets/MyTargetsCard';
+import { DutyTodayBanner } from '../attendance/WeekOffDutyPanel';
 import { useNavigate } from 'react-router-dom';
 import {
   PhoneCall,
@@ -398,6 +399,7 @@ export const TelecallerDashboard: React.FC = () => {
       </div>
 
       <div className="px-4 pt-4 sm:px-0 sm:pt-0">
+        <DutyTodayBanner />
         <MyTargetsCard />
       </div>
 

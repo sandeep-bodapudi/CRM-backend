@@ -18,6 +18,9 @@ interface Row {
     source: string;
   } | null;
   attendance_required: boolean;
+  /** Their day off today ("Sunday (week off)", a holiday...), or null. */
+  off_today?: string | null;
+  duty_today?: boolean;
   calls_logged: number;
   leads_worked: number;
   contacted: number;
@@ -445,12 +448,18 @@ export const TeamTodayPage: React.FC = () => {
                     <div className="text-slate-400">
                       {r.attendance.status.replace(/_/g, ' ').toLowerCase()}
                       {r.attendance.source !== 'QR_SCAN' &&
-                        ` · ${r.attendance.source === 'REMOTE' ? 'work from home' : r.attendance.source === 'FIELD' ? 'field work' : r.attendance.source.replace(/_/g, ' ').toLowerCase()}`}
+                        ` · ${r.attendance.source === 'REMOTE' ? 'work from home' : r.attendance.source === 'FIELD' ? 'field work' : r.attendance.source === 'APP_SELFIE' ? 'phone check-in (selfie)' : r.attendance.source.replace(/_/g, ' ').toLowerCase()}`}
                     </div>
                   </>
                 ) : (
                   <div className="font-bold text-slate-400">
-                    {r.attendance_required ? 'No check-in' : 'Attendance not required'}
+                    {r.off_today
+                      ? `Off today: ${r.off_today}`
+                      : r.duty_today
+                        ? 'On duty today, no check-in yet'
+                        : r.attendance_required
+                          ? 'No check-in'
+                          : 'Attendance not required'}
                   </div>
                 )}
               </div>
