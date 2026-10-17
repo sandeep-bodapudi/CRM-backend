@@ -158,6 +158,10 @@ export class PaymentService {
       FAILED: ['SUCCESS'], // e.g. a cheque that cleared late
       SUCCESS: ['REFUNDED'],
       REFUNDED: [],
+      // Set when the booking is cancelled or its form rejected: Finance either
+      // returns the money (REFUNDED) or finds it never arrived (FAILED). The
+      // booking is cancelled, so no balance or instalment is recalculated.
+      REFUND_DUE: ['REFUNDED', 'FAILED'],
     };
     if (!(allowed[payment.status] || []).includes(status)) {
       throw new AppError(

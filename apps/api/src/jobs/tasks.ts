@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { notifyEmployee } from '../utils/notifyEmployee';
 import { dayInfoMany, creditCompOffIfEarned, ATTENDANCE_CLAIM } from '../services/workCalendar';
 import { Roles } from '../shared';
+import { HOLD_UNTIL_DECIDED_MS } from '../services/booking.service';
 import {
   getISTComponents,
   getISTMidnightInstant,
@@ -1022,6 +1023,72 @@ export const leadRecoveryJob = async () => {
 // 2. HOLD expiry: a manual "hold this unit for a walk-in customer" (spec
 //    section 24's HOLD status, `hold_until`/`held_for_lead_id`) has nothing
 //    else that ever clears it. Past its expiry, the unit reverts to AVAILABLE.
+/**
+ * Booking forms waiting more than 24 hours for the MD: remind the MD and
+ * Admin once a day (09:00-20:00 IST), one summary each. Runs inside the
+ * 15-minute sweep rather than as a daily job because the host sleeps when
+ * idle and would miss a fixed time; the "already reminded in the last 20
+ * hours" check keeps it to once a day.
+ */
+const BOOKING_REMINDER_TYPE = 'BOOKING_APPROVAL_REMINDER';
+export async function remindPendingBookingApprovals(now: Date) {
+  const istHour = Number(
+    new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })
+      .format(now)
+      .slice(0, 2),
+  );
+  if (istHour < 9 || istHour >= 20) return 0;
+  const waiting = await prisma.booking.findMany({
+    where: {
+      form_status: 'SUBMITTED',
+      status: { in: ['PENDING', 'TOKEN_RECEIVED'] },
+      form_submitted_at: { lt: new Date(now.getTime() - 24 * 3600 * 1000) },
+    },
+    select: { booking_code: true, company_id: true, form_submitted_at: true },
+    orderBy: { form_submitted_at: 'asc' },
+  });
+  if (waiting.length === 0) return 0;
+  let sent = 0;
+  const byCompany = new Map<number, typeof waiting>();
+  for (const b of waiting) byCompany.set(b.company_id, [...(byCompany.get(b.company_id) || []), b]);
+  for (const [companyId, list] of byCompany) {
+    const people = await prisma.employee.findMany({
+      where: {
+        company_id: companyId,
+        status: 'ACTIVE',
+        roles: { some: { role: { name: { in: [Roles.MD, Roles.ADMIN] } } } },
+      },
+      select: { id: true },
+    });
+    for (const person of people) {
+      const recent = await prisma.notification.count({
+        where: {
+          employee_id: person.id,
+          type: BOOKING_REMINDER_TYPE,
+          created_at: { gt: new Date(now.getTime() - 20 * 3600 * 1000) },
+        },
+      });
+      if (recent > 0) continue;
+      const oldestDays = Math.floor(
+        (now.getTime() - (list[0].form_submitted_at?.getTime() || now.getTime())) / 86400000,
+      );
+      await notifyEmployee(person.id, {
+        type: BOOKING_REMINDER_TYPE,
+        title: 'Booking forms waiting for MD approval',
+        message: `${list.length} booking form(s) are waiting for the MD (oldest ${oldestDays} day(s)): ${list
+          .slice(0, 5)
+          .map((b) => b.booking_code)
+          .join(
+            ', ',
+          )}${list.length > 5 ? ' …' : ''}. The units stay held until the MD approves or rejects.`,
+        link: '/action-center',
+      });
+      sent++;
+    }
+  }
+  return sent;
+}
+
 export const inventoryLockAndHoldExpirySweepJob = async () => {
   logger.info('Executing Inventory Lock & Hold Expiry Sweep...');
   const now = new Date();
@@ -1048,45 +1115,106 @@ export const inventoryLockAndHoldExpirySweepJob = async () => {
 
   let releasedLocks = 0;
   let cancelledBookings = 0;
+  let keptHolds = 0;
+  const autoCancelled: {
+    id: number;
+    code: string;
+    companyId: number;
+    people: number[];
+  }[] = [];
 
-  const cancelStaleBookingIfPending = async (
+  // What to do with a booking whose lock ran out (decisions 2026-10-17):
+  //  - waiting for the MD (form submitted), token received, or money recorded:
+  //    keep holding the unit until someone decides -- never cancel silently;
+  //  - a quick booking with no form and no payment: cancel it and release the
+  //    unit, and tell the booker and the MD;
+  //  - anything else (already cancelled, gone): just release the unit.
+  const decide = async (
     tx: Prisma.TransactionClient,
     bookingId: number | null,
-  ) => {
-    if (!bookingId) return false;
+  ): Promise<'KEEP' | 'RELEASE'> => {
+    if (!bookingId) return 'RELEASE';
     const booking = await tx.booking.findUnique({ where: { id: bookingId } });
-    if (!booking || booking.status !== 'PENDING') return false;
+    if (!booking || !['PENDING', 'TOKEN_RECEIVED'].includes(booking.status)) return 'RELEASE';
+    const paid = await tx.payment.count({
+      where: { booking_id: booking.id, status: { notIn: ['FAILED'] } },
+    });
+    if (booking.form_status === 'SUBMITTED' || booking.status === 'TOKEN_RECEIVED' || paid > 0) {
+      return 'KEEP';
+    }
     await tx.booking.update({
       where: { id: booking.id },
       data: {
         status: 'CANCELLED',
-        notes: `${booking.notes ? booking.notes + ' | ' : ''}Auto-cancelled: hold expired without confirmation.`,
+        notes: `${booking.notes ? booking.notes + ' | ' : ''}Auto-cancelled: the 24-hour hold expired without confirmation.`,
       },
     });
-    return true;
+    autoCancelled.push({
+      id: booking.id,
+      code: booking.booking_code,
+      companyId: booking.company_id,
+      people: [booking.assigned_employee_id, booking.form_submitted_by_id].filter(
+        (x): x is number => !!x,
+      ),
+    });
+    cancelledBookings++;
+    return 'RELEASE';
   };
+  const holdUntil = new Date(now.getTime() + HOLD_UNTIL_DECIDED_MS);
 
   for (const row of expiredLockedProperties) {
     await prisma.$transaction(async (tx) => {
-      if (await cancelStaleBookingIfPending(tx, row.locked_by_booking_id)) cancelledBookings++;
+      if ((await decide(tx, row.locked_by_booking_id)) === 'KEEP') {
+        await tx.property.update({ where: { id: row.id }, data: { locked_until: holdUntil } });
+        keptHolds++;
+        return;
+      }
       await tx.property.update({
         where: { id: row.id },
         data: { status: 'LIVE', locked_until: null, locked_by_booking_id: null },
       });
+      releasedLocks++;
     });
-    releasedLocks++;
   }
 
   for (const row of expiredReservedUnits) {
     await prisma.$transaction(async (tx) => {
-      if (await cancelStaleBookingIfPending(tx, row.locked_by_booking_id)) cancelledBookings++;
+      if ((await decide(tx, row.locked_by_booking_id)) === 'KEEP') {
+        await tx.projectUnit.update({ where: { id: row.id }, data: { locked_until: holdUntil } });
+        keptHolds++;
+        return;
+      }
       await tx.projectUnit.update({
         where: { id: row.id },
         data: { sales_status: 'AVAILABLE', locked_until: null, locked_by_booking_id: null },
       });
+      releasedLocks++;
     });
-    releasedLocks++;
   }
+
+  for (const b of autoCancelled) {
+    const mds = await prisma.employee.findMany({
+      where: {
+        company_id: b.companyId,
+        status: 'ACTIVE',
+        roles: { some: { role: { name: Roles.MD } } },
+      },
+      select: { id: true },
+    });
+    const to = [...new Set([...b.people, ...mds.map((m) => m.id)])];
+    if (to.length > 0) {
+      await notifyEmployee(to, {
+        type: 'BOOKING_CANCELLED',
+        title: 'Booking auto-cancelled',
+        message: `Booking ${b.code} was not confirmed within 24 hours (no booking form, no payment), so it was cancelled and the unit released.`,
+        link: `/bookings/${b.id}`,
+      }).catch((err) => logger.error({ err }, '[Jobs] auto-cancel notification failed'));
+    }
+  }
+
+  await remindPendingBookingApprovals(now).catch((err) =>
+    logger.error({ err }, '[Jobs] booking approval reminder failed'),
+  );
 
   if (expiredHeldProperties.length > 0) {
     await prisma.property.updateMany({
@@ -1103,6 +1231,6 @@ export const inventoryLockAndHoldExpirySweepJob = async () => {
 
   const releasedHolds = expiredHeldProperties.length + expiredHeldUnits.length;
   logger.info(
-    `Inventory Lock & Hold Expiry Sweep finished. Released ${releasedLocks} expired lock(s) (${cancelledBookings} stale booking(s) cancelled), released ${releasedHolds} expired hold(s).`,
+    `Inventory Lock & Hold Expiry Sweep finished. Released ${releasedLocks} expired lock(s) (${cancelledBookings} stale booking(s) cancelled), kept ${keptHolds} hold(s) waiting for a decision, released ${releasedHolds} expired hold(s).`,
   );
 };
