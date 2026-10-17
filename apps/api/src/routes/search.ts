@@ -3,7 +3,8 @@ import { prisma } from '../lib/prisma';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { hasEffectivePermission } from '../middleware/authz';
 import { buildLeadScope, buildProjectScope } from '../authz/dataScope';
-import { Permissions } from '../shared';
+import { Permissions, DO_NOT_CALL_EXIT_REASONS, LEAD_EXIT_REASON_LABELS } from '../shared';
+import { findLeadIdByPhone } from '../services/lead/duplicates';
 
 const router = Router();
 
@@ -52,7 +53,13 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
                 ],
               },
               take: 5,
-              select: { id: true, customer_name: true, phone: true, status: true },
+              select: {
+                id: true,
+                customer_name: true,
+                phone: true,
+                status: true,
+                exit_reason: true,
+              },
             });
           })()
         : [],
@@ -81,7 +88,29 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
         : [],
     ]);
 
-    return res.status(200).json({ leads, bookings, projects });
+    // A phone number marked "do not call" anywhere in the company (asked not to be
+    // called, or a salesperson from another company). Said even when the lead is
+    // not the searcher's, so nobody calls it; nothing else about it is shown.
+    let doNotCall: { reason: string; label: string } | null = null;
+    if (q.replace(/\D/g, '').length >= 7) {
+      const hitId = await findLeadIdByPhone(user.companyId, q);
+      if (hitId) {
+        const hit = await prisma.lead.findUnique({
+          where: { id: hitId },
+          select: { exit_reason: true },
+        });
+        if (hit?.exit_reason && (DO_NOT_CALL_EXIT_REASONS as string[]).includes(hit.exit_reason)) {
+          doNotCall = {
+            reason: hit.exit_reason,
+            label:
+              (LEAD_EXIT_REASON_LABELS as Record<string, string>)[hit.exit_reason] ||
+              hit.exit_reason,
+          };
+        }
+      }
+    }
+
+    return res.status(200).json({ leads, bookings, projects, do_not_call: doNotCall });
   } catch (error) {
     return res.status(500).json({ error: 'Search failed' });
   }

@@ -32,7 +32,23 @@ import {
   FILTER_SOURCE_OPTIONS,
 } from '../../constants/leadStatus';
 import { getPropertyTypeLabel } from '../../constants/propertyTypes';
-import { Roles, Permissions } from '../../shared';
+import {
+  Roles,
+  Permissions,
+  LEAD_EXIT_REASON_LABELS,
+  DO_NOT_CALL_EXIT_REASONS,
+} from '../../shared';
+
+/** A red tag on leads nobody may call again (asked not to, or a salesperson from another company). */
+const DoNotCallTag: React.FC<{ exitReason?: string | null }> = ({ exitReason }) =>
+  exitReason && (DO_NOT_CALL_EXIT_REASONS as string[]).includes(exitReason) ? (
+    <span
+      title={(LEAD_EXIT_REASON_LABELS as Record<string, string>)[exitReason]}
+      className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-extrabold shrink-0"
+    >
+      {exitReason === 'OTHER_COMPANY_SALESPERSON' ? 'Salesperson · do not call' : 'Do not call'}
+    </span>
+  ) : null;
 import { QuickAddLeadModal } from './QuickAddLeadModal';
 import { MoveLeadBatchModal } from './MoveLeadBatchModal';
 import { TelecallerReport } from './TelecallerReport';
@@ -165,6 +181,7 @@ const LeadCard: React.FC<LeadCardProps> = ({
           <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-semibold shrink-0">
             {getLeadSourceLabel(lead.source, lead.source_detail)}
           </span>
+          <DoNotCallTag exitReason={(lead as any).exit_reason} />
           {canAssign ? (
             <select
               value={lead.assigned_to?.id || ''}
@@ -229,6 +246,8 @@ export const LeadManagement: React.FC = () => {
   );
   const [leadSearchQuery, setLeadSearchQuery] = useState<string>('');
   const [sourceFilter, setSourceFilter] = useState<string>(searchParams.get('source') || 'ALL');
+  // Why a lead was dropped (e.g. salesperson from another company): find them all.
+  const [exitFilter, setExitFilter] = useState<string>(searchParams.get('exit_reason') || 'ALL');
   // Page size for the server-side list; "Load more" asks for the next page.
   const LEADS_PAGE_SIZE = 50;
   const [totalLeads, setTotalLeads] = useState(0);
@@ -471,6 +490,7 @@ export const LeadManagement: React.FC = () => {
       params.set('offset', String(append ? leads.length : 0));
       if (statusFilter !== 'ALL') params.set('status', statusFilter);
       if (sourceFilter !== 'ALL') params.set('source', sourceFilter);
+      if (exitFilter !== 'ALL') params.set('exit_reason', exitFilter);
       if (debouncedQuery) params.set('q', debouncedQuery);
       if (leadViewTab === 'added_by_me') params.set('created_by_id', 'me');
       const res = await fetchWithAuth(`${API_BASE_URL}/leads?${params.toString()}`);
@@ -521,7 +541,7 @@ export const LeadManagement: React.FC = () => {
     if (!user?.permissions?.includes(Permissions.LEADS_READ)) return;
     fetchLeads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, statusFilter, sourceFilter, debouncedQuery, leadViewTab]);
+  }, [user, statusFilter, sourceFilter, exitFilter, debouncedQuery, leadViewTab]);
 
   useEffect(() => {
     if (!user?.permissions?.includes(Permissions.LEADS_READ)) return;
@@ -735,8 +755,11 @@ export const LeadManagement: React.FC = () => {
       header: 'Source',
       sortable: true,
       render: (l) => (
-        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold">
-          {getLeadSourceLabel(l.source, l.source_detail)}
+        <span className="flex flex-wrap gap-1">
+          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold">
+            {getLeadSourceLabel(l.source, l.source_detail)}
+          </span>
+          <DoNotCallTag exitReason={(l as any).exit_reason} />
         </span>
       ),
     },
@@ -1064,6 +1087,21 @@ export const LeadManagement: React.FC = () => {
                   {getLeadSourceLabel(s)}
                 </option>
               ))}
+            </select>
+            <label className="text-xs font-semibold text-slate-500">Why dropped:</label>
+            <select
+              value={exitFilter}
+              onChange={(e) => setExitFilter(e.target.value)}
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-navy-500"
+            >
+              <option value="ALL">Any reason</option>
+              {Object.entries(LEAD_EXIT_REASON_LABELS as Record<string, string>).map(
+                ([k, label]) => (
+                  <option key={k} value={k}>
+                    {label}
+                  </option>
+                ),
+              )}
             </select>
             <label className="text-xs font-semibold text-slate-500">Status:</label>
             <select

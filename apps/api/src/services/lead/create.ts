@@ -4,6 +4,7 @@ import { TokenPayload } from '../../utils/jwt';
 import { Roles, Permissions } from '../../shared';
 import { AppError } from './errors';
 import { findLeadIdByPhone } from './duplicates';
+import { DO_NOT_CALL_EXIT_REASONS, LEAD_EXIT_REASON_LABELS } from '../../shared';
 import { generateNextLeadCode, calculateLeadScore, syncLeadPreferredLocations } from './shared';
 import { findBestAssigneeForLead } from '../../utils/distributionService';
 import { notifyEmployee } from '../../utils/notifyEmployee';
@@ -113,6 +114,30 @@ export async function createLead(
       // Dropped/Cancelled lead duplicate check
       const isAutomatedChannel =
         dto.source !== 'MANUAL_ENTRY' && dto.source !== 'REFERRAL' && dto.source !== 'ASSOCIATE';
+
+      // "Do not call" (asked not to be called, or a salesperson from another
+      // company): a new enquiry or upload must not put the number back in anyone's
+      // calling list. It is noted on the lead and the existing lead is returned.
+      const doNotCall =
+        !!existingLead.exit_reason &&
+        (DO_NOT_CALL_EXIT_REASONS as string[]).includes(existingLead.exit_reason);
+      if (doNotCall) {
+        await p.leadActivity.create({
+          data: {
+            lead_id: existingLead.id,
+            actor_id: user.employeeId || existingLead.assigned_to_id || 1,
+            activity_type: 'NOTE_ADDED',
+            notes: `New enquiry via ${dto.source || 'MANUAL_ENTRY'} ignored: this number is marked "${(LEAD_EXIT_REASON_LABELS as Record<string, string>)[existingLead.exit_reason!] || existingLead.exit_reason}".`,
+          },
+        });
+        if (!isAutomatedChannel) {
+          throw new AppError(
+            409,
+            `Do not call: ${existingLead.customer_name} (${existingLead.lead_code}) is marked "${(LEAD_EXIT_REASON_LABELS as Record<string, string>)[existingLead.exit_reason!] || existingLead.exit_reason}". Only management can bring this lead back.`,
+          );
+        }
+        return { lead: existingLead, do_not_call: true };
+      }
 
       if (isAutomatedChannel) {
         // Task 7: Automated channel -> auto-recover to POOL

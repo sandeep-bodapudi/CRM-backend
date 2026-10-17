@@ -3,7 +3,12 @@ import { prisma } from '../../lib/prisma';
 import { TokenPayload } from '../../utils/jwt';
 import { can } from '../../authz/authorization';
 import { getAccessibleCompanyIds } from '../../authz/dataScope';
-import { Permissions, Roles } from '../../shared';
+import {
+  Permissions,
+  Roles,
+  DO_NOT_CALL_EXIT_REASONS,
+  LEAD_EXIT_REASON_LABELS,
+} from '../../shared';
 import { WorkflowEngine } from '../../workflows/workflowEngine';
 import { OpportunityService } from '../opportunity.service';
 import { CustomerPortalService } from '../customerPortal.service';
@@ -729,7 +734,15 @@ export async function bulkUploadLeads(
         ...(emails.length > 0 ? [{ email: { in: emails } }] : []),
       ],
     },
-    select: { id: true, phone: true, email: true, status: true, source: true },
+    select: {
+      id: true,
+      phone: true,
+      email: true,
+      status: true,
+      source: true,
+      exit_reason: true,
+      lead_code: true,
+    },
   });
 
   // Duplicates are not imported, but if the same person came in again from a
@@ -779,7 +792,19 @@ export async function bulkUploadLeads(
               notes: `Also came in from ${incoming.detail || LEAD_SOURCE_NAMES[incoming.source] || incoming.source} (bulk upload, row ${currentRow}).`,
             });
           }
-          if (existingLead.status === 'DROPPED') {
+          if (
+            existingLead.status === 'DROPPED' &&
+            existingLead.exit_reason &&
+            (DO_NOT_CALL_EXIT_REASONS as string[]).includes(existingLead.exit_reason)
+          ) {
+            // Never put a "do not call" number (asked not to be called / salesperson
+            // from another company) back into the calling list through an upload.
+            results.duplicates++;
+            results.errors.push({
+              row: currentRow,
+              reason: `Do not call: ${item.phone} is marked "${(LEAD_EXIT_REASON_LABELS as Record<string, string>)[existingLead.exit_reason] || existingLead.exit_reason}" (${existingLead.lead_code ?? 'existing lead'}).`,
+            });
+          } else if (existingLead.status === 'DROPPED') {
             await updateLeadStatus(user, existingLead.id, 'RECOVERED_TO_POOL');
             results.successful_imports++;
           } else {

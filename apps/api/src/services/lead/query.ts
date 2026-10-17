@@ -35,6 +35,8 @@ export async function getUnclaimedLeads(user: TokenPayload) {
 export interface LeadListFilters {
   status?: string;
   source?: string;
+  /** Why it was dropped (Lead.exit_reason), e.g. OTHER_COMPANY_SALESPERSON. */
+  exit_reason?: string;
   q?: string;
   assigned_to_id?: number;
   created_by_id?: number;
@@ -57,6 +59,7 @@ async function buildFilteredLeadWhere(user: TokenPayload, filters: LeadListFilte
     extra.push({ status: statuses.length > 1 ? { in: statuses } : statuses[0] });
   }
   if (filters.source) extra.push({ source: filters.source });
+  if (filters.exit_reason) extra.push({ exit_reason: filters.exit_reason });
   if (filters.assigned_to_id) extra.push({ assigned_to_id: filters.assigned_to_id });
   if (filters.created_by_id) extra.push({ created_by_id: filters.created_by_id });
   if (filters.unassigned) extra.push({ assigned_to_id: null });

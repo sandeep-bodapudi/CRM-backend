@@ -4,14 +4,19 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
 import { toUserFacingError } from '../../utils/userFacingError';
-import { CALL_REASONS_BY_OUTCOME, CALL_REASON_LABELS } from '../../shared';
+import {
+  CALL_REASONS_BY_OUTCOME,
+  CALL_REASON_LABELS,
+  DO_NOT_CALL_REASONS,
+  DROPPABLE_CALL_OUTCOMES,
+} from '../../shared';
 
 const OUTCOMES: { value: string; label: string; tone: string }[] = [
   { value: 'CONNECTED_INTERESTED', label: 'Spoke — interested', tone: 'emerald' },
   { value: 'CALL_BACK', label: 'Asked to call back', tone: 'amber' },
   { value: 'CONNECTED_NOT_INTERESTED', label: 'Spoke — not interested', tone: 'slate' },
   { value: 'NO_ANSWER', label: 'No answer', tone: 'slate' },
-  { value: 'BUSY_OR_SWITCHED_OFF', label: 'Busy / switched off', tone: 'slate' },
+  { value: 'BUSY_OR_SWITCHED_OFF', label: 'Busy / switched off / not reachable', tone: 'slate' },
   { value: 'WRONG_NUMBER', label: 'Wrong number', tone: 'red' },
 ];
 
@@ -44,12 +49,13 @@ export const CallOutcomeModal: React.FC<{
   const [reason, setReason] = useState('');
   const [dropLead, setDropLead] = useState(false);
 
-  // "Not interested" and "wrong number" must say why. A lead still in NEW
-  // cannot be dropped, so the option is not offered for it.
+  // Every outcome with a reason list must say why (or, when the call did not get
+  // through, what the phone/network said). Only "not interested" and "wrong
+  // number" can drop the lead; a lead still in NEW cannot be dropped at all.
   const reasonOptions = CALL_REASONS_BY_OUTCOME[outcome] || [];
   const needsReason = reasonOptions.length > 0;
-  const canDrop = lead.status !== 'NEW';
-  const doNotCall = reason === 'DO_NOT_CALL_AGAIN';
+  const canDrop = lead.status !== 'NEW' && DROPPABLE_CALL_OUTCOMES.includes(outcome);
+  const doNotCall = !!reason && (DO_NOT_CALL_REASONS as string[]).includes(reason);
 
   const pickOutcome = (value: string) => {
     setOutcome(value);
@@ -58,9 +64,9 @@ export const CallOutcomeModal: React.FC<{
   };
   const pickReason = (value: string) => {
     setReason(value);
-    // Wrong numbers and "do not call again" almost always mean the lead is
-    // finished; other reasons leave the choice to the telecaller.
-    setDropLead(['WRONG_PERSON', 'NOT_IN_SERVICE', 'DO_NOT_CALL_AGAIN'].includes(value));
+    // Wrong numbers and "never call again" reasons almost always mean the lead
+    // is finished; other reasons leave the choice to the telecaller.
+    setDropLead(['WRONG_PERSON', 'NOT_IN_SERVICE', ...DO_NOT_CALL_REASONS].includes(value as any));
   };
 
   // A call-back always needs a time; for "interested" a follow-up is offered
@@ -144,7 +150,11 @@ export const CallOutcomeModal: React.FC<{
         {needsReason && (
           <div className="space-y-2">
             <label className="block text-[11px] font-bold text-slate-600 uppercase">
-              {outcome === 'WRONG_NUMBER' ? 'What was wrong? *' : 'Why not interested? *'}
+              {outcome === 'WRONG_NUMBER'
+                ? 'What was wrong? *'
+                : outcome === 'CONNECTED_NOT_INTERESTED'
+                  ? 'Why not interested? *'
+                  : 'What did you hear? *'}
             </label>
             <select
               value={reason}
@@ -158,6 +168,11 @@ export const CallOutcomeModal: React.FC<{
                 </option>
               ))}
             </select>
+            {reason && !DROPPABLE_CALL_OUTCOMES.includes(outcome) && (
+              <p className="text-[11px] text-slate-500">
+                The lead stays in your list and comes back as &quot;try again&quot;.
+              </p>
+            )}
             {reason && canDrop && (
               <label className="flex items-start gap-2 text-xs text-slate-700">
                 <input

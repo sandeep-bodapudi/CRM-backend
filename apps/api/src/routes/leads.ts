@@ -12,6 +12,7 @@ import {
   AddPropertyInterestSchema,
   CALL_REASON_VALUES,
   LEAD_UPLOAD_SOURCES,
+  LEAD_EXIT_REASON_VALUES,
 } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
 import { LeadService, AppError } from '../services/lead.service';
@@ -63,6 +64,10 @@ const parseLeadFilters = (req: AuthenticatedRequest): LeadListFilters => {
   return {
     status: queryString(req.query.status),
     source: queryString(req.query.source),
+    exit_reason: (() => {
+      const v = queryString(req.query.exit_reason);
+      return v && (LEAD_EXIT_REASON_VALUES as readonly string[]).includes(v) ? v : undefined;
+    })(),
     q: queryString(req.query.q),
     assigned_to_id: idOrMe(req.query.assigned_to_id),
     created_by_id: idOrMe(req.query.created_by_id),

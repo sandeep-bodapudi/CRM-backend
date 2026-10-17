@@ -5,6 +5,22 @@ import { AppError } from './errors';
 import { generateNextLeadCode } from './shared';
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import { logger } from '../../utils/logger';
+import { Roles, DO_NOT_CALL_EXIT_REASONS } from '../../shared';
+
+/** A "do not call" lead may be brought back only by management (the customer really came back). */
+function assertMayRecover(user: TokenPayload, lead: { exit_reason: string | null }) {
+  const doNotCall =
+    !!lead.exit_reason && (DO_NOT_CALL_EXIT_REASONS as string[]).includes(lead.exit_reason);
+  const management = user.roles.some((r) =>
+    [Roles.MD, Roles.ADMIN, Roles.MARKETING_DIRECTOR].includes(r as any),
+  );
+  if (doNotCall && !management) {
+    throw new AppError(
+      403,
+      'This number is marked "do not call". Only the MD or Marketing Director can bring it back.',
+    );
+  }
+}
 const p = prisma;
 
 export async function distributeUnassignedPoolLeads(companyId: number) {
@@ -155,6 +171,7 @@ export async function recoverManualLead(user: TokenPayload, leadId: number) {
   if (lead.status !== 'DROPPED' && lead.status !== 'CANCELLED') {
     throw new AppError(400, 'Only dropped or cancelled leads can be manually recovered.');
   }
+  assertMayRecover(user, lead);
 
   return await p.$transaction(async (tx) => {
     const recovered = await tx.lead.update({
@@ -198,6 +215,7 @@ export async function recoverFreshLead(user: TokenPayload, leadId: number) {
   if (lead.status !== 'DROPPED' && lead.status !== 'CANCELLED') {
     throw new AppError(400, 'Only dropped or cancelled leads can be used to start a fresh lead.');
   }
+  assertMayRecover(user, lead);
 
   const leadCode = await generateNextLeadCode();
 

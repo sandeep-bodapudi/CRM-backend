@@ -8,6 +8,8 @@ interface SearchResult {
   leads: any[];
   bookings: any[];
   projects: any[];
+  /** The searched phone number is marked "do not call" somewhere in the company. */
+  do_not_call?: { reason: string; label: string } | null;
 }
 
 export const GlobalSearchInput: React.FC<{
@@ -126,6 +128,11 @@ export const GlobalSearchInput: React.FC<{
 
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-[60vh] overflow-y-auto">
+          {results.do_not_call && (
+            <div className="mx-2 mt-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs font-bold text-red-700">
+              Do not call this number: {results.do_not_call.label}.
+            </div>
+          )}
           {flatItems.length === 0 ? (
             <div className="px-4 py-3 text-sm text-slate-500">No results found</div>
           ) : (
@@ -151,6 +158,14 @@ export const GlobalSearchInput: React.FC<{
                         </div>
                         <div className="text-xs text-slate-500">
                           {lead.phone} • {lead.status}
+                          {lead.exit_reason === 'OTHER_COMPANY_SALESPERSON' && (
+                            <span className="ml-1 text-red-600 font-bold">
+                              • salesperson, do not call
+                            </span>
+                          )}
+                          {lead.exit_reason === 'DO_NOT_CONTACT' && (
+                            <span className="ml-1 text-red-600 font-bold">• do not call</span>
+                          )}
                         </div>
                       </div>
                     );

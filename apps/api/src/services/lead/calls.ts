@@ -8,6 +8,8 @@ import {
   CALL_REASON_LABELS,
   CALL_REASON_EXIT_REASON,
   CallReasonType,
+  DO_NOT_CALL_REASONS,
+  DROPPABLE_CALL_OUTCOMES,
 } from '../../shared';
 import { AppError } from './errors';
 import { updateLeadStatus } from './status';
@@ -59,8 +61,10 @@ export async function logCall(
   }
 
   // The reason is optional for the API (older apps do not send one) but must
-  // fit the outcome when given. "Asked not to be called again" always drops the
-  // lead: nobody should keep calling that number.
+  // fit the outcome when given. "Asked not to be called again" and "salesperson
+  // from another company" always drop the lead: nobody should call that number
+  // again. A call that did not get through (no answer, busy, switched off ...)
+  // keeps its reason but never drops the lead: it is simply tried again.
   if (input.reason) {
     const allowed = CALL_REASONS_BY_OUTCOME[input.outcome] || [];
     if (!allowed.includes(input.reason as CallReasonType)) {
@@ -68,8 +72,11 @@ export async function logCall(
     }
   }
   const reason = input.reason as CallReasonType | undefined;
-  const doNotCall = reason === 'DO_NOT_CALL_AGAIN';
-  const wantsDrop = !!reason && (input.drop_lead === true || doNotCall);
+  const doNotCall = !!reason && DO_NOT_CALL_REASONS.includes(reason);
+  const wantsDrop =
+    !!reason &&
+    DROPPABLE_CALL_OUTCOMES.includes(input.outcome) &&
+    (input.drop_lead === true || doNotCall);
 
   const followUpAt = input.follow_up_at && !doNotCall ? new Date(input.follow_up_at) : null;
   if (followUpAt && Number.isNaN(followUpAt.getTime())) {

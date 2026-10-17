@@ -39,6 +39,7 @@ enum LeadExitReason {
   OTHER
   MARKETING_CALL
   BROKER_OR_AGENT
+  OTHER_COMPANY_SALESPERSON
 }
 
 enum SiteVisitStatus {

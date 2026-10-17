@@ -42,6 +42,7 @@ export const LeadExitReason = {
   OTHER: 'OTHER',
   MARKETING_CALL: 'MARKETING_CALL',
   BROKER_OR_AGENT: 'BROKER_OR_AGENT',
+  OTHER_COMPANY_SALESPERSON: 'OTHER_COMPANY_SALESPERSON',
 } as const;
 
 export type LeadExitReasonType = (typeof LeadExitReason)[keyof typeof LeadExitReason];
@@ -67,10 +68,12 @@ export const LEAD_EXIT_REASON_LABELS: Record<LeadExitReasonType, string> = {
   OTHER: 'Other (please specify)',
   MARKETING_CALL: 'Marketing / promotional call, not a real enquiry',
   BROKER_OR_AGENT: 'Broker / agent, not a buyer',
+  OTHER_COMPANY_SALESPERSON: 'Salesperson from another company (do not call)',
 };
 
 // ---------------------------------------------------------------------------
-// Call reasons: WHY a call ended as "not interested" or "wrong number".
+// Call reasons: WHY a call ended as "not interested" or "wrong number", or
+// what the phone/network said when it did not get through.
 // Stored in its own column (LeadActivity.call_reason) instead of inside the
 // note text, so reports can count them. Each maps to the exit reason used if
 // the telecaller also drops the lead.
@@ -90,6 +93,17 @@ export const CallReason = {
   DO_NOT_CALL_AGAIN: 'DO_NOT_CALL_AGAIN',
   WRONG_PERSON: 'WRONG_PERSON',
   NOT_IN_SERVICE: 'NOT_IN_SERVICE',
+  OTHER_COMPANY_SALESPERSON: 'OTHER_COMPANY_SALESPERSON',
+  // Why the call did not get through: what the phone or the network said.
+  NOT_ANSWERING: 'NOT_ANSWERING',
+  VOICEMAIL: 'VOICEMAIL',
+  ON_ANOTHER_CALL: 'ON_ANOTHER_CALL',
+  CURRENTLY_BUSY: 'CURRENTLY_BUSY',
+  SWITCHED_OFF: 'SWITCHED_OFF',
+  NOT_REACHABLE: 'NOT_REACHABLE',
+  TEMPORARILY_OUT_OF_SERVICE: 'TEMPORARILY_OUT_OF_SERVICE',
+  INCOMING_BARRED: 'INCOMING_BARRED',
+  OUT_OF_COVERAGE: 'OUT_OF_COVERAGE',
 } as const;
 
 export type CallReasonType = (typeof CallReason)[keyof typeof CallReason];
@@ -110,7 +124,17 @@ export const CALL_REASON_LABELS: Record<CallReasonType, string> = {
   LANGUAGE_PROBLEM: 'Language problem',
   DO_NOT_CALL_AGAIN: 'Asked not to be called again',
   WRONG_PERSON: 'Number belongs to someone else',
-  NOT_IN_SERVICE: 'Number not in service',
+  NOT_IN_SERVICE: 'Dialled number does not exist / not in service',
+  OTHER_COMPANY_SALESPERSON: 'Salesperson from another company (never call again)',
+  NOT_ANSWERING: 'Ringing, not answering',
+  VOICEMAIL: 'Call forwarded to voicemail',
+  ON_ANOTHER_CALL: 'Speaking (on another call)',
+  CURRENTLY_BUSY: 'Currently busy',
+  SWITCHED_OFF: 'Switched off',
+  NOT_REACHABLE: 'Unavailable / services not available at the moment',
+  TEMPORARILY_OUT_OF_SERVICE: 'Temporarily out of service',
+  INCOMING_BARRED: 'Incoming services stopped',
+  OUT_OF_COVERAGE: 'Out of network coverage area',
 };
 
 /** Which reasons can be given for which call outcome. */
@@ -128,9 +152,35 @@ export const CALL_REASONS_BY_OUTCOME: Record<string, CallReasonType[]> = {
     'OUT_OF_STATION',
     'LANGUAGE_PROBLEM',
     'DO_NOT_CALL_AGAIN',
+    'OTHER_COMPANY_SALESPERSON',
   ],
   WRONG_NUMBER: ['WRONG_PERSON', 'NOT_IN_SERVICE'],
+  NO_ANSWER: ['NOT_ANSWERING', 'VOICEMAIL'],
+  BUSY_OR_SWITCHED_OFF: [
+    'ON_ANOTHER_CALL',
+    'CURRENTLY_BUSY',
+    'SWITCHED_OFF',
+    'NOT_REACHABLE',
+    'TEMPORARILY_OUT_OF_SERVICE',
+    'INCOMING_BARRED',
+    'OUT_OF_COVERAGE',
+  ],
 };
+
+/** Outcomes whose reason may also drop the lead (the others are tried again later). */
+export const DROPPABLE_CALL_OUTCOMES = ['CONNECTED_NOT_INTERESTED', 'WRONG_NUMBER'];
+
+/** Call reasons that always drop the lead: nobody may call this number again. */
+export const DO_NOT_CALL_REASONS: CallReasonType[] = [
+  'DO_NOT_CALL_AGAIN',
+  'OTHER_COMPANY_SALESPERSON',
+];
+
+/** Exit reasons that mean "never call again": such a lead is not revived by a new enquiry or upload. */
+export const DO_NOT_CALL_EXIT_REASONS: LeadExitReasonType[] = [
+  'DO_NOT_CONTACT',
+  'OTHER_COMPANY_SALESPERSON',
+];
 
 /** The exit reason used when a call reason leads to dropping the lead. */
 export const CALL_REASON_EXIT_REASON: Record<
@@ -151,6 +201,18 @@ export const CALL_REASON_EXIT_REASON: Record<
   DO_NOT_CALL_AGAIN: { exit_reason: 'DO_NOT_CONTACT' },
   WRONG_PERSON: { exit_reason: 'INVALID_CONTACT' },
   NOT_IN_SERVICE: { exit_reason: 'INVALID_CONTACT' },
+  OTHER_COMPANY_SALESPERSON: { exit_reason: 'OTHER_COMPANY_SALESPERSON' },
+  // Not reached: never dropped from the call dialog (tried again later); listed so
+  // the map stays complete if a lead is dropped by hand after many attempts.
+  NOT_ANSWERING: { exit_reason: 'UNRESPONSIVE' },
+  VOICEMAIL: { exit_reason: 'UNRESPONSIVE' },
+  ON_ANOTHER_CALL: { exit_reason: 'UNRESPONSIVE' },
+  CURRENTLY_BUSY: { exit_reason: 'UNRESPONSIVE' },
+  SWITCHED_OFF: { exit_reason: 'UNRESPONSIVE' },
+  NOT_REACHABLE: { exit_reason: 'UNRESPONSIVE' },
+  TEMPORARILY_OUT_OF_SERVICE: { exit_reason: 'UNRESPONSIVE' },
+  INCOMING_BARRED: { exit_reason: 'UNRESPONSIVE' },
+  OUT_OF_COVERAGE: { exit_reason: 'UNRESPONSIVE' },
 };
 
 export const LeadSource = {
