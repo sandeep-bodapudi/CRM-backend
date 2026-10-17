@@ -8,6 +8,7 @@ import { SiteVisitPolicy } from '../../policies/siteVisit.policy';
 import { generateNextBookingCode, resolveVisitProject } from './shared';
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import { logger } from '../../utils/logger';
+import { LeadService } from '../lead.service';
 const p = prisma;
 
 export async function listVisits(
@@ -180,141 +181,170 @@ export async function bookVisit(user: TokenPayload, data: any) {
   // inside resolveVisitProject, which also resolves the PM this visit routes to.
   const { projectId, pmId } = await resolveVisitProject(data, user.companyId || 1, lead);
 
-  return await p.$transaction(async (tx: import('@prisma/client').Prisma.TransactionClient) => {
-    const bookingCode = await generateNextBookingCode();
-    const bookingData: any = {
-      booking_code: bookingCode,
-      lead: { connect: { id: data.lead_id } },
-      telecaller: { connect: { id: user.employeeId } },
-      scheduled_date: new Date(data.scheduled_date),
-      status: 'REQUESTED',
-      verification_call_notes: data.notes || 'Site visit booked by telecaller.',
-    };
-
-    if (data.opportunity_id) bookingData.opportunity = { connect: { id: data.opportunity_id } };
-
-    if (propertyIds.length > 0) {
-      // Single property column kept for backward compatibility (first property).
-      bookingData.property = { connect: { id: propertyIds[0] } };
-    } else if (projectUnitIds.length > 0) {
-      // Same single-column convenience field, unit side (only set when no
-      // property is linked — the column is one-or-the-other, same as Booking).
-      bookingData.project_unit = { connect: { id: projectUnitIds[0] } };
-    }
-    if (projectId) {
-      bookingData.project = { connect: { id: projectId } };
-    }
-
-    const booking = await tx.siteVisitBooking.create({ data: bookingData });
-
-    // §2 property/unit links (multi-item outcome capture)
-    if (propertyIds.length > 0 || projectUnitIds.length > 0) {
-      await tx.siteVisitProperty.createMany({
-        data: [
-          ...propertyIds.map((pid: number) => ({ visit_id: booking.id, property_id: pid })),
-          ...projectUnitIds.map((uid: number) => ({ visit_id: booking.id, project_unit_id: uid })),
-        ],
-      });
-    }
-
-    // Auto-route REQUESTED → PENDING_ACCEPTANCE (to the project's assigned PM)
-    const route = WorkflowEngine.canTransition({
-      domain: WorkflowDomain.SITE_VISIT,
-      currentState: 'REQUESTED',
-      action: 'ROUTE',
-      actor: user,
-      entity: { id: booking.id },
-    });
-    if (!route.allowed) {
-      throw { status: 409, message: route.reason || 'Invalid site visit transition' };
-    }
-
-    const updatedBooking = await tx.siteVisitBooking.update({
-      where: { id: booking.id },
-      data: {
-        status: route.nextState as import('@prisma/client').SiteVisitStatus,
-        project_manager_id: pmId ?? undefined,
-      },
-      include: {
-        lead: true,
-        property: true,
-        project_unit: { include: { project: { select: { id: true, name: true } } } },
-        project: true,
-        telecaller: true,
-        project_manager: true,
-        assigned_agent: true,
-      },
-    });
-
-    // Activity log
-    await tx.leadActivity.create({
-      data: {
+  const booked = await p.$transaction(
+    async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+      const bookingCode = await generateNextBookingCode();
+      const bookingData: any = {
+        booking_code: bookingCode,
         lead: { connect: { id: data.lead_id } },
-        activity_type: 'SITE_VISIT_REQUESTED',
-        notes: `Site visit scheduled. Auto-routed to project PM.`,
-        actor: { connect: { id: user.employeeId } },
-      },
-    });
+        telecaller: { connect: { id: user.employeeId } },
+        scheduled_date: new Date(data.scheduled_date),
+        status: 'REQUESTED',
+        verification_call_notes: data.notes || 'Site visit booked by telecaller.',
+      };
 
-    // Notifications
-    const notifyId = pmId ?? undefined;
-    if (notifyId) {
-      await tx.notification.create({
-        data: {
-          employee_id: notifyId,
-          type: 'TARGET_ASSIGNED',
-          title: 'New Site Visit to Accept',
-          message: `Site visit ${updatedBooking.booking_code} requires your acceptance.`,
-        },
-      });
-      // Web push to PM (outside transaction)
-      notifyEmployee(
-        notifyId,
-        {
-          type: 'TARGET_ASSIGNED',
-          title: 'New Site Visit to Accept',
-          message: `Site visit ${updatedBooking.booking_code} requires your acceptance.`,
-        },
-        { skipDbNotification: true },
-      ).catch((err) => logger.error('[WebPush] Site visit route PM:', err));
-    } else {
-      // Immediate Escalation Fallback for unmapped PM
-      await tx.siteVisitEscalation.create({
-        data: {
-          site_visit_booking_id: booking.id,
-          marketing_director_notified_at: new Date(),
-        },
-      });
+      if (data.opportunity_id) bookingData.opportunity = { connect: { id: data.opportunity_id } };
 
-      const marketingDirectors = await tx.employee.findMany({
-        where: { roles: { some: { role: { name: Roles.MARKETING_DIRECTOR } } }, status: 'ACTIVE' },
-        select: { id: true },
-      });
+      if (propertyIds.length > 0) {
+        // Single property column kept for backward compatibility (first property).
+        bookingData.property = { connect: { id: propertyIds[0] } };
+      } else if (projectUnitIds.length > 0) {
+        // Same single-column convenience field, unit side (only set when no
+        // property is linked — the column is one-or-the-other, same as Booking).
+        bookingData.project_unit = { connect: { id: projectUnitIds[0] } };
+      }
+      if (projectId) {
+        bookingData.project = { connect: { id: projectId } };
+      }
 
-      if (marketingDirectors.length > 0) {
-        await tx.notification.createMany({
-          data: marketingDirectors.map((md: any) => ({
-            employee_id: md.id,
-            type: 'SYSTEM_ALERT',
-            title: 'Unassigned Site Visit',
-            message: `Site visit ${updatedBooking.booking_code} has no active project PM. Please reassign manually.`,
-          })),
+      const booking = await tx.siteVisitBooking.create({ data: bookingData });
+
+      // §2 property/unit links (multi-item outcome capture)
+      if (propertyIds.length > 0 || projectUnitIds.length > 0) {
+        await tx.siteVisitProperty.createMany({
+          data: [
+            ...propertyIds.map((pid: number) => ({ visit_id: booking.id, property_id: pid })),
+            ...projectUnitIds.map((uid: number) => ({
+              visit_id: booking.id,
+              project_unit_id: uid,
+            })),
+          ],
         });
-        // Web push to marketing directors (outside transaction)
-        for (const md of marketingDirectors) {
-          notifyEmployee(
-            md.id,
-            {
+      }
+
+      // Auto-route REQUESTED → PENDING_ACCEPTANCE (to the project's assigned PM)
+      const route = WorkflowEngine.canTransition({
+        domain: WorkflowDomain.SITE_VISIT,
+        currentState: 'REQUESTED',
+        action: 'ROUTE',
+        actor: user,
+        entity: { id: booking.id },
+      });
+      if (!route.allowed) {
+        throw { status: 409, message: route.reason || 'Invalid site visit transition' };
+      }
+
+      const updatedBooking = await tx.siteVisitBooking.update({
+        where: { id: booking.id },
+        data: {
+          status: route.nextState as import('@prisma/client').SiteVisitStatus,
+          project_manager_id: pmId ?? undefined,
+        },
+        include: {
+          lead: true,
+          property: true,
+          project_unit: { include: { project: { select: { id: true, name: true } } } },
+          project: true,
+          telecaller: true,
+          project_manager: true,
+          assigned_agent: true,
+        },
+      });
+
+      // Activity log
+      await tx.leadActivity.create({
+        data: {
+          lead: { connect: { id: data.lead_id } },
+          activity_type: 'SITE_VISIT_REQUESTED',
+          notes: `Site visit scheduled. Auto-routed to project PM.`,
+          actor: { connect: { id: user.employeeId } },
+        },
+      });
+
+      // Notifications
+      const notifyId = pmId ?? undefined;
+      if (notifyId) {
+        await tx.notification.create({
+          data: {
+            employee_id: notifyId,
+            type: 'TARGET_ASSIGNED',
+            title: 'New Site Visit to Accept',
+            message: `Site visit ${updatedBooking.booking_code} requires your acceptance.`,
+          },
+        });
+        // Web push to PM (outside transaction)
+        notifyEmployee(
+          notifyId,
+          {
+            type: 'TARGET_ASSIGNED',
+            title: 'New Site Visit to Accept',
+            message: `Site visit ${updatedBooking.booking_code} requires your acceptance.`,
+          },
+          { skipDbNotification: true },
+        ).catch((err) => logger.error('[WebPush] Site visit route PM:', err));
+      } else {
+        // Immediate Escalation Fallback for unmapped PM
+        await tx.siteVisitEscalation.create({
+          data: {
+            site_visit_booking_id: booking.id,
+            marketing_director_notified_at: new Date(),
+          },
+        });
+
+        const marketingDirectors = await tx.employee.findMany({
+          where: {
+            roles: { some: { role: { name: Roles.MARKETING_DIRECTOR } } },
+            status: 'ACTIVE',
+          },
+          select: { id: true },
+        });
+
+        if (marketingDirectors.length > 0) {
+          await tx.notification.createMany({
+            data: marketingDirectors.map((md: any) => ({
+              employee_id: md.id,
               type: 'SYSTEM_ALERT',
               title: 'Unassigned Site Visit',
-              message: `Site visit ${updatedBooking.booking_code} has no active project PM — please reassign.`,
-            },
-            { skipDbNotification: true },
-          ).catch((err) => logger.error('[WebPush] Site visit escalation MD:', err));
+              message: `Site visit ${updatedBooking.booking_code} has no active project PM. Please reassign manually.`,
+            })),
+          });
+          // Web push to marketing directors (outside transaction)
+          for (const md of marketingDirectors) {
+            notifyEmployee(
+              md.id,
+              {
+                type: 'SYSTEM_ALERT',
+                title: 'Unassigned Site Visit',
+                message: `Site visit ${updatedBooking.booking_code} has no active project PM — please reassign.`,
+              },
+              { skipDbNotification: true },
+            ).catch((err) => logger.error('[WebPush] Site visit escalation MD:', err));
+          }
         }
       }
-    }
 
-    return updatedBooking;
-  });
+      return updatedBooking;
+    },
+  );
+
+  // A booked visit puts the lead at "Site visit scheduled". Nothing used to do this
+  // (neither here nor the website), so the lead stayed "Qualified" and completing
+  // the visit could not move it on to Negotiation. Only from the stages the
+  // workflow allows; never fails the booking itself.
+  if (['QUALIFIED', 'DEMO_COMPLETED'].includes(lead.status)) {
+    try {
+      await LeadService.updateLeadStatus(
+        user,
+        lead.id,
+        'SITE_VISIT_SCHEDULED',
+        `Site visit ${booked.booking_code} booked.`,
+        undefined,
+        { skipPermissionCheck: true },
+      );
+    } catch (err) {
+      logger.error(`[site-visit] lead ${lead.id} not moved to SITE_VISIT_SCHEDULED:`, err);
+    }
+  }
+
+  return booked;
 }

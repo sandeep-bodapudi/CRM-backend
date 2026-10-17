@@ -519,6 +519,22 @@ router.post(
         cascadeNote = `Visit recorded. This lead has ${openSiblingVisits} more site visit(s) to complete; it moves on after the last one.`;
       } else if (outcomeBranch) {
         try {
+          // A lead whose visit was booked before booking moved it on is still
+          // "Qualified": take it to "Site visit scheduled" first, as the workflow requires.
+          const leadNow = await prisma.lead.findUnique({
+            where: { id: visit.lead_id },
+            select: { status: true },
+          });
+          if (leadNow && ['QUALIFIED', 'DEMO_COMPLETED'].includes(leadNow.status)) {
+            await LeadService.updateLeadStatus(
+              req.user!,
+              visit.lead_id,
+              'SITE_VISIT_SCHEDULED',
+              undefined,
+              undefined,
+              { skipPermissionCheck: true },
+            );
+          }
           await LeadService.updateLeadStatus(
             req.user!,
             visit.lead_id,
