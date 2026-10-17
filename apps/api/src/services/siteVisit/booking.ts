@@ -51,6 +51,7 @@ export async function listVisits(
           phone: true,
           preferred_location: true,
           company_id: true,
+          assigned_to_id: true,
         },
       },
       telecaller: { select: { id: true, employee_code: true, full_name: true, phone: true } },
@@ -179,7 +180,15 @@ export async function bookVisit(user: TokenPayload, data: any) {
 
   // §2 constraint (properties and units must share one project) is validated
   // inside resolveVisitProject, which also resolves the PM this visit routes to.
-  const { projectId, pmId } = await resolveVisitProject(data, user.companyId || 1, lead);
+  const { projectId, pmId: routedPmId } = await resolveVisitProject(
+    data,
+    user.companyId || 1,
+    lead,
+  );
+  // A direct visit: the customer goes to the site on their own, so nobody is
+  // routed, nothing waits for acceptance and nothing escalates (see ./direct.ts).
+  const direct = data.direct === true;
+  const pmId = direct ? null : routedPmId;
 
   const booked = await p.$transaction(
     async (tx: import('@prisma/client').Prisma.TransactionClient) => {
@@ -207,6 +216,10 @@ export async function bookVisit(user: TokenPayload, data: any) {
         bookingData.project = { connect: { id: projectId } };
       }
 
+      if (direct) {
+        bookingData.visit_type = 'DIRECT';
+        bookingData.status = 'CONFIRMED';
+      }
       const booking = await tx.siteVisitBooking.create({ data: bookingData });
 
       // §2 property/unit links (multi-item outcome capture)
@@ -219,6 +232,30 @@ export async function bookVisit(user: TokenPayload, data: any) {
               project_unit_id: uid,
             })),
           ],
+        });
+      }
+
+      if (direct) {
+        // property/unit links above are kept; nothing to route.
+        await tx.leadActivity.create({
+          data: {
+            lead: { connect: { id: data.lead_id } },
+            activity_type: 'SITE_VISIT_REQUESTED',
+            notes: 'Direct site visit booked: the customer goes on their own, no project manager.',
+            actor: { connect: { id: user.employeeId } },
+          },
+        });
+        return tx.siteVisitBooking.findUniqueOrThrow({
+          where: { id: booking.id },
+          include: {
+            lead: true,
+            property: true,
+            project_unit: { include: { project: { select: { id: true, name: true } } } },
+            project: true,
+            telecaller: true,
+            project_manager: true,
+            assigned_agent: true,
+          },
         });
       }
 

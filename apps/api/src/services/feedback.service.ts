@@ -71,7 +71,9 @@ export async function dispatchFeedbackRequestNotification(
     // templates); a walk-in has its own version because nobody "visited with"
     // a project manager.
     const message = await MessageTemplateService.resolveWithFallback(
-      visit.visit_type === 'WALK_IN' ? 'WALK_IN_FEEDBACK' : 'SITE_VISIT_FEEDBACK',
+      visit.visit_type === 'WALK_IN' || visit.visit_type === 'DIRECT'
+        ? 'WALK_IN_FEEDBACK'
+        : 'SITE_VISIT_FEEDBACK',
       {
         customer_name: visit.lead.customer_name,
         pm_name: ratedEmployee?.full_name || 'our team',

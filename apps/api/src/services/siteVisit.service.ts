@@ -16,6 +16,11 @@
 import { listVisits, bookVisit } from './siteVisit/booking';
 import { recordWalkIn } from './siteVisit/walkIn';
 import {
+  makeVisitDirect,
+  rescheduleDirectVisit,
+  recordDirectVisitOutcome,
+} from './siteVisit/direct';
+import {
   acceptVisit,
   reassignVisit,
   escalateVisit,
@@ -39,6 +44,9 @@ export class SiteVisitService {
   static listVisits = listVisits;
   static bookVisit = bookVisit;
   static recordWalkIn = recordWalkIn;
+  static makeVisitDirect = makeVisitDirect;
+  static rescheduleDirectVisit = rescheduleDirectVisit;
+  static recordDirectVisitOutcome = recordDirectVisitOutcome;
 
   static acceptVisit = acceptVisit;
   static reassignVisit = reassignVisit;

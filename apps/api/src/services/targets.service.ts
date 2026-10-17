@@ -76,7 +76,7 @@ export async function measureMetric(
       return p.siteVisitBooking.count({
         where: {
           telecaller_id: employeeId,
-          visit_type: 'SCHEDULED',
+          visit_type: { in: ['SCHEDULED', 'DIRECT'] },
           status: { not: 'CANCELLED' },
           created_at: { gte: start, lt: end },
         },

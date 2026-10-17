@@ -34,6 +34,7 @@ export async function markPresentFromVisit(visitId: number): Promise<string> {
     });
     if (!visit || visit.status !== 'COMPLETED' || !visit.completed_at) return 'not completed';
     if (visit.visit_type === 'WALK_IN') return 'walk-in: nobody ran it';
+    if (visit.visit_type === 'DIRECT') return 'direct visit: nobody ran it';
     if (!visit.proof_photo_url) return 'no photo';
     if ((visit.feedback_notes || '').trim().length < 3) return 'no feedback';
 

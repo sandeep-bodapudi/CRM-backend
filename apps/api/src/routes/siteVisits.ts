@@ -95,7 +95,10 @@ router.post(
     try {
       const booking = await SiteVisitService.bookVisit(req.user!, req.body);
       return res.status(201).json({
-        message: `Site visit ${booking.booking_code} booked! Awaiting project PM acceptance.`,
+        message:
+          booking.visit_type === 'DIRECT'
+            ? `Direct site visit ${booking.booking_code} booked. The customer goes on their own; record afterwards whether they came.`
+            : `Site visit ${booking.booking_code} booked! Awaiting project PM acceptance.`,
         booking,
       });
     } catch (error: any) {
@@ -135,6 +138,89 @@ router.post(
       });
     } catch (error: any) {
       logger.error('Record walk-in error:', error);
+      next(error);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Direct visits: the customer goes to the site on their own, nobody is assigned.
+// The booker / lead owner / management can turn a pending visit into one, move
+// it, and record afterwards whether the customer came.
+// ---------------------------------------------------------------------------
+const visitIdOf = (req: AuthenticatedRequest) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) throw { status: 400, message: 'Invalid ID format' };
+  return id;
+};
+
+// POST /api/v1/site-visits/:id/make-direct
+router.post(
+  '/:id/make-direct',
+  authenticateToken,
+  requirePermission([Permissions.SITE_VISITS_CREATE]),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const visit = await SiteVisitService.makeVisitDirect(req.user!, visitIdOf(req));
+      return res.status(200).json({
+        message: `Site visit ${visit.booking_code} is now a direct visit. No project manager is needed.`,
+        visit,
+      });
+    } catch (error: any) {
+      logger.error('Make visit direct error:', error);
+      next(error);
+    }
+  },
+);
+
+const DirectRescheduleSchema = z.object({ scheduled_date: z.string().min(1) });
+// POST /api/v1/site-visits/:id/direct-reschedule { scheduled_date }
+router.post(
+  '/:id/direct-reschedule',
+  authenticateToken,
+  requirePermission([Permissions.SITE_VISITS_CREATE]),
+  validateRequestBody(DirectRescheduleSchema),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const visit = await SiteVisitService.rescheduleDirectVisit(
+        req.user!,
+        visitIdOf(req),
+        req.body.scheduled_date,
+      );
+      return res.status(200).json({ message: 'Visit date changed.', visit });
+    } catch (error: any) {
+      logger.error('Reschedule direct visit error:', error);
+      next(error);
+    }
+  },
+);
+
+const DirectOutcomeSchema = z.object({
+  visited: z.boolean(),
+  rating: z.string().optional(),
+  feedback_notes: z.string().trim().max(1000).optional(),
+});
+// POST /api/v1/site-visits/:id/direct-outcome { visited, rating?, feedback_notes? }
+router.post(
+  '/:id/direct-outcome',
+  authenticateToken,
+  requirePermission([Permissions.SITE_VISITS_CREATE]),
+  validateRequestBody(DirectOutcomeSchema),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const result = await SiteVisitService.recordDirectVisitOutcome(
+        req.user!,
+        visitIdOf(req),
+        req.body,
+      );
+      return res.status(200).json({
+        message: req.body.visited
+          ? `Visit ${result.visit.booking_code} recorded.`
+          : `Visit ${result.visit.booking_code} marked as not visited.`,
+        ...result,
+      });
+    } catch (error: any) {
+      logger.error('Direct visit outcome error:', error);
       next(error);
     }
   },
