@@ -161,7 +161,9 @@ router.post(
   '/:id/proof-photo',
   authenticateToken,
   requirePermission([Permissions.SITE_VISITS_COMPLETE]),
-  proofUpload.single('photo'),
+  // `as any` like every other upload route: with yarn and no lockfile (how Render
+  // builds), @types/multer brings its own @types/express and the types clash.
+  proofUpload.single('photo') as any,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const visitId = parseInt(req.params.id, 10);
