@@ -27,11 +27,18 @@ export class PaymentService {
     return `RRH-PAY-${currentYear}-${sequentialNum}`;
   }
 
-  static async getPayments(user: TokenPayload, bookingId?: number) {
+  static async getPayments(
+    user: TokenPayload,
+    bookingId?: number,
+    opts: { statuses?: string[]; limit?: number } = {},
+  ) {
     const whereCondition: any = { company_id: user.companyId };
 
     if (bookingId) {
       whereCondition.booking_id = bookingId;
+    }
+    if (opts.statuses && opts.statuses.length > 0) {
+      whereCondition.status = { in: opts.statuses };
     }
 
     // Similar scope restrictions could be applied here if an agent queries all payments
@@ -51,19 +58,41 @@ export class PaymentService {
       whereCondition.recorded_by_id = user.employeeId;
     }
 
+    // A work queue (to verify / to refund) is worked oldest first.
+    const isQueue = !!opts.statuses?.length && opts.statuses.every((st) => st !== 'SUCCESS');
     return await p.payment.findMany({
       where: whereCondition,
       include: {
         booking: {
           select: {
+            id: true,
             booking_code: true,
-            customer: { select: { first_name: true, last_name: true } },
+            status: true,
+            customer: { select: { first_name: true, last_name: true, phone: true } },
           },
         },
         recorded_by: { select: { id: true, full_name: true } },
       },
-      orderBy: { payment_date: 'desc' },
+      orderBy: { payment_date: isQueue ? 'asc' : 'desc' },
+      take: Math.min(Math.max(opts.limit ?? 500, 1), 1000),
     });
+  }
+
+  /** How many payments wait for Finance: to verify (PENDING) and to refund (REFUND_DUE). */
+  static async getQueueCounts(user: TokenPayload) {
+    const rows = await p.payment.groupBy({
+      by: ['status'],
+      where: { company_id: user.companyId, status: { in: ['PENDING', 'REFUND_DUE'] } },
+      _count: { _all: true },
+      _sum: { amount: true },
+    });
+    const get = (st: string) => rows.find((r) => r.status === st);
+    return {
+      to_verify: get('PENDING')?._count._all ?? 0,
+      to_verify_amount: get('PENDING')?._sum.amount ?? 0,
+      refund_due: get('REFUND_DUE')?._count._all ?? 0,
+      refund_due_amount: get('REFUND_DUE')?._sum.amount ?? 0,
+    };
   }
 
   static async recordPayment(user: TokenPayload, dto: any) {
@@ -125,7 +154,12 @@ export class PaymentService {
     });
   }
 
-  static async verifyPayment(user: TokenPayload, id: number, status: string) {
+  static async verifyPayment(
+    user: TokenPayload,
+    id: number,
+    status: string,
+    extra: { reference_number?: string; note?: string } = {},
+  ) {
     const payment = await p.payment.findFirst({
       where: { id, company_id: user.companyId },
       include: { booking: true },
@@ -175,9 +209,37 @@ export class PaymentService {
 
     const result = await p.$transaction(
       async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+        // Finance can confirm the cheque / UTR number and add a note while deciding.
+        const ref = extra.reference_number?.trim();
+        const note = extra.note?.trim();
+        const stamp = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
         const updatedPayment = await tx.payment.update({
           where: { id },
-          data: { status },
+          data: {
+            status,
+            ...(ref ? { reference_number: ref } : {}),
+            ...(note
+              ? {
+                  notes:
+                    `${payment.notes ? payment.notes + ' | ' : ''}${status} ${stamp}: ${note}`.slice(
+                      0,
+                      5000,
+                    ),
+                }
+              : {}),
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            actor_id: user.employeeId,
+            action: 'PAYMENT_VERIFIED',
+            entity_type: 'Payment',
+            entity_id: id,
+            old_value: payment.status,
+            new_value: status,
+            reason: note ? note.slice(0, 500) : null,
+            created_at: new Date(),
+          },
         });
 
         // Refunding money that was collected: undo exactly what the SUCCESS
