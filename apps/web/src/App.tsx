@@ -7,6 +7,7 @@ import { AppLayout } from './components/common/AppLayout';
 import { LoginForm } from './components/auth/LoginForm';
 import { ChangePasswordModal } from './components/auth/ChangePasswordModal';
 import { DailyReportModal } from './components/reports/DailyReportModal';
+import { ReportDueCard } from './components/myday/ReportDueCard';
 import { NotificationDrawer } from './components/notifications/NotificationDrawer';
 import { ISTClock } from './components/common/ISTClock';
 import { FirstLoginSetup } from './components/auth/FirstLoginSetup';
@@ -152,8 +153,8 @@ const HRAttendanceDashboard = lazy(() =>
 const RequestsPage = lazy(() =>
   import('./components/attendance/RequestsPage').then((m) => ({ default: m.RequestsPage })),
 );
-const WorkLogPage = lazy(() =>
-  import('./components/worklog/WorkLogPage').then((m) => ({ default: m.WorkLogPage })),
+const MyDayPage = lazy(() =>
+  import('./components/myday/MyDayPage').then((m) => ({ default: m.MyDayPage })),
 );
 const MyAttendancePage = lazy(() =>
   import('./components/attendance/MyAttendancePage').then((m) => ({ default: m.MyAttendancePage })),
@@ -183,11 +184,6 @@ const PerformanceAdjustmentPage = lazy(() =>
 );
 const AnalyticsHub = lazy(() =>
   import('./components/analytics/AnalyticsHub').then((m) => ({ default: m.AnalyticsHub })),
-);
-const DailyReportingPage = lazy(() =>
-  import('./components/reports/DailyReportingPage').then((m) => ({
-    default: m.DailyReportingPage,
-  })),
 );
 const KioskManagementPage = lazy(() =>
   import('./components/system/KioskManagementPage').then((m) => ({
@@ -585,7 +581,9 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
       />
       <Route path="/pm/demos/approvals" element={<Navigate to="/approvals?tab=visits" replace />} />
       <Route path="/tasks" element={<TaskManager />} />
-      <Route path="/daily-report" element={<DailyReportingPage />} />
+      {/* Work Log and Daily Report are one page now: My Day (2026-10-19). */}
+      <Route path="/my-day" element={<MyDayPage />} />
+      <Route path="/daily-report" element={<Navigate to="/my-day#report" replace />} />
       <Route
         path="/bookings"
         element={canAccessCommercial ? <BookingManagement /> : <Navigate to="/dashboard" replace />}
@@ -601,7 +599,7 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
         path="/team-requests"
         element={<Navigate to="/approvals?tab=attendance&sub=duty" replace />}
       />
-      <Route path="/work-log" element={<WorkLogPage />} />
+      <Route path="/work-log" element={<Navigate to="/my-day" replace />} />
       <Route path="/my-performance" element={<MyPerformanceDashboard />} />
       <Route
         path="/achievements"
@@ -768,7 +766,8 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     '/team-today': 'Team Today',
     '/requests': 'Requests',
     '/team-requests': 'Team requests',
-    '/work-log': 'Work Log',
+    '/my-day': 'My Day',
+    '/hr-daily-reports': 'End-of-day reports',
     '/finance': 'Payments & Refunds',
     '/action-center': 'Action Center',
     '/pm/approvals': 'PM Approvals',
@@ -815,6 +814,7 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
               </div>
             }
           >
+            <ReportDueCard />
             {dashboardElement}
           </Suspense>
         </ErrorBoundary>

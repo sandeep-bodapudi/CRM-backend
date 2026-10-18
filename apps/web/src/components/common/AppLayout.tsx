@@ -343,8 +343,8 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   // Leave / late / field work / WFH requests, previously only reachable via
   // My Attendance -> "Leave / Late Request".
   { id: 'requests', label: 'Requests', icon: FilePlus, path: '/requests' },
-  // Work done outside the CRM (posts, reels, meetings) -- shown on Team Today.
-  { id: 'work-log', label: 'Work Log', icon: NotebookPen, path: '/work-log' },
+  // Work Log (work outside the CRM) + the end-of-day report needed for checkout.
+  { id: 'my-day', label: 'My Day', icon: NotebookPen, path: '/my-day' },
   { id: 'my-performance', label: 'My Performance', icon: TrendingUp, path: '/my-performance' },
   { id: 'achievements', label: 'Achievements', icon: Trophy, path: '/achievements' },
   {
@@ -354,7 +354,6 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     path: '/tasks',
     requiredPermission: Permissions.TASKS_READ,
   },
-  { id: 'daily-report', label: 'Daily Report', icon: FileText, path: '/daily-report' },
 
   // FINANCE
   { id: 'group-finance', label: 'FINANCE', group: true, icon: undefined },
@@ -428,7 +427,7 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   },
   {
     id: 'hr-daily-reports',
-    label: 'Daily Reports',
+    label: 'End-of-day reports',
     icon: FileText,
     path: '/hr-daily-reports',
     requiredAnyRole: [Roles.MD, Roles.HR_MANAGER, Roles.ADMIN],

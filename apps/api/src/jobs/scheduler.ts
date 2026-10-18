@@ -118,6 +118,20 @@ jobManager.register({
   envDisableKey: 'DISABLE_JOB_TASK_OVERDUE',
 });
 
+import { reminderSweepJob } from './reminders';
+
+// 14. Reminders (every 10 minutes): check-in, tasks and visits today, HR and
+// Finance queues, end-of-day report, checkout. Each goes once a day per
+// person, inside its time window (see jobs/reminders.ts).
+jobManager.register({
+  name: 'Reminders',
+  schedule: '*/10 * * * *',
+  handler: async () => {
+    await reminderSweepJob();
+  },
+  envDisableKey: 'DISABLE_JOB_REMINDERS',
+});
+
 export const initJobs = () => {
   jobManager.startAll();
 

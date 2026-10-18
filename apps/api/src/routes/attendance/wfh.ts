@@ -399,7 +399,11 @@ router.post(
           where: { employee_id: employeeId, submitted_at: dayRange },
         });
         if (!report)
-          return res.status(400).json({ error: 'Please submit your daily report first.' });
+          return res
+            .status(400)
+            .json({
+              error: 'Send your end-of-day report first (CRM app → My Day), then check out.',
+            });
       }
 
       const minutes = Math.max(0, Math.round((now.getTime() - log.check_in_at.getTime()) / 60000));
