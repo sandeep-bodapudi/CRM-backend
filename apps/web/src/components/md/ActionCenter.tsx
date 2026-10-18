@@ -49,7 +49,8 @@ type BookingItem = {
   agreed_price?: number;
 };
 
-export const ActionCenter: React.FC = () => {
+/** `embedded`: shown inside the Approvals page (no page title, no links tab). */
+export const ActionCenter: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { fetchWithAuth } = useAuth();
   const { showToast, showError } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('unassigned');
@@ -289,9 +290,21 @@ export const ActionCenter: React.FC = () => {
     fetchBookings();
   }, [fetchUnassigned, fetchVerification, fetchBookings]);
 
+  // Open on the first queue that has something waiting (once, after loading),
+  // instead of always on "Unassigned".
+  const [pickedTab, setPickedTab] = useState(false);
+  useEffect(() => {
+    if (pickedTab) return;
+    if (bookings.length > 0) setActiveTab('bookings');
+    else if (verification.length > 0) setActiveTab('verification');
+    else if (unassigned.length > 0) setActiveTab('unassigned');
+    else return;
+    setPickedTab(true);
+  }, [pickedTab, bookings.length, verification.length, unassigned.length]);
+
   return (
     <div className="space-y-6">
-      <div>
+      <div className={embedded ? 'hidden' : ''}>
         <h1 className="text-2xl font-bold text-navy-900 tracking-tight">Action Center</h1>
         <p className="text-slate-500 text-sm mt-1">
           Everything waiting on you — PM assignment, property/project verification, booking
@@ -300,7 +313,7 @@ export const ActionCenter: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto">
-        {TABS.map((tab) => {
+        {TABS.filter((t) => !(embedded && t.id === 'links')).map((tab) => {
           const Icon = tab.icon;
           const counts: Record<TabId, number> = {
             unassigned: unassigned.length,
@@ -311,7 +324,10 @@ export const ActionCenter: React.FC = () => {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setPickedTab(true);
+                setActiveTab(tab.id);
+              }}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
                 activeTab === tab.id
                   ? 'border-navy-600 text-navy-900'

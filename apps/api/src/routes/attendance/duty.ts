@@ -14,7 +14,6 @@ import { prisma } from '../../lib/prisma';
 import { authenticateToken, AuthenticatedRequest } from '../../middleware/auth';
 import { validateRequestBody } from '../../middleware/validate';
 import { Roles } from '../../shared';
-import { getDownstreamEmployeeIds } from '../../utils/hierarchy';
 import { getAccessibleCompanyIds } from '../../authz/dataScope';
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import {
@@ -58,7 +57,12 @@ const TYPE_LABEL: Record<string, string> = {
 const isHrOrTop = (roles: string[]) =>
   roles.some((r) => [Roles.MD, Roles.ADMIN, Roles.HR_MANAGER].includes(r as any));
 
-/** Employee ids whose requests this person may decide (their team; HR/MD: the company). */
+/**
+ * Employee ids whose requests this person may decide. Since 2026-10-18 all
+ * attendance requests (duty days, swaps, comp-offs, missed-attendance claims,
+ * selfie check-ins) are decided by HR (and MD / Admin) only -- reporting
+ * managers no longer approve them.
+ */
 async function decidableIds(req: AuthenticatedRequest): Promise<number[]> {
   const user = req.user!;
   if (isHrOrTop(user.roles)) {
@@ -71,9 +75,7 @@ async function decidableIds(req: AuthenticatedRequest): Promise<number[]> {
     });
     return rows.map((r) => r.id).filter((id) => id !== user.employeeId);
   }
-  return (await getDownstreamEmployeeIds(user.companyId, user.employeeId)).filter(
-    (id) => id !== user.employeeId,
-  );
+  return [];
 }
 
 const dayRange = (dateString: string) => {
@@ -83,27 +85,32 @@ const dayRange = (dateString: string) => {
 
 const todayKey = () => getISTComponents(new Date()).dateString;
 
-/** Tell the person's manager (and HR when there is no manager) about a new request. */
+/** Tell HR (or the MD when the company has no HR) about a new request -- HR decides them. */
 async function tellApprover(employeeId: number, title: string, message: string) {
   try {
     const emp = await p.employee.findUnique({
       where: { id: employeeId },
-      select: { reporting_manager_id: true, company_id: true },
+      select: { company_id: true },
     });
-    let to: number[] = emp?.reporting_manager_id ? [emp.reporting_manager_id] : [];
-    if (to.length === 0 && emp) {
-      const hr = await p.employee.findMany({
-        where: {
-          company_id: emp.company_id,
-          status: 'ACTIVE',
-          roles: { some: { role: { name: { in: [Roles.HR_MANAGER, Roles.MD] } } } },
-        },
-        select: { id: true },
-      });
-      to = hr.map((h) => h.id);
-    }
+    if (!emp) return;
+    const people = await p.employee.findMany({
+      where: {
+        company_id: emp.company_id,
+        status: 'ACTIVE',
+        id: { not: employeeId },
+        roles: { some: { role: { name: { in: [Roles.HR_MANAGER, Roles.MD] } } } },
+      },
+      select: { id: true, roles: { select: { role: { select: { name: true } } } } },
+    });
+    const hr = people.filter((x) => x.roles.some((r) => r.role.name === Roles.HR_MANAGER));
+    const to = (hr.length ? hr : people).map((x) => x.id);
     if (to.length)
-      await notifyEmployee(to, { type: 'SYSTEM', title, message, link: '/team-requests' });
+      await notifyEmployee(to, {
+        type: 'SYSTEM',
+        title,
+        message,
+        link: '/approvals?tab=attendance',
+      });
   } catch (err) {
     logger.error('[duty] could not notify approver:', err);
   }
@@ -225,9 +232,7 @@ router.post(
         'Duty day request',
         `${req.user!.employeeCode} wants to work on ${date} (${info.label}): ${reason}`,
       );
-      return res
-        .status(201)
-        .json({ message: 'Duty day request sent to your manager.', request: created });
+      return res.status(201).json({ message: 'Duty day request sent to HR.', request: created });
     } catch (error) {
       logger.error('Duty request error:', error);
       return res.status(500).json({ error: 'Failed to send the request' });
@@ -291,7 +296,7 @@ router.post(
         'Week-off swap request',
         `${req.user!.employeeCode}: work ${work_date}, take ${off_date} off. ${reason}`,
       );
-      return res.status(201).json({ message: 'Swap request sent to your manager.' });
+      return res.status(201).json({ message: 'Swap request sent to HR.' });
     } catch (error) {
       logger.error('Swap request error:', error);
       return res.status(500).json({ error: 'Failed to send the request' });
@@ -331,9 +336,7 @@ router.post(
         'Comp-off request',
         `${req.user!.employeeCode} wants a comp-off on ${date}: ${reason}`,
       );
-      return res
-        .status(201)
-        .json({ message: 'Comp-off request sent to your manager.', request: created });
+      return res.status(201).json({ message: 'Comp-off request sent to HR.', request: created });
     } catch (error) {
       logger.error('Comp-off request error:', error);
       return res.status(500).json({ error: 'Failed to send the request' });
@@ -385,7 +388,10 @@ router.post(
       );
       return res
         .status(201)
-        .json({ message: 'Sent to your manager, who sees your work that day.', request: created });
+        .json({
+          message: 'Sent to HR, who can see your work that day in the CRM.',
+          request: created,
+        });
     } catch (error) {
       logger.error('Claim request error:', error);
       return res.status(500).json({ error: 'Failed to send the request' });
@@ -506,9 +512,7 @@ router.post(
         return res.status(404).json({ error: 'Request not found' });
       }
       if (!(await decidableIds(req)).includes(reqRow.employee_id)) {
-        return res
-          .status(403)
-          .json({ error: 'Only their manager (or HR) can decide this request.' });
+        return res.status(403).json({ error: 'Only HR (or the MD) can decide this request.' });
       }
       if (reqRow.status !== 'PENDING') {
         return res
@@ -650,13 +654,11 @@ router.post(
           link: '/requests',
         }).catch(() => {});
       }
-      return res
-        .status(201)
-        .json({
-          message: `${created} put on duty${skipped ? `, ${skipped} skipped (already on duty, or a normal working day for them)` : ''}.`,
-          created,
-          skipped,
-        });
+      return res.status(201).json({
+        message: `${created} put on duty${skipped ? `, ${skipped} skipped (already on duty, or a normal working day for them)` : ''}.`,
+        created,
+        skipped,
+      });
     } catch (error) {
       logger.error('Assign duty error:', error);
       return res.status(500).json({ error: 'Failed to assign the duty day' });
@@ -871,13 +873,11 @@ router.post(
         where: { employee_id: employee.id, check_in_at: dayRange(dateString) },
       });
       if (existing) {
-        return res
-          .status(200)
-          .json({
-            message: 'Already checked in today',
-            alreadyStamped: true,
-            checkInAt: existing.check_in_at,
-          });
+        return res.status(200).json({
+          message: 'Already checked in today',
+          alreadyStamped: true,
+          checkInAt: existing.check_in_at,
+        });
       }
 
       // Re-encode (proves they are images, drops the photos' own metadata) and store privately.
@@ -955,7 +955,7 @@ router.post(
           check_in_at: now,
           status: calculateAttendanceStatus(now, !!late, employee.employment_type || 'FULL_TIME'),
           source: 'APP_SELFIE',
-          notes: `${info.duty ? 'Duty day' : 'Field day'} check-in from the phone (${placeType === 'OFFICE' ? 'office' : 'field'})${flags.length ? ' - waiting for manager check' : ''}`,
+          notes: `${info.duty ? 'Duty day' : 'Field day'} check-in from the phone (${placeType === 'OFFICE' ? 'office' : 'field'})${flags.length ? ' - waiting for HR check' : ''}`,
         },
       });
       const proof = await p.attendanceCheckinProof.create({
@@ -985,7 +985,7 @@ router.post(
         );
       }
       return res.status(200).json({
-        message: flags.length ? 'Checked in. Your manager will check the photos.' : 'Checked in.',
+        message: flags.length ? 'Checked in. HR will check the photos.' : 'Checked in.',
         status: log.status,
         timeIST: timeString,
         flags,
@@ -1041,9 +1041,7 @@ router.post(
       });
       if (!proof) return res.status(404).json({ error: 'Not found' });
       if (!(await decidableIds(req)).includes(proof.employee_id)) {
-        return res
-          .status(403)
-          .json({ error: 'Only their manager (or HR) can review this check-in.' });
+        return res.status(403).json({ error: 'Only HR (or the MD) can review this check-in.' });
       }
       if (proof.review_status !== 'PENDING')
         return res.status(409).json({ error: 'Already reviewed.' });

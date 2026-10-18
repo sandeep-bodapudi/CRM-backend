@@ -104,7 +104,8 @@ const ProofPhoto: React.FC<{ path: string; label: string }> = ({ path, label }) 
  * and where the phone was; putting the team on duty; and (HR) weekly offs and
  * office locations.
  */
-export const TeamRequestsPage: React.FC = () => {
+/** `embedded`: shown inside the Approvals page (no page title). */
+export const TeamRequestsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { fetchWithAuth } = useAuth();
   const { showToast, showError } = useToast();
   const [tab, setTab] = useState<'REQUESTS' | 'CHECKINS' | 'DUTY' | 'WEEKOFFS'>('REQUESTS');
@@ -170,7 +171,7 @@ export const TeamRequestsPage: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      <div className="flex items-center gap-3">
+      <div className={`flex items-center gap-3 ${embedded ? 'hidden' : ''}`}>
         <div className="w-10 h-10 rounded-xl bg-navy-100 text-navy-700 flex items-center justify-center">
           <ClipboardCheck className="w-5 h-5" />
         </div>

@@ -88,7 +88,7 @@ export const WeekOffDutyPanel: React.FC = () => {
         showError(d.error || d.details?.[0]?.message || 'Could not send the request.');
         return;
       }
-      showToast(d.message || 'Sent to your manager', 'success');
+      showToast(d.message || 'Sent to HR', 'success');
       setForm(null);
       refresh();
     } finally {
@@ -158,7 +158,7 @@ export const WeekOffDutyPanel: React.FC = () => {
       )}
       {data.proof && data.proof.review_status === 'PENDING' && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-          Checked in. Your manager will check the photos: {data.proof.flags.join('; ')}.
+          Checked in. HR will check the photos: {data.proof.flags.join('; ')}.
         </p>
       )}
       {appCheckedIn && (
@@ -198,7 +198,7 @@ export const WeekOffDutyPanel: React.FC = () => {
             {form === 'SWAP' && 'Work on your week off, and take another day off instead.'}
             {form === 'COMP' && 'Take one comp-off day on a working day.'}
             {form === 'CLAIM' &&
-              'You worked but could not check in (last 7 days). Your manager sees your work in the CRM that day.'}
+              'You worked but could not check in (last 7 days). HR can see your work in the CRM that day.'}
           </p>
           <label className="block text-[11px] font-bold text-slate-600 uppercase">
             {form === 'SWAP' ? 'I will work on (my off day)' : 'Date'}
@@ -242,7 +242,7 @@ export const WeekOffDutyPanel: React.FC = () => {
               disabled={busy || !date || (form === 'SWAP' && !date2) || reason.trim().length < 3}
               className="flex-1 py-2 rounded-xl bg-navy-900 text-white text-xs font-black disabled:opacity-40"
             >
-              Send to my manager
+              Send to HR
             </button>
           </div>
         </div>

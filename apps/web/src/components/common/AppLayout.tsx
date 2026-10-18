@@ -27,7 +27,6 @@ import {
   TrendingUp,
   ShieldCheck,
   MonitorSmartphone,
-  ClipboardCheck,
   MessageSquareText,
   MessageSquareWarning,
   HelpCircle,
@@ -230,6 +229,8 @@ type SidebarNavItem = {
   requiredPermission?: string;
   /** Canonical Roles.* values; item visible if the user holds ANY of them. Omit = no role restriction. */
   requiredAnyRole?: string[];
+  /** Visible when the active role is one of `roles` OR the user holds any of `permissions`. */
+  anyOf?: { roles?: string[]; permissions?: string[] };
 };
 
 const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
@@ -244,12 +245,23 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     requiredAnyRole: [Roles.MD, Roles.ADMIN, Roles.HR_MANAGER],
   },
   {
-    // One inbox for everything waiting on the MD (badge = total count).
-    id: 'approvals-inbox',
+    // One page for every decision (2026-10-18): bookings & listings, leave &
+    // attendance (HR), refunds, site visits & demos. Replaces the separate
+    // Approvals inbox, Action Center, HR Approvals, Team requests and PM
+    // Approvals items. Visible to anyone who has at least one tab there.
+    id: 'approvals',
     label: 'Approvals',
     icon: Inbox,
-    path: '/approvals-inbox',
-    requiredAnyRole: [Roles.MD, Roles.ADMIN],
+    path: '/approvals',
+    anyOf: {
+      roles: [Roles.MD, Roles.ADMIN, Roles.HR_MANAGER],
+      permissions: [
+        Permissions.EXPENSES_REVIEW,
+        Permissions.EXPENSES_MD_APPROVE,
+        Permissions.SITE_VISITS_ACCEPT,
+        Permissions.DEMOS_ACCEPT,
+      ],
+    },
   },
   {
     id: 'leads-clients',
@@ -291,26 +303,6 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     path: '/demos',
     requiredPermission: Permissions.DEMOS_READ,
   },
-  {
-    // Was just "Approvals" — identical to 'hr-approvals' below (a
-    // different page, /approvals) despite having a different destination.
-    // MD/Admin hold both sets of permissions, so they'd see two identically
-    // labeled sidebar items leading to different pages. Renamed to match
-    // this route's own page-title convention already used elsewhere
-    // (App.tsx's title map: '/pm/approvals' -> 'PM Approvals').
-    id: 'pm-approvals',
-    label: 'PM Approvals',
-    icon: ClipboardCheck,
-    path: '/pm/approvals',
-    requiredPermission: `${Permissions.SITE_VISITS_ACCEPT}|${Permissions.DEMOS_ACCEPT}`,
-  },
-  {
-    id: 'action-center',
-    label: 'Action Center',
-    icon: ShieldCheck,
-    path: '/action-center',
-    requiredAnyRole: [Roles.MD, Roles.ADMIN],
-  },
   { id: 'sales-pipeline', label: 'Sales Pipeline', icon: GitBranch, path: '/sales-pipeline' },
   {
     id: 'property-inventory',
@@ -351,24 +343,6 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   // Leave / late / field work / WFH requests, previously only reachable via
   // My Attendance -> "Leave / Late Request".
   { id: 'requests', label: 'Requests', icon: FilePlus, path: '/requests' },
-  // Managers decide their team's duty days, swaps, comp-offs, missed check-ins
-  // and doubtful phone check-ins; HR also sets weekly offs and office locations.
-  {
-    id: 'team-requests',
-    label: 'Team requests',
-    icon: ClipboardCheck,
-    path: '/team-requests',
-    requiredAnyRole: [
-      Roles.MD,
-      Roles.ADMIN,
-      Roles.HR_MANAGER,
-      Roles.MARKETING_DIRECTOR,
-      Roles.SALES_MANAGER,
-      Roles.PROJECT_MANAGER,
-      Roles.DIGITAL_MARKETING_HEAD,
-      Roles.CHANNEL_PARTNER_MANAGER,
-    ],
-  },
   // Work done outside the CRM (posts, reels, meetings) -- shown on Team Today.
   { id: 'work-log', label: 'Work Log', icon: NotebookPen, path: '/work-log' },
   { id: 'my-performance', label: 'My Performance', icon: TrendingUp, path: '/my-performance' },
@@ -411,16 +385,6 @@ const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
     label: 'Attendance',
     icon: Clock,
     path: '/hr-attendance',
-    requiredAnyRole: [Roles.MD, Roles.HR_MANAGER, Roles.ADMIN],
-  },
-  {
-    // Matches this feature's own naming elsewhere (the dashboard StatCard
-    // for this same page is labeled "HR Approvals") — see 'pm-approvals'
-    // above for why the generic "Approvals" label was ambiguous.
-    id: 'hr-approvals',
-    label: 'HR Approvals',
-    icon: Calendar,
-    path: '/approvals',
     requiredAnyRole: [Roles.MD, Roles.HR_MANAGER, Roles.ADMIN],
   },
   {
@@ -565,7 +529,7 @@ const SidebarNav: React.FC = () => {
   });
   const approvalsCount: number = approvalsInbox?.total || 0;
   const badge = (id: string) =>
-    id === 'approvals-inbox' && approvalsCount > 0 ? (
+    id === 'approvals' && approvalsCount > 0 ? (
       <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">
         {approvalsCount > 99 ? '99+' : approvalsCount}
       </span>
@@ -573,6 +537,12 @@ const SidebarNav: React.FC = () => {
   const location = useLocation();
   const userPermissions = user?.permissions ?? [];
   const isVisible = (item: SidebarNavItem): boolean => {
+    if (item.anyOf) {
+      return (
+        !!item.anyOf.roles?.includes(activeRole) ||
+        !!item.anyOf.permissions?.some((p) => userPermissions.includes(p))
+      );
+    }
     const hasPermission = item.requiredPermission
       ? item.requiredPermission.split('|').some((p) => userPermissions.includes(p.trim()))
       : true;
