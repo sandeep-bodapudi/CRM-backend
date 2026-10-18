@@ -623,6 +623,7 @@ router.get('/:brand/legal', async (req: any, res: Response) => {
     const legal: Record<string, unknown> = { company_name: company?.name ?? null };
     for (const k of PUBLIC_LEGAL_FIELDS) legal[k] = info[k] ?? null;
     res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Vary', 'x-api-key');
     return res.status(200).json({ legal });
   } catch (error) {
     logger.error('Public legal info error:', error);
