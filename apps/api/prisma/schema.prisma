@@ -247,6 +247,10 @@ model Company {
   announcement_image_url  String?                @db.Text
   announcement_active     Boolean                @default(false)
   offers                  Offer[]
+  // Legal / compliance details shown on the brand's website (legal name,
+  // address, RERA no., GSTIN, CIN, grievance contact, disclaimer). Edited by
+  // the technical admin in Super Admin -> Legal & compliance.
+  legal_info              Json?
 
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt

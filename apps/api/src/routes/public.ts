@@ -592,6 +592,44 @@ function deriveUnitInventorySummary(units: { sales_status: string }[]) {
   return { total, available, reserved, sold };
 }
 
+// GET /api/v1/public/:brand/legal — the brand's legal / compliance details for
+// the website footer and the privacy / terms pages. Only what is meant to be
+// public; nothing appears until the admin has entered it.
+const PUBLIC_LEGAL_FIELDS = [
+  'legal_name',
+  'registered_address',
+  'rera_number',
+  'rera_authority',
+  'gstin',
+  'cin',
+  'grievance_officer_name',
+  'grievance_officer_email',
+  'grievance_officer_phone',
+  'support_email',
+  'support_phone',
+  'website_disclaimer',
+];
+router.get('/:brand/legal', async (req: any, res: Response) => {
+  try {
+    const brandLower = String(req.params.brand).toLowerCase();
+    if (brandLower !== 'rrh' && brandLower !== 'sonthillu') {
+      return res.status(400).json({ error: 'Invalid brand specified in URL' });
+    }
+    const company = await p.company.findUnique({
+      where: { id: req.apiKeyContext.company_id },
+      select: { name: true, legal_info: true },
+    });
+    const info = (company?.legal_info || {}) as Record<string, unknown>;
+    const legal: Record<string, unknown> = { company_name: company?.name ?? null };
+    for (const k of PUBLIC_LEGAL_FIELDS) legal[k] = info[k] ?? null;
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.status(200).json({ legal });
+  } catch (error) {
+    logger.error('Public legal info error:', error);
+    return res.status(500).json({ error: 'Failed to load legal details' });
+  }
+});
+
 // GET /api/v1/public/:brand/projects — list published projects for this company
 router.get('/:brand/projects', async (req: any, res: Response) => {
   try {
