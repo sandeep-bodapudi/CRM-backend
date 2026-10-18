@@ -48,7 +48,8 @@ router.get('/', requireAuthz(Permissions.PAYMENTS_READ as any), async (req: any,
 // GET /api/v1/payments/queue-counts -- to verify / to refund, for Finance badges
 router.get(
   '/queue-counts',
-  requireAuthz(Permissions.PAYMENTS_READ as any),
+  // Company-wide totals: only for people who verify payments (Finance, MD).
+  requireAuthz(Permissions.PAYMENTS_UPDATE as any),
   async (req: any, res, next) => {
     try {
       res.json(await PaymentService.getQueueCounts(req.user));

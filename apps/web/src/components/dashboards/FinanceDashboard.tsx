@@ -7,6 +7,8 @@ import { StatCard, ListWidget, ListItem } from '../ui';
 import { TaskManager } from '../tasks/TaskManager';
 import { PerformanceScoreWidget } from '../performance/PerformanceScoreWidget';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { usePaymentQueueCounts } from '../finance/CustomerPaymentsQueue';
 
 export const FinanceDashboard: React.FC = () => {
   const { user, fetchWithAuth } = useAuth();
@@ -69,6 +71,9 @@ export const FinanceDashboard: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* The main daily job: customer money waiting for Finance to confirm or refund. */}
+      <PaymentsToVerifyBanner />
 
       {hasError && (
         <div className="text-sm text-danger-700 bg-danger-50 border border-danger-200 rounded-lg px-4 py-3 flex items-center gap-2">
@@ -134,5 +139,28 @@ export const FinanceDashboard: React.FC = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+const PaymentsToVerifyBanner: React.FC = () => {
+  const { data } = usePaymentQueueCounts();
+  if (!data) return null;
+  const rupees = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+  return (
+    <Link
+      to="/finance"
+      className="grid grid-cols-2 gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
+    >
+      <div>
+        <p className="text-[11px] font-bold uppercase text-emerald-800">Payments to verify</p>
+        <p className="text-2xl font-black text-emerald-900">{data.to_verify}</p>
+        <p className="text-xs text-emerald-800">{rupees(data.to_verify_amount)}</p>
+      </div>
+      <div>
+        <p className="text-[11px] font-bold uppercase text-rose-800">Refunds due</p>
+        <p className="text-2xl font-black text-rose-900">{data.refund_due}</p>
+        <p className="text-xs text-rose-800">{rupees(data.refund_due_amount)}</p>
+      </div>
+    </Link>
   );
 };
