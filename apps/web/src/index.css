@@ -655,10 +655,8 @@ html.dark .bg-navy-50.text-navy-700 {
   [role='button']:not(.tap-inline) {
     min-height: 40px;
   }
-  button:not(.tap-inline):empty,
-  button:not(.tap-inline):has(> svg:only-child) {
-    min-width: 40px;
-  }
+  /* No min-width here: flex items rely on min-width:auto to keep their
+     text width, and overriding it let tab buttons shrink and overlap. */
   .tap-inline {
     position: relative;
   }
