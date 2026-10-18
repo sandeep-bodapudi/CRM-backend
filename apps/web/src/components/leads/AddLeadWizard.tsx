@@ -142,13 +142,13 @@ export const AddLeadWizard: React.FC<AddLeadWizardProps> = ({ onClose, onSuccess
                 <ShieldCheck className="w-4 h-4 text-navy-600" />
               </div>
               <div>
-                <span className="text-navy-500 text-[9px] uppercase font-black tracking-widest block">
+                <span className="text-navy-500 text-[10px] uppercase font-black tracking-widest block">
                   Introduced By
                 </span>
                 <span className="text-navy-900 text-xs font-bold">
                   You — automatically recorded
                 </span>
-                <span className="text-navy-400 text-[9px] block">
+                <span className="text-navy-400 text-[10px] block">
                   Attribution credit is assigned to you and cannot be changed
                 </span>
               </div>

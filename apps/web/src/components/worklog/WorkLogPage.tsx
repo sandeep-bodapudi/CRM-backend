@@ -173,7 +173,7 @@ export const WorkLogPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="mt-1 text-[11px] font-bold text-navy-600 hover:text-navy-800"
+              className="tap-inline mt-1 text-[11px] font-bold text-navy-600 hover:text-navy-800"
             >
               {showAll ? 'Show only my role’s work types' : 'Show all work types'}
             </button>

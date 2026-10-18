@@ -552,11 +552,11 @@ export const TeamPerformanceDashboard: React.FC = () => {
                         key={i}
                         className="bg-white rounded-xl p-2.5 border border-white/60 shadow-sm"
                       >
-                        <span className="text-[9px] text-slate-500 block">{item.label}</span>
+                        <span className="text-[10px] text-slate-500 block">{item.label}</span>
                         <span className={`text-sm font-extrabold font-mono ${item.color}`}>
                           {item.value}
                         </span>
-                        <span className="text-[9px] text-slate-400 block">{item.hint}</span>
+                        <span className="text-[10px] text-slate-400 block">{item.hint}</span>
                       </div>
                     ))}
                   </div>

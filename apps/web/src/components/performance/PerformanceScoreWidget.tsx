@@ -169,7 +169,7 @@ export const PerformanceScoreWidget: React.FC = () => {
           <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200/60 flex items-center justify-between">
             <div className="flex flex-col">
               <span>Starting Base Score</span>
-              <span className="text-[9px] text-emerald-700/70">Base metric: out of 100</span>
+              <span className="text-[10px] text-emerald-700/70">Base metric: out of 100</span>
             </div>
             <span className="font-mono font-bold text-emerald-700">+{baseScore.toFixed(1)}</span>
           </div>

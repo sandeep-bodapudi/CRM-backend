@@ -444,7 +444,7 @@ export const DailyReportModal: React.FC<DailyReportProps> = ({
                             onClick={() =>
                               handleResponseChange(field.id, String(recordedFor(field.id)))
                             }
-                            className="ml-1 font-bold text-navy-600 hover:text-navy-800"
+                            className="tap-inline ml-1 font-bold text-navy-600 hover:text-navy-800"
                           >
                             Use this number
                           </button>

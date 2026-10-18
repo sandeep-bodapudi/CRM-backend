@@ -253,7 +253,7 @@ export const MyPerformanceDashboard: React.FC = () => {
                 <span className="block text-lg font-bold text-slate-800">
                   {breakdown.baseScore}
                 </span>
-                <span className="block text-[9px] text-slate-400 mt-1">
+                <span className="block text-[10px] text-slate-400 mt-1">
                   Base metric: out of 100
                 </span>
               </div>

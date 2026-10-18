@@ -2167,7 +2167,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                         >
                           <img src={img.preview} alt="" className="w-full h-full object-cover" />
                           {i === stagedCoverIndex && (
-                            <div className="absolute top-2 left-2 bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
                               <Star className="w-2.5 h-2.5" /> COVER
                             </div>
                           )}
@@ -2217,7 +2217,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                           className="w-full h-full object-cover"
                         />
                         {img.is_primary && (
-                          <div className="absolute top-2 left-2 bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
                             <Star className="w-2.5 h-2.5" /> COVER
                           </div>
                         )}

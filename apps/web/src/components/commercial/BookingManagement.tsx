@@ -115,7 +115,7 @@ export const BookingManagement: React.FC = () => {
                 {unit ? `${unit.project.name} — Unit ${unitLabel}` : b.property?.title}
               </span>
               {unit && (
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-navy-100 text-navy-700 uppercase tracking-wide shrink-0">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-navy-100 text-navy-700 uppercase tracking-wide shrink-0">
                   Project Unit
                 </span>
               )}

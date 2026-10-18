@@ -618,7 +618,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                       if (lead.can_edit !== false) setTimeout(() => setCallOpen(true), 400);
                     }}
                     title="Call"
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold font-sans"
+                    className="tap-inline inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold font-sans"
                   >
                     <PhoneCall className="w-3.5 h-3.5" /> Call
                   </a>
@@ -629,7 +629,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Chat on WhatsApp"
-                    className="text-emerald-600 hover:text-emerald-700"
+                    className="tap-inline text-emerald-600 hover:text-emerald-700"
                   >
                     <MessageCircle className="w-4 h-4" />
                   </a>
@@ -721,7 +721,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 {lead.can_edit !== false && (
                   <button
                     onClick={() => setShowQualificationModal(true)}
-                    className="px-2 py-0.5 text-[10px] font-bold bg-navy-50 text-navy-600 hover:bg-navy-100 rounded-md transition-colors"
+                    className="tap-inline px-2 py-0.5 text-[10px] font-bold bg-navy-50 text-navy-600 hover:bg-navy-100 rounded-md transition-colors"
                   >
                     Edit
                   </button>
@@ -884,7 +884,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                     {lead.can_edit !== false && (
                       <button
                         onClick={() => setShowQualificationModal(true)}
-                        className="text-xs font-semibold text-navy-600 hover:text-navy-700 transition-colors"
+                        className="tap-inline text-xs font-semibold text-navy-600 hover:text-navy-700 transition-colors"
                       >
                         Edit Details
                       </button>
@@ -992,7 +992,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                             <div className="flex items-center gap-1.5 mb-1">
                               <h4 className="font-bold text-navy-900 text-sm">{m.title}</h4>
                               {isUnit && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-navy-100 text-navy-700 uppercase tracking-wide shrink-0">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-navy-100 text-navy-700 uppercase tracking-wide shrink-0">
                                   Project Unit
                                 </span>
                               )}
@@ -1072,7 +1072,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                                 {code}
                               </span>
                               {isUnit && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-navy-100 text-navy-700 uppercase tracking-wide">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-navy-100 text-navy-700 uppercase tracking-wide">
                                   Project Unit
                                 </span>
                               )}
@@ -1119,7 +1119,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                             </span>
                             <StatusPill status={visit.status} type={getStatusMap(visit.status)} />
                             {visit.visit_type === 'DIRECT' && (
-                              <span className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[9px] font-extrabold uppercase">
+                              <span className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[10px] font-extrabold uppercase">
                                 Direct
                               </span>
                             )}

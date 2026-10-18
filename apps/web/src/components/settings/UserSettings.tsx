@@ -294,7 +294,7 @@ export const UserSettings: React.FC = () => {
               </p>
               <span className="text-xs text-slate-400 dark:text-slate-500 ml-1">Tap to select</span>
             </div>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
               {(['chime', 'ding', 'alert', 'pop', 'none'] as NotificationTone[]).map((tone) => (
                 <button
                   key={tone}

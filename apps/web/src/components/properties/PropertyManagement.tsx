@@ -275,7 +275,7 @@ const PropertyPipelineStepper: React.FC<{ status: Property['status'] }> = ({ sta
 
   return (
     <div className="w-full my-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
-      <div className="flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
+      <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
         <span>Approval Workflow</span>
         <span className="text-navy-800 font-bold">
           {status === 'LIVE' ? 'Approved & LIVE' : `Stage ${currentIndex + 1} of 3`}
@@ -288,7 +288,7 @@ const PropertyPipelineStepper: React.FC<{ status: Property['status'] }> = ({ sta
           return (
             <div
               key={stg.key}
-              className={`px-1 py-1 rounded-lg text-[9px] font-bold text-center leading-tight transition-all ${
+              className={`px-1 py-1 rounded-lg text-[10px] font-bold text-center leading-tight transition-all ${
                 isCurrent
                   ? 'bg-amber-600 text-white shadow-sm ring-1 ring-amber-400'
                   : isPassed

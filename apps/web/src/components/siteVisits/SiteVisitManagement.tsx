@@ -164,7 +164,7 @@ const SiteVisitStepper: React.FC<{ status: SiteVisit['status'] }> = ({ status })
 
   return (
     <div className="w-full my-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
-      <div className="flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
+      <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
         <span>Visit Progress</span>
         <span className="text-navy-800 font-bold">
           {status === 'COMPLETED'
@@ -184,7 +184,7 @@ const SiteVisitStepper: React.FC<{ status: SiteVisit['status'] }> = ({ status })
           return (
             <div
               key={stg.key}
-              className={`px-1 py-1 rounded-lg text-[8px] font-bold text-center leading-tight transition-all ${
+              className={`px-1 py-1 rounded-lg text-[10px] font-bold text-center leading-tight transition-all ${
                 isCurrent
                   ? 'bg-navy-600 text-white shadow-sm ring-1 ring-navy-400'
                   : isPassed
@@ -895,12 +895,12 @@ export const SiteVisitManagement: React.FC = () => {
                   <span className="font-mono font-bold text-navy-900 text-xs">
                     {visit.booking_code}
                     {visit.visit_type === 'WALK_IN' && (
-                      <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-extrabold uppercase">
+                      <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-extrabold uppercase">
                         Walk-in
                       </span>
                     )}
                     {visit.visit_type === 'DIRECT' && (
-                      <span className="ml-2 px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[9px] font-extrabold uppercase">
+                      <span className="ml-2 px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[10px] font-extrabold uppercase">
                         Direct
                       </span>
                     )}

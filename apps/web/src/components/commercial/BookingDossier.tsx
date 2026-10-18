@@ -147,7 +147,7 @@ export const BookingDossier: React.FC = () => {
     <div className="max-w-4xl mx-auto space-y-6">
       <button
         onClick={() => navigate('/bookings')}
-        className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
+        className="tap-inline text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
       >
         <ArrowLeft className="w-4 h-4" /> Back to Bookings
       </button>
