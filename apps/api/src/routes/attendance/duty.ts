@@ -7,6 +7,7 @@
 // and their location; doubtful check-ins wait for the manager. A duty day worked
 // earns one comp-off day. The reporting manager (or HR / MD) decides the requests.
 import { logger } from '../../utils/logger';
+import { recheckAbsences } from '../../services/absenceRecheck';
 import { Router, Response } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
@@ -588,6 +589,15 @@ router.post(
           new_value: JSON.stringify({ type: reqRow.type, date: ds, note: req.body.note || null }),
         },
       });
+      // A comp-off / swap / "I worked that day" approved after the day: cancel
+      // the absence already recorded for it.
+      if (approve) {
+        await recheckAbsences({
+          employeeIds: [reqRow.employee_id],
+          date: ds,
+          actorId: req.user!.employeeId,
+        }).catch((err) => logger.error({ err }, 'Absence re-check after request failed'));
+      }
       await notifyEmployee(reqRow.employee_id, {
         type: 'SYSTEM',
         title: approve ? 'Request approved' : 'Request not approved',

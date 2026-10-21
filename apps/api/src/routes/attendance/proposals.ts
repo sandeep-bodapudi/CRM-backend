@@ -1,4 +1,5 @@
 import { logger } from '../../utils/logger';
+import { recheckAbsences } from '../../services/absenceRecheck';
 import { Router, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../../middleware/auth';
@@ -685,6 +686,13 @@ router.post(
         link: '/requests',
       });
 
+      // Approved after the day (late leave approval): cancel the absence recorded for it.
+      if (updated.type === 'LEAVE') {
+        await recheckAbsences({
+          employeeIds: [updated.employee_id],
+          actorId: req.user!.employeeId,
+        }).catch((err) => logger.error({ err }, 'Absence re-check after leave failed'));
+      }
       return res.status(200).json({ message: 'Proposal approved', proposal: updated });
     } catch (error) {
       logger.error('Proposal approve error:', error);

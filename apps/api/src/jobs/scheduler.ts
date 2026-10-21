@@ -118,8 +118,29 @@ jobManager.register({
   envDisableKey: 'DISABLE_JOB_TASK_OVERDUE',
 });
 
+import { recheckAbsences } from '../services/absenceRecheck';
+
+// 15. Absence re-check (daily 00:30): cancels uninformed-absence penalties for
+// days that were excused later -- a holiday entered after the day, a leave or
+// comp-off approved late (see services/absenceRecheck.ts).
+jobManager.register({
+  name: 'Absence Re-check',
+  schedule: '30 0 * * *',
+  handler: async () => {
+    await recheckAbsences({ days: 45 });
+  },
+  envDisableKey: 'DISABLE_JOB_ABSENCE_RECHECK',
+});
+
 export const initJobs = () => {
   jobManager.startAll();
+
+  // The host sleeps at night, so also re-check on every start.
+  if (process.env.DISABLE_JOB_ABSENCE_RECHECK !== 'true') {
+    recheckAbsences({ days: 45 }).catch((err) =>
+      logger.error({ err }, '[Jobs] Absence re-check on start failed'),
+    );
+  }
 
   // The host sleeps when idle, so the 23:58 rollup is routinely missed --
   // run it on wake-up instead if last night's run never happened.

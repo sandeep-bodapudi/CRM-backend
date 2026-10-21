@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../../middleware/auth';
 import { getISTComponents, getISTDayOfWeek } from '../../utils/time';
 import { WEEKDAY_NAMES } from '../../services/workCalendar';
+import { recheckAbsences } from '../../services/absenceRecheck';
 import { Roles, AttendanceHolidaySchema, EmptyBodySchema } from '../../shared';
 import { validateRequestBody } from '../../middleware/validate';
 
@@ -51,7 +52,19 @@ router.post(
           date: istDate,
         },
       });
-      return res.status(201).json({ holiday: h });
+      // A holiday entered after the day: cancel the absences already recorded for it.
+      let absencesCancelled = 0;
+      if (String(date).slice(0, 10) <= getISTComponents(new Date()).dateString) {
+        absencesCancelled = await recheckAbsences({
+          companyId,
+          date: String(date).slice(0, 10),
+          actorId: req.user!.employeeId,
+        }).catch((err) => {
+          logger.error({ err }, 'Absence re-check after holiday failed');
+          return 0;
+        });
+      }
+      return res.status(201).json({ holiday: h, absences_cancelled: absencesCancelled });
     } catch (err) {
       return res.status(500).json({ error: 'Failed to create holiday' });
     }
