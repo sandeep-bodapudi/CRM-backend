@@ -276,6 +276,11 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
           project_type: projectType || null,
           developer_name: developerName || null,
           ...(isEdit ? { status } : {}),
+          // Data-entry roles must name the PM when the project is first saved
+          // (the server refuses to create it without one).
+          ...(isInventoryExecutive && !projectId && assignedPmId
+            ? { assigned_pm_id: parseInt(assignedPmId, 10) }
+            : {}),
         };
       case 2:
         return {
@@ -329,6 +334,10 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
   const saveStep = async (forStep: number): Promise<boolean> => {
     if (forStep === 1 && !name.trim()) {
       showError({ message: 'Project name is required' });
+      return false;
+    }
+    if (forStep === 1 && !projectId && isInventoryExecutive && !assignedPmId) {
+      showError({ message: 'Select the Project Manager who provided this project data.' });
       return false;
     }
     setIsSaving(true);
@@ -413,6 +422,25 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
           <div className="space-y-5 animate-fadeIn">
             <h3 className="text-lg font-bold text-slate-800">Project Identity</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {isInventoryExecutive && !projectId && (
+                <div className="md:col-span-2">
+                  <FieldLabel required>Project Manager who provided this data</FieldLabel>
+                  <select
+                    className={selectCls}
+                    value={assignedPmId}
+                    onChange={(e) => setAssignedPmId(e.target.value)}
+                  >
+                    <option value="" className="text-slate-800 bg-white">
+                      -- Select Project Manager --
+                    </option>
+                    {pms.map((pm) => (
+                      <option key={pm.id} value={pm.id} className="text-slate-800 bg-white">
+                        {pm.full_name || pm.fullName} ({pm.employee_code || pm.employeeCode})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="md:col-span-2">
                 <FieldLabel required>Project Name</FieldLabel>
                 <input
