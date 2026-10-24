@@ -6,12 +6,14 @@ import { TaskManager } from '../tasks/TaskManager';
 import { Briefcase, Calendar, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { StatCard } from '../ui';
 import { API_BASE_URL } from '../../config';
+import { Permissions } from '../../shared';
 
 export const StaffDashboard: React.FC = () => {
   const { user, fetchWithAuth } = useAuth();
   const [showOps, setShowOps] = useState(false);
   const [metrics, setMetrics] = useState({ leads: 0, visits: 0, tasks: 0 });
   const [isLoading, setIsLoading] = useState(true);
+  const canSeeVisits = !!user?.permissions?.includes(Permissions.SITE_VISITS_READ);
 
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -24,7 +26,11 @@ export const StaffDashboard: React.FC = () => {
           // LeadManagement. No render-side pagination needed here since
           // individual leads are never rendered as cards, just counted.
           fetchWithAuth(`${API_BASE_URL}/leads/summary?assigned_to_id=me`),
-          fetchWithAuth(`${API_BASE_URL}/site-visits`),
+          // Roles without site-visit access (data entry, inventory) got a
+          // "Permission Denied" popup on every login from this call.
+          canSeeVisits
+            ? fetchWithAuth(`${API_BASE_URL}/site-visits`)
+            : Promise.resolve(new Response('{"visits":[]}', { status: 200 })),
           fetchWithAuth(`${API_BASE_URL}/tasks/my-tasks`),
         ]);
 

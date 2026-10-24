@@ -20,6 +20,8 @@ export class BookingPolicy {
         Roles.MARKETING_DIRECTOR,
         Roles.DIGITAL_LEAD_OPERATOR,
         Roles.PROJECT_MANAGER,
+        // Enters and corrects booking data (user decision 2026-10-24).
+        Roles.DATA_ENTRY_OPERATOR,
       ].includes(r as any),
     );
   }

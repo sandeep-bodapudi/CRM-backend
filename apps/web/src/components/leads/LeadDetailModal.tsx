@@ -270,6 +270,8 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   };
 
   const fetchLeadVisits = async (leadId: number) => {
+    // Data entry / inventory roles cannot read site visits ("Permission Denied").
+    if (!user?.permissions?.includes(Permissions.SITE_VISITS_READ)) return;
     try {
       const res = await fetchWithAuth(`${API_BASE_URL}/site-visits?leadId=${leadId}`);
       const data = await res.json();
@@ -282,6 +284,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   };
 
   const fetchLeadDemos = async (leadId: number) => {
+    if (!user?.permissions?.includes(Permissions.DEMOS_READ)) return;
     try {
       const res = await fetchWithAuth(`${API_BASE_URL}/demos?leadId=${leadId}`);
       const data = await res.json();
