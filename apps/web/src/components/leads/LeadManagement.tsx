@@ -508,7 +508,9 @@ export const LeadManagement: React.FC = () => {
       if (!append) {
         const sumRes = await fetchWithAuth(`${API_BASE_URL}/leads/summary?created_by_id=me`);
         if (sumRes.ok) setAddedByMeCount((await sumRes.json()).total ?? 0);
-        if (canBulkUpload) {
+        // Bulk upload and the distribution monitor are separate permissions;
+        // asking without the second one showed "Permission Denied" each refresh.
+        if (canBulkUpload && user?.permissions?.includes(Permissions.LEADS_DISTRIBUTION_MONITOR)) {
           const monRes = await fetchWithAuth(`${API_BASE_URL}/leads/distribution-monitor`);
           const monData = await monRes.json();
           if (monRes.ok) {
