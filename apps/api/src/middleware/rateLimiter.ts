@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../lib/prisma';
+import { trustedForwardedIp } from '../utils/forwarder';
 
 const p = prisma;
 const skipRateLimitInTests = (req: any) =>
@@ -15,6 +16,9 @@ const skipRateLimitInTests = (req: any) =>
  * value; fall back to req.ip when it's absent (local dev, tests).
  */
 export const clientIp = (req: any): string => {
+  // Passed on (and signed) by our own forwarding server.
+  const forwarded = trustedForwardedIp(req);
+  if (forwarded) return forwarded;
   const cf = req.headers?.['cf-connecting-ip'];
   if (typeof cf === 'string' && cf.trim()) return cf.trim();
   return req.ip || 'UNKNOWN_IP';
