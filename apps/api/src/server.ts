@@ -66,12 +66,20 @@ import amenityRoutes from './routes/amenities';
 
 import { PortalWorker } from './services/portalWorker';
 import compression from 'compression';
+import { forwardAll } from './utils/forwarder';
+import { clientIp } from './middleware/rateLimiter';
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // Proxy Awareness for Rate Limiting (Render architecture)
 app.set('trust proxy', 1);
+
+// Forward-everything mode: this server only passes requests on to the new
+// production server (see utils/forwarder.ts). Registered first, so nothing
+// below runs and no database connection is opened.
+const FORWARD_ALL_TO = process.env.FORWARD_ALL_TO || '';
+if (FORWARD_ALL_TO) app.use(forwardAll(FORWARD_ALL_TO, clientIp));
 
 // Security Middlewares
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -381,6 +389,10 @@ import { syncRolePermissions } from './authz/syncRolePermissions';
 if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   app.listen(port, () => {
     logger.info(`[server]: API running at http://localhost:${port}`);
+    if (FORWARD_ALL_TO) {
+      logger.info(`[server]: forwarding every request to ${FORWARD_ALL_TO}`);
+      return;
+    }
 
     // Additive DB sync of RolePermissionsMatrix — without this, adding a
     // permission to a role in code has no effect until someone remembers to
