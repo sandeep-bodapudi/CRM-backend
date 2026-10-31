@@ -2,7 +2,7 @@ import { logger } from '../../utils/logger';
 import { Router, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../../middleware/auth';
-import { getISTComponents, getISTDayOfWeek } from '../../utils/time';
+import { getISTComponents, getISTDayOfWeek, getISTNextMonthStart } from '../../utils/time';
 import { WEEKDAY_NAMES } from '../../services/workCalendar';
 import { recheckAbsences } from '../../services/absenceRecheck';
 import { Roles, AttendanceHolidaySchema, EmptyBodySchema } from '../../shared';
@@ -109,8 +109,7 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
     if (!year || !month) return res.status(400).json({ error: 'year and month are required' });
 
     const startDate = new Date(`${year}-${month.toString().padStart(2, '0')}-01T00:00:00+05:30`);
-    const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + 1);
+    const endDate = getISTNextMonthStart(year, month);
 
     const employee = await p.employee.findUnique({
       where: { id: targetEmployeeId },
@@ -179,7 +178,7 @@ router.get('/calendar', authenticateToken, async (req: AuthenticatedRequest, res
         calendarMap[dayStr].weekOff = true;
       }
 
-      d.setDate(d.getDate() + 1);
+      d.setTime(d.getTime() + 24 * 60 * 60 * 1000);
     }
 
     for (const h of holidays) {

@@ -95,6 +95,20 @@ export const getISTMidnightInstant = (dateString: string): Date =>
  * never read back with a local (non-UTC) accessor — so this is safe
  * regardless of the server's own timezone.
  */
+/**
+ * The first instant (IST midnight) of the month after year/month (1-12).
+ * Use as an exclusive month end. DO NOT use `setMonth(+1)` on an IST
+ * instant: it runs on the server's own clock, so on a UTC server the month
+ * starting on the 1st IST (the last day of the previous month in UTC) moved
+ * by "one month" lands on the 30th -- the calendar lost the 31st and showed
+ * everyone absent on it (2026-10-31).
+ */
+export const getISTNextMonthStart = (year: number, month: number): Date => {
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  return new Date(`${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00+05:30`);
+};
+
 export const getISTMonthRange = (
   year: number,
   month: number,
