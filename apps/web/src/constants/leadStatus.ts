@@ -36,8 +36,28 @@ const LEAD_SOURCE_LABELS: Record<string, string> = {
   REFERRAL: 'Referral',
   HOUSING_COM: 'Housing.com',
   ASSOCIATE: 'Associate',
+  ORGANIC_SEARCH: 'Organic Search',
+  SOCIAL_MEDIA: 'Social Media',
+  BILLBOARD: 'Billboard / Hoarding',
+  DIRECT_TRAFFIC: 'Direct Traffic',
   OTHER: 'Other',
 };
+
+// Every source a person can pick when adding a single lead (Quick Add and
+// the full form). "Other" asks for the source's name (Lead.source_detail).
+export const MANUAL_SOURCE_OPTIONS = [
+  'ORGANIC_SEARCH',
+  'SOCIAL_MEDIA',
+  'FACEBOOK_ADS',
+  'GOOGLE_ADS',
+  'HOUSING_COM',
+  'WEBSITE',
+  'WALK_IN',
+  'REFERRAL',
+  'BILLBOARD',
+  'DIRECT_TRAFFIC',
+  'OTHER',
+] as const;
 
 // Sources a person can pick for a bulk upload, and filter the Leads page by.
 export const UPLOAD_SOURCE_OPTIONS = [
@@ -51,6 +71,10 @@ export const UPLOAD_SOURCE_OPTIONS = [
 ] as const;
 export const FILTER_SOURCE_OPTIONS = [
   ...UPLOAD_SOURCE_OPTIONS,
+  'ORGANIC_SEARCH',
+  'SOCIAL_MEDIA',
+  'BILLBOARD',
+  'DIRECT_TRAFFIC',
   'BULK_UPLOAD',
   'MANUAL_ENTRY',
   'ASSOCIATE',

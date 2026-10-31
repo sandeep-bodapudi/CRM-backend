@@ -247,6 +247,8 @@ export const LeadCreateSchema = z.object({
   phone: z.string().min(10, 'Valid phone number is required'),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
   source: z.string().default('MANUAL_ENTRY'),
+  // The source's name when source is OTHER (e.g. "99acres"); required then.
+  source_detail: z.string().trim().max(80).optional().nullable(),
   property_type_preference: z.string().optional(),
   budget_min: z.number().optional().nullable(),
   budget_max: z.number().optional().nullable(),

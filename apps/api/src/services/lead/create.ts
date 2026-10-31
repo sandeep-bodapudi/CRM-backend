@@ -46,6 +46,10 @@ export async function createLead(
   if (!dto.phone) {
     throw new AppError(400, 'Phone number is required for lead creation.');
   }
+  // "Other" must say what the source is, or the lead can't be traced.
+  if (dto.source === 'OTHER' && !dto.source_detail?.trim()) {
+    throw new AppError(400, 'Enter where this lead came from.');
+  }
   const duplicateInclude = {
     assigned_to: { select: { id: true, full_name: true, employee_code: true } },
     site_visits: {
@@ -346,6 +350,7 @@ export async function createLead(
         phone: dto.phone,
         email: dto.email || null,
         source: dto.source || 'MANUAL_ENTRY',
+        source_detail: dto.source === 'OTHER' ? dto.source_detail!.trim() : null,
         status: status,
         assigned_to_id: assignedToId,
         assigned_at: assignedToId ? new Date() : null,
