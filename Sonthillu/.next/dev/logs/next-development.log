@@ -1,6 +1,0 @@
-{"timestamp":"00:00:01.796","source":"Server","level":"LOG","message":""}
-{"timestamp":"00:00:22.858","source":"Browser","level":"WARN","message":"Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\"smooth\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior"}
-{"timestamp":"00:00:22.956","source":"Server","level":"WARN","message":"[browser] \"\\u001b[33mDetected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior=\\\"smooth\\\"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior\\u001b[39m\""}
-{"timestamp":"00:02:35.955","source":"Server","level":"LOG","message":"  Reload env: .env"}
-{"timestamp":"00:02:36.033","source":"Server","level":"LOG","message":"✓ Compiled in 40ms"}
-{"timestamp":"00:02:36.108","source":"Server","level":"WARN","message":"⚠ Fast Refresh had to perform a full reload when ./Sonthillu/src/app/actions/customer.ts changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload"}

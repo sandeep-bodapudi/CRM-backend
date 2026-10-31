@@ -68,3 +68,6 @@ apps/api/drop_migrations.js
 apps/api/fetch_logs.js
 apps/api/fix_drop_table.js
 apps/api/fix_migrations.js
+
+# Public websites live in their own repos (Sonthillu restored 2026-10-31)
+/Sonthillu/
