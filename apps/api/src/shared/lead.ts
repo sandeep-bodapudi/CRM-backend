@@ -300,7 +300,7 @@ export const LeadCreateSchema = z.object({
 export type LeadCreateInput = z.infer<typeof LeadCreateSchema>;
 
 // Website public lead intake — mirrors the fields the public API currently accepts.
-// Intentionally narrower than the internal LeadCreateSchema (no source/campaign/UTM:
+// Intentionally narrower than the internal LeadCreateSchema (no source/campaign:
 // source is forced to WEBSITE server-side).
 export const PublicLeadCreateSchema = z.object({
   customer_name: z.string().min(2, 'Customer name is required'),
@@ -319,6 +319,12 @@ export const PublicLeadCreateSchema = z.object({
   project_id: z.number().int().positive().optional().nullable(),
   budget_max: z.number().positive('Budget must be a positive number').optional().nullable(),
   notes: z.string().optional(),
+  // Ad-campaign tags from the page address (?utm_source=...). The websites
+  // always sent them, but without these lines they were silently dropped, so
+  // no website lead could be traced to the campaign that brought it in.
+  utm_source: z.string().trim().max(100).optional(),
+  utm_medium: z.string().trim().max(100).optional(),
+  utm_campaign: z.string().trim().max(100).optional(),
 });
 
 export type PublicLeadCreateInput = z.infer<typeof PublicLeadCreateSchema>;
