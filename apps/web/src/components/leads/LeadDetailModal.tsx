@@ -159,6 +159,8 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   // booked with no project at all -- the card and the PM routing had nothing
   // to go on. Pick the project directly (the server accepts project_id).
   const [scheduleProjectId, setScheduleProjectId] = useState('');
+  // "Other": the customer visits a project that is not listed in the CRM.
+  const [scheduleOtherProject, setScheduleOtherProject] = useState('');
   const [visitProjects, setVisitProjects] = useState<{ id: number; name: string }[] | null>(null);
   useEffect(() => {
     if (!showScheduleModal || visitProjects) return;
@@ -1417,7 +1419,17 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                         {pr.name}
                       </option>
                     ))}
+                    <option value="OTHER">Other (not in this list)</option>
                   </select>
+                  {scheduleProjectId === 'OTHER' && (
+                    <input
+                      value={scheduleOtherProject}
+                      onChange={(e) => setScheduleOtherProject(e.target.value)}
+                      placeholder="Project name and location"
+                      maxLength={120}
+                      className="mt-2 w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                    />
+                  )}
                   <p className="text-[11px] text-slate-500 mt-1">
                     Visits are booked for the whole project — the customer sees all its units on
                     site.
@@ -1495,6 +1507,12 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                         showToast('Select the project being visited.', 'error');
                         return;
                       }
+                      const otherProject =
+                        scheduleProjectId === 'OTHER' ? scheduleOtherProject.trim() : '';
+                      if (scheduleProjectId === 'OTHER' && otherProject.length < 2) {
+                        showToast('Enter the name of the project being visited.', 'error');
+                        return;
+                      }
                       try {
                         const res = await fetchWithAuth(`${API_BASE_URL}/site-visits`, {
                           method: 'POST',
@@ -1502,7 +1520,11 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                           body: JSON.stringify({
                             lead_id: lead.id,
                             scheduled_date: new Date(scheduleDate).toISOString(),
-                            notes: scheduleNotes,
+                            // A project outside the CRM has no project record:
+                            // its name is kept at the start of the visit notes.
+                            notes: otherProject
+                              ? `Other project: ${otherProject}${scheduleNotes ? `. ${scheduleNotes}` : ''}`
+                              : scheduleNotes,
                             // SiteVisitCreateSchema only recognises the plural
                             // *_ids arrays — a bare property_id here was
                             // previously silently stripped by zod's default
@@ -1515,7 +1537,9 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                             // (the server checks they match); send the picked
                             // project on its own otherwise.
                             project_id:
-                              !id && scheduleProjectId ? Number(scheduleProjectId) : undefined,
+                              !id && scheduleProjectId && scheduleProjectId !== 'OTHER'
+                                ? Number(scheduleProjectId)
+                                : undefined,
                             direct: scheduleDirect || undefined,
                           }),
                         });

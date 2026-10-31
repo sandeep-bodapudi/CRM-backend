@@ -223,12 +223,21 @@ const unitLabel = (u: {
  * `property` link, so visits booked for a project or for units (stored in
  * `project`, `project_unit` and `site_visit_properties`) showed nothing.
  */
+/** A visit booked for a project outside the CRM keeps its name in the notes ("Other project: X. ..."). */
+const otherProjectName = (notes?: string | null) => {
+  const m = /^Other project: (.+?)(?:\. |$)/.exec(notes || '');
+  return m ? `${m[1]} (not in CRM)` : null;
+};
+
 const visitTargets = (visit: SiteVisit): { project: string | null; items: string[] } => {
   const items: string[] = [];
   const add = (label: string) => {
     if (!items.includes(label)) items.push(label);
   };
-  let project = visit.project?.name || visit.project_unit?.project?.name || null;
+  let project =
+    visit.project?.name ||
+    visit.project_unit?.project?.name ||
+    otherProjectName(visit.verification_call_notes);
   if (visit.property) add(`${visit.property.title} (${visit.property.property_code})`);
   if (visit.project_unit) add(unitLabel(visit.project_unit));
   for (const sp of visit.site_visit_properties || []) {
