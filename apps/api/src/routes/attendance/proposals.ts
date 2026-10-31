@@ -8,6 +8,7 @@ import {
   getISTComponents,
   getISTDayOfWeek,
   getISTMidnightInstant,
+  getISTNextMonthStart,
   toHolidayDateKey,
 } from '../../utils/time';
 import { Roles, LateProposalSchema, LeaveProposalSchema, EmptyBodySchema } from '../../shared';
@@ -450,8 +451,7 @@ router.get(
       const { dateString: todayStr } = getISTComponents(new Date());
       const [year, month] = todayStr.split('-');
       const monthStart = new Date(`${year}-${month}-01T00:00:00+05:30`);
-      const monthEnd = new Date(monthStart);
-      monthEnd.setMonth(monthEnd.getMonth() + 1);
+      const monthEnd = getISTNextMonthStart(Number(year), Number(month));
 
       const monthProposals = await p.attendanceProposal.findMany({
         where: { employee_id: { in: employeeIds }, target_date: { gte: monthStart, lt: monthEnd } },
