@@ -1,3 +1,0 @@
-module.exports=[17090,a=>{"use strict";a.s(["default",()=>b]);let b=(0,a.i(63663).registerClientReference)(function(){throw Error("Attempted to call the default export of [project]/Sonthillu/src/app/error.tsx from the server, but it's on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/Sonthillu/src/app/error.tsx","default")},6799,a=>{"use strict";var b=a.i(17090);a.n(b)},62933,function(a){a.n(a.i(6799))}];
-
-//# sourceMappingURL=Sonthillu_src_app_error_tsx_1w2xqqc._.js.map

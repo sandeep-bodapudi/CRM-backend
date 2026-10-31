@@ -1,3 +1,0 @@
-module.exports=[88544,a=>{"use strict";var b=a.i(57507);a.s(["default",0,function(){return(0,b.jsx)("div",{className:"flex min-h-[60vh] items-center justify-center",children:(0,b.jsxs)("div",{className:"text-center",children:[(0,b.jsx)("div",{className:"mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-brand-navy border-t-transparent"}),(0,b.jsx)("p",{className:"text-text-secondary",children:"Loading..."})]})})}])},93771,function(a){a.n(a.i(88544))}];
-
-//# sourceMappingURL=Sonthillu_src_app_loading_tsx_0je33ww._.js.map

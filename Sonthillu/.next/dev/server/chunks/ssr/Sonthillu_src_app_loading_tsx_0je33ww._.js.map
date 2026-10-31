@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///D:/HYD/RRH%20PWA/Sonthillu/src/app/loading.tsx"],"sourcesContent":["export default function Loading() {\r\n  return (\r\n    <div className=\"flex min-h-[60vh] items-center justify-center\">\r\n      <div className=\"text-center\">\r\n        <div className=\"mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-brand-navy border-t-transparent\" />\r\n        <p className=\"text-text-secondary\">Loading...</p>\r\n      </div>\r\n    </div>\r\n  );\r\n}\r\n"],"names":["Loading","className"],"mappings":";;;;;;AAAe,SAASA;IACtB,qBACE,2PAAC;QAAIC,WAAU;kBACb,cAAA,2PAAC;YAAIA,WAAU;;8BACb,2PAAC;oBAAIA,WAAU;;;;;;8BACf,2PAAC;oBAAEA,WAAU;8BAAsB;;;;;;;;;;;;;;;;;AAI3C"}}]
-}
