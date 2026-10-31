@@ -98,7 +98,7 @@ export const CPMAssociatePanel: React.FC = () => {
               <Handshake className="w-4 h-4" /> This month
             </h3>
             <Link
-              to="/work-log"
+              to="/my-day"
               className="text-xs font-bold text-white bg-navy-700 hover:bg-navy-800 px-3 py-2 rounded-xl flex items-center gap-1.5"
             >
               <NotebookPen className="w-3.5 h-3.5" /> Log associate work

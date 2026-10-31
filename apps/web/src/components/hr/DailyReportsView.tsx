@@ -1,227 +1,313 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Calendar, Filter, Eye, AlertCircle, CheckCircle2, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertCircle, Calendar, CheckCircle2, FileText, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
 
+interface ReportRow {
+  id: number;
+  employee_id: number;
+  submitted_at: string;
+  summary: string;
+  target_met: boolean;
+  below_target_reason: string | null;
+  metrics_json: Record<string, any> | null;
+  employee: { full_name: string | null; employee_code: string; department: string | null };
+}
+
+interface Missing {
+  id: number;
+  full_name: string | null;
+  employee_code: string;
+  checked_in_at: string;
+  checked_out_at: string | null;
+}
+
+interface Detail {
+  report: ReportRow;
+  labels: Record<string, string>;
+  work_log: {
+    id: number;
+    kind: string;
+    title: string | null;
+    note: string;
+    count: number;
+    associate_name: string | null;
+    at: string;
+  }[];
+  edits: { at: string; before: any; after: any }[];
+}
+
+const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+const time = (iso: string) =>
+  new Date(iso).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata',
+  });
+// "leadsQualified" / "work_log" -> "Leads qualified" / "Work log" (older reports).
+const words = (k: string) =>
+  k
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .replace(/^./, (c) => c.toUpperCase());
+
+/**
+ * Rows of "field | recorded by the CRM | typed by the person". Reports since
+ * 2026-10-19 keep `recorded` and `typed`; older ones kept a flat object with
+ * verified_* numbers from the server.
+ */
+function rowsOf(m: Record<string, any> | null, labels: Record<string, string>) {
+  if (!m) return [];
+  if (m.recorded || m.typed) {
+    const ids = [...new Set([...Object.keys(m.recorded || {}), ...Object.keys(m.typed || {})])];
+    return ids.map((id) => ({
+      label: labels[id] || words(id),
+      recorded: m.recorded?.[id] ?? null,
+      typed: m.typed?.[id] ?? null,
+    }));
+  }
+  const rows: { label: string; recorded: any; typed: any }[] = [
+    { label: 'Calls', recorded: m.verified_calls ?? null, typed: m.callsMade ?? null },
+    { label: 'Site visits', recorded: m.verified_visits ?? null, typed: m.siteVisits ?? null },
+    { label: 'Bookings', recorded: m.verified_deals ?? null, typed: null },
+  ];
+  for (const [k, v] of Object.entries(m)) {
+    if (k.startsWith('verified_') || k.startsWith('reported_')) continue;
+    if (['callsMade', 'siteVisits', 'feedback'].includes(k) || typeof v === 'boolean') continue;
+    rows.push({ label: words(k), recorded: null, typed: v });
+  }
+  return rows.filter((r) => r.recorded !== null || (r.typed !== null && r.typed !== ''));
+}
+
+const cell = (v: any) => (v === null || v === undefined || v === '' ? '—' : String(v));
+
+/** HR / MD: who sent the end-of-day report, who has not, and each report in full. */
 export const DailyReportsView: React.FC = () => {
   const { fetchWithAuth } = useAuth();
-  const [reports, setReports] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
-  const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [date, setDate] = useState(istToday);
+  const [openId, setOpenId] = useState<number | null>(null);
 
-  useEffect(() => {
-    fetchReports();
-  }, [dateFilter]);
+  const { data, isLoading } = useQuery({
+    queryKey: ['hrDailyReports', date],
+    queryFn: async () => {
+      const res = await fetchWithAuth(`${API_BASE_URL}/reports/all?date=${date}`);
+      if (!res.ok) throw new Error('Failed');
+      return (await res.json()) as { reports: ReportRow[]; missing: Missing[] };
+    },
+  });
 
-  const fetchReports = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/reports/all?date=${dateFilter}`);
-      const data = await res.json();
-      if (res.ok && data.reports) {
-        setReports(data.reports);
-      }
-    } catch (err) {
-      console.error('Failed to load daily reports:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { data: detail } = useQuery({
+    queryKey: ['hrDailyReport', openId],
+    queryFn: async () => {
+      const res = await fetchWithAuth(`${API_BASE_URL}/reports/${openId}`);
+      if (!res.ok) throw new Error('Failed');
+      return (await res.json()) as Detail;
+    },
+    enabled: openId !== null,
+  });
+
+  const reports = data?.reports || [];
+  const missing = data?.missing || [];
 
   return (
-    <div className="h-full bg-slate-50 relative flex flex-col p-6">
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-navy-50 text-navy-700 rounded-xl flex items-center justify-center shrink-0">
-            <FileText className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">Employee Daily Reports</h1>
-            <p className="text-sm text-slate-500">
-              View end-of-day submissions and target metrics.
-            </p>
-          </div>
+    <div className="max-w-5xl mx-auto space-y-4 pb-24 md:pb-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-black text-navy-900">End-of-day reports</h1>
+          <p className="text-sm text-slate-500">
+            {reports.length} sent · {missing.length} not sent
+          </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-navy focus:border-transparent"
-            />
-          </div>
-        </div>
+        <label className="relative">
+          <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="date"
+            value={date}
+            max={istToday()}
+            onChange={(e) => setDate(e.target.value || istToday())}
+            className="pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm"
+          />
+        </label>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        {isLoading ? (
-          <div className="flex justify-center p-12">
-            <div className="w-8 h-8 border-4 border-navy-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          </div>
-        ) : reports.length === 0 ? (
-          <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center shadow-sm">
-            <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500">No reports submitted for this date.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {reports.map((report) => (
-              <div
-                key={report.id}
-                className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-navy-200 transition-all flex flex-col"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-bold text-slate-800 text-lg">
-                      {report.employee?.full_name || 'Unknown'}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-mono">
-                      {report.employee?.employee_code}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                      {new Date(report.submitted_at).toLocaleTimeString('en-IN', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true,
-                      })}
+      {isLoading ? (
+        <p className="text-sm text-slate-400 py-8 text-center">Loading…</p>
+      ) : (
+        <>
+          {missing.length > 0 && (
+            <section className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+              <h2 className="text-sm font-bold text-amber-900 mb-2 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" /> Not sent yet ({missing.length})
+              </h2>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                {missing.map((m) => (
+                  <li key={m.id} className="flex justify-between gap-3">
+                    <span className="font-semibold text-slate-800 truncate">
+                      {m.full_name || m.employee_code}
                     </span>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  {report.target_met ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Target Met
+                    <span className="text-xs text-slate-500 shrink-0">
+                      in {time(m.checked_in_at)}
+                      {m.checked_out_at ? ` · out ${time(m.checked_out_at)}` : ' · still in'}
                     </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-100">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      Missed Target
-                    </span>
-                  )}
-                </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-                <div className="flex-1">
-                  {report.metrics_json && Object.keys(report.metrics_json).length > 0 ? (
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      {Object.entries(report.metrics_json)
-                        .slice(0, 4)
-                        .map(([key, value]) => (
-                          <div
-                            key={key}
-                            className="bg-slate-50 p-2.5 rounded-xl border border-slate-100"
-                          >
-                            <p
-                              className="text-[10px] uppercase font-bold text-slate-400 truncate"
-                              title={key}
-                            >
-                              {key}
-                            </p>
-                            <p
-                              className="text-sm font-black text-slate-700 truncate"
-                              title={String(value)}
-                            >
-                              {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
-                            </p>
-                          </div>
-                        ))}
-                      {Object.keys(report.metrics_json).length > 4 && (
-                        <div className="col-span-2 text-xs text-center text-slate-400 mt-1 italic">
-                          +{Object.keys(report.metrics_json).length - 4} more metrics
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-400 italic mb-4">
-                      No dynamic metrics available.
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => setSelectedReport(report)}
-                  className="w-full py-2 bg-navy-50 text-navy-600 hover:bg-navy-100 hover:text-navy-700 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors border border-transparent hover:border-navy-200"
-                >
-                  <Eye className="w-4 h-4" />
-                  View Full Report
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Detail Modal */}
-      {selectedReport && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-800">Report Details</h2>
-                <p className="text-sm text-slate-500">
-                  {selectedReport.employee?.full_name} •{' '}
-                  {new Date(selectedReport.submitted_at).toLocaleDateString('en-IN')}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedReport(null)}
-                className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          {reports.length === 0 ? (
+            <div className="bg-white p-10 rounded-2xl border border-slate-200 text-center">
+              <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-slate-500 text-sm">No reports for this day.</p>
             </div>
-            <div className="p-6 overflow-y-auto space-y-6">
-              {!selectedReport.target_met && selectedReport.below_target_reason && (
-                <div className="bg-rose-50 border border-rose-100 rounded-xl p-4">
-                  <h3 className="text-sm font-bold text-rose-800 flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-4 h-4" />
-                    Reason for Missing Target
-                  </h3>
-                  <p className="text-sm text-rose-700">{selectedReport.below_target_reason}</p>
-                </div>
-              )}
-
-              <div>
-                <h3 className="text-sm font-bold text-slate-700 mb-2">End of Day Summary</h3>
-                <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-600 whitespace-pre-wrap border border-slate-100">
-                  {selectedReport.summary || 'No summary provided.'}
-                </div>
-              </div>
-
-              {selectedReport.metrics_json &&
-                Object.keys(selectedReport.metrics_json).length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-700 mb-2">Dynamic Metrics</h3>
-                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 grid grid-cols-2 gap-4">
-                      {Object.entries(selectedReport.metrics_json).map(([key, value]) => (
-                        <div key={key}>
-                          <div className="text-xs text-slate-500 truncate" title={key}>
-                            {key}
-                          </div>
-                          <div className="text-sm font-bold text-slate-800">
-                            {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
-                          </div>
-                        </div>
-                      ))}
+          ) : (
+            <ul className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+              {reports.map((r) => (
+                <li key={r.id}>
+                  <button
+                    onClick={() => setOpenId(r.id)}
+                    className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-800">
+                        {r.employee.full_name || r.employee.employee_code}{' '}
+                        <span className="font-normal text-slate-400">
+                          {r.employee.employee_code} · {time(r.submitted_at)}
+                        </span>
+                      </p>
+                      <p className="text-xs text-slate-500 line-clamp-1">{r.summary}</p>
                     </div>
+                    {r.target_met ? (
+                      <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5">
+                        <CheckCircle2 className="w-3 h-3" /> On target
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-0.5">
+                        Below target
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      {openId !== null && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="bg-white w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5 relative">
+            <button
+              onClick={() => setOpenId(null)}
+              aria-label="Close"
+              className="absolute top-3 right-3 p-2 rounded-full text-slate-400 hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {!detail ? (
+              <p className="text-sm text-slate-400 py-8 text-center">Loading…</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="pr-10">
+                  <h2 className="text-lg font-bold text-navy-900">
+                    {detail.report.employee.full_name || detail.report.employee.employee_code}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Sent {time(detail.report.submitted_at)}
+                    {detail.edits.length > 0 &&
+                      ` · corrected ${detail.edits.length} time${detail.edits.length === 1 ? '' : 's'}`}
+                  </p>
+                </div>
+
+                {rowsOf(detail.report.metrics_json, detail.labels).length > 0 && (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[11px] uppercase text-slate-400 text-left">
+                        <th className="py-1 font-bold">Work</th>
+                        <th className="py-1 font-bold text-right">CRM</th>
+                        <th className="py-1 font-bold text-right">They said</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {rowsOf(detail.report.metrics_json, detail.labels).map((r) => (
+                        <tr key={r.label}>
+                          <td className="py-1.5 text-slate-700">{r.label}</td>
+                          <td className="py-1.5 text-right font-bold text-navy-900">
+                            {cell(r.recorded)}
+                          </td>
+                          <td
+                            className={`py-1.5 text-right ${r.recorded !== null && r.typed !== null && r.typed !== '' && Number(r.typed) !== Number(r.recorded) ? 'font-bold text-amber-700' : 'text-slate-600'}`}
+                          >
+                            {cell(r.typed)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                <div>
+                  <p className="text-[11px] font-bold uppercase text-slate-400 mb-1">Summary</p>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 rounded-xl p-3">
+                    {detail.report.summary}
+                  </p>
+                </div>
+                {detail.report.below_target_reason && (
+                  <div>
+                    <p className="text-[11px] font-bold uppercase text-rose-500 mb-1">
+                      Why below target
+                    </p>
+                    <p className="text-sm text-rose-800 bg-rose-50 rounded-xl p-3">
+                      {detail.report.below_target_reason}
+                    </p>
                   </div>
                 )}
-            </div>
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button
-                onClick={() => setSelectedReport(null)}
-                className="px-6 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors"
-              >
-                Close
-              </button>
-            </div>
+
+                <div>
+                  <p className="text-[11px] font-bold uppercase text-slate-400 mb-1">
+                    Work outside the CRM that day
+                  </p>
+                  {detail.work_log.length === 0 ? (
+                    <p className="text-sm text-slate-400">Nothing logged.</p>
+                  ) : (
+                    <ul className="text-sm divide-y divide-slate-100">
+                      {detail.work_log.map((w) => (
+                        <li key={w.id} className="py-1.5 flex justify-between gap-3">
+                          <span className="text-slate-700">
+                            {w.title || words(w.kind)}
+                            {w.count > 1 ? ` × ${w.count}` : ''}
+                            {w.associate_name ? ` · ${w.associate_name}` : ''}
+                            {w.note ? (
+                              <span className="block text-xs text-slate-500">{w.note}</span>
+                            ) : null}
+                          </span>
+                          <span className="text-xs text-slate-400 shrink-0">{time(w.at)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {detail.edits.length > 0 && (
+                  <details>
+                    <summary className="text-xs font-bold text-navy-700 cursor-pointer py-1">
+                      Corrections ({detail.edits.length})
+                    </summary>
+                    <ul className="mt-2 space-y-2 text-xs">
+                      {detail.edits.map((e, i) => (
+                        <li key={i} className="bg-slate-50 rounded-xl p-2">
+                          <p className="font-bold text-slate-600">{time(e.at)}</p>
+                          <p className="text-slate-500">Before: {e.before?.summary}</p>
+                          <p className="text-slate-700">After: {e.after?.summary}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

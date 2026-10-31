@@ -265,7 +265,7 @@ export const MobileBottomNav: React.FC = () => {
             ) : (
               <CheckCircle2 className="w-5 h-5" />
             )}
-            <span className="text-[9px] truncate w-full text-center">{homeItem.label}</span>
+            <span className="text-[10px] truncate w-full text-center">{homeItem.label}</span>
           </button>
         )}
 
@@ -282,7 +282,7 @@ export const MobileBottomNav: React.FC = () => {
               }`}
             >
               {item.icon ? <item.icon className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
-              <span className="text-[9px] truncate w-full text-center">{item.label}</span>
+              <span className="text-[10px] truncate w-full text-center">{item.label}</span>
             </button>
           );
         })}
@@ -301,7 +301,7 @@ export const MobileBottomNav: React.FC = () => {
             ) : (
               <CheckCircle2 className="w-5 h-5" />
             )}
-            <span className="text-[9px] truncate w-full text-center">Profile</span>
+            <span className="text-[10px] truncate w-full text-center">Profile</span>
           </button>
         )}
 
@@ -310,7 +310,7 @@ export const MobileBottomNav: React.FC = () => {
           className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-all text-slate-400 hover:text-slate-200"
         >
           <Menu className="w-5 h-5" />
-          <span className="text-[9px] truncate w-full text-center">Menu</span>
+          <span className="text-[10px] truncate w-full text-center">Menu</span>
         </button>
       </div>
     </>

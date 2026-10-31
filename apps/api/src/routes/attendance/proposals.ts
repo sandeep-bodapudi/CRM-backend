@@ -559,7 +559,8 @@ router.get(
 router.post(
   '/proposals/:id/approve',
   authenticateToken,
-  requireRole([Roles.MD, Roles.ADMIN]),
+  // HR decides attendance requests (2026-10-18); MD / Admin can too.
+  requireRole([Roles.HR_MANAGER, Roles.MD, Roles.ADMIN]),
   validateRequestBody(EmptyBodySchema),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -705,7 +706,8 @@ router.post(
 router.post(
   '/proposals/:id/reject',
   authenticateToken,
-  requireRole([Roles.MD, Roles.ADMIN]),
+  // HR decides attendance requests (2026-10-18); MD / Admin can too.
+  requireRole([Roles.HR_MANAGER, Roles.MD, Roles.ADMIN]),
   validateRequestBody(EmptyBodySchema),
   async (req: AuthenticatedRequest, res: Response) => {
     try {

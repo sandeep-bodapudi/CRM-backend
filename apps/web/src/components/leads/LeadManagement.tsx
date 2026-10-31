@@ -207,7 +207,7 @@ const LeadCard: React.FC<LeadCardProps> = ({
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {lead.can_edit === false && (
-            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold uppercase tracking-wider border border-slate-200">
+            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-bold uppercase tracking-wider border border-slate-200">
               View Only
             </span>
           )}
@@ -218,7 +218,7 @@ const LeadCard: React.FC<LeadCardProps> = ({
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               title="Chat on WhatsApp"
-              className="text-emerald-600 hover:text-emerald-700 p-1 -m-1"
+              className="tap-inline text-emerald-600 hover:text-emerald-700 p-1 -m-1"
             >
               <MessageCircle className="w-3.5 h-3.5" />
             </a>
@@ -728,7 +728,7 @@ export const LeadManagement: React.FC = () => {
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 title="Chat on WhatsApp"
-                className="text-emerald-600 hover:text-emerald-700 ml-1"
+                className="tap-inline text-emerald-600 hover:text-emerald-700 ml-1"
               >
                 <MessageCircle className="w-3.5 h-3.5" />
               </a>
@@ -799,7 +799,7 @@ export const LeadManagement: React.FC = () => {
               <div className="font-bold text-slate-800 text-[11px] truncate">
                 {l.assigned_to.full_name || l.assigned_to.employee_code}
               </div>
-              <div className="text-[9px] text-slate-400 font-mono truncate">
+              <div className="text-[10px] text-slate-400 font-mono truncate">
                 {l.assignment_type || 'AUTO'}
               </div>
             </div>
@@ -1066,62 +1066,70 @@ export const LeadManagement: React.FC = () => {
             Showing {filteredLeads.length} of {totalLeads} leads
           </p>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
+          {/* Phone: search on its own row, then two filters side by side and the long
+              "why dropped" list on its own row, labels above. Wider: one row. */}
+          <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
+            <div className="relative col-span-2">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={leadSearchQuery}
                 onChange={(e) => setLeadSearchQuery(e.target.value)}
                 placeholder="Search name, phone, code..."
-                className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm w-56 focus:outline-none focus:border-navy-500"
+                className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm w-full sm:w-56 focus:outline-none focus:border-navy-500"
               />
             </div>
-            <label className="text-xs font-semibold text-slate-500">Source:</label>
-            <select
-              value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-navy-500"
-            >
-              <option value="ALL">All Sources</option>
-              {FILTER_SOURCE_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {getLeadSourceLabel(s)}
-                </option>
-              ))}
-            </select>
-            <label className="text-xs font-semibold text-slate-500">Why dropped:</label>
-            <select
-              value={exitFilter}
-              onChange={(e) => setExitFilter(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-navy-500"
-            >
-              <option value="ALL">Any reason</option>
-              {Object.entries(LEAD_EXIT_REASON_LABELS as Record<string, string>).map(
-                ([k, label]) => (
-                  <option key={k} value={k}>
-                    {label}
+            <label className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+              <span className="text-xs font-semibold text-slate-500">Source:</span>
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                className="w-full sm:w-auto px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-navy-500"
+              >
+                <option value="ALL">All Sources</option>
+                {FILTER_SOURCE_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {getLeadSourceLabel(s)}
                   </option>
-                ),
-              )}
-            </select>
-            <label className="text-xs font-semibold text-slate-500">Status:</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-navy-500"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="NEW">New</option>
-              <option value="ASSIGNED">Assigned</option>
-              <option value="CONTACTED">Contacted</option>
-              <option value="QUALIFIED">Qualified</option>
-              <option value="SITE_VISIT_SCHEDULED">Site Visit</option>
-              <option value="NEGOTIATION">Negotiation</option>
-              <option value="BOOKING_INITIATED">Booking</option>
-              <option value="BOOKED">Booked</option>
-              <option value="DROPPED">Dropped</option>
-            </select>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+              <span className="text-xs font-semibold text-slate-500">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full sm:w-auto px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-navy-500"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="NEW">New</option>
+                <option value="ASSIGNED">Assigned</option>
+                <option value="CONTACTED">Contacted</option>
+                <option value="QUALIFIED">Qualified</option>
+                <option value="SITE_VISIT_SCHEDULED">Site Visit</option>
+                <option value="NEGOTIATION">Negotiation</option>
+                <option value="BOOKING_INITIATED">Booking</option>
+                <option value="BOOKED">Booked</option>
+                <option value="DROPPED">Dropped</option>
+              </select>
+            </label>
+            <label className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0 col-span-2">
+              <span className="text-xs font-semibold text-slate-500">Why dropped:</span>
+              <select
+                value={exitFilter}
+                onChange={(e) => setExitFilter(e.target.value)}
+                className="w-full sm:w-auto px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-navy-500"
+              >
+                <option value="ALL">Any reason</option>
+                {Object.entries(LEAD_EXIT_REASON_LABELS as Record<string, string>).map(
+                  ([k, label]) => (
+                    <option key={k} value={k}>
+                      {label}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
           </div>
         </div>
 

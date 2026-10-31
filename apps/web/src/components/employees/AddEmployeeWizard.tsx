@@ -521,7 +521,7 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
                 <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                   <Heart className="w-4 h-4 text-rose-500" /> Emergency Contact
                 </h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Name</label>
                     <input

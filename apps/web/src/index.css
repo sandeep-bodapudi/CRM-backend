@@ -641,3 +641,28 @@ html.dark .bg-navy-50.text-navy-700 {
   }
 }
 
+
+/* =============================================================================
+   Touch screens: comfortable tap targets (2026-10-18 mobile review).
+   Most buttons are ~24-27px tall, too small for a thumb. On touch devices only
+   (pointer: coarse) every button, select and role=button gets at least 40px.
+   Inline text buttons/links mark themselves `tap-inline`: they keep their size
+   and get a larger invisible tap area instead. Mouse/desktop layout unchanged.
+   ============================================================================= */
+@media (pointer: coarse) {
+  button:not(.tap-inline),
+  select,
+  [role='button']:not(.tap-inline) {
+    min-height: 40px;
+  }
+  /* No min-width here: flex items rely on min-width:auto to keep their
+     text width, and overriding it let tab buttons shrink and overlap. */
+  .tap-inline {
+    position: relative;
+  }
+  .tap-inline::after {
+    content: '';
+    position: absolute;
+    inset: -10px -6px;
+  }
+}

@@ -306,7 +306,7 @@ const Stat: React.FC<{ label: string; value: number | string; strong?: boolean }
     <div className={`text-base font-black ${strong ? 'text-navy-900' : 'text-slate-700'}`}>
       {value}
     </div>
-    <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">{label}</div>
+    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{label}</div>
   </div>
 );
 

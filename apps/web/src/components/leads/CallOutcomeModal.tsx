@@ -11,6 +11,8 @@ import {
   DROPPABLE_CALL_OUTCOMES,
 } from '../../shared';
 
+const SALESPERSON = 'OTHER_COMPANY_SALESPERSON';
+
 const OUTCOMES: { value: string; label: string; tone: string }[] = [
   { value: 'CONNECTED_INTERESTED', label: 'Spoke — interested', tone: 'emerald' },
   { value: 'CALL_BACK', label: 'Asked to call back', tone: 'amber' },
@@ -18,6 +20,9 @@ const OUTCOMES: { value: string; label: string; tone: string }[] = [
   { value: 'NO_ANSWER', label: 'No answer', tone: 'slate' },
   { value: 'BUSY_OR_SWITCHED_OFF', label: 'Busy / switched off / not reachable', tone: 'slate' },
   { value: 'WRONG_NUMBER', label: 'Wrong number', tone: 'red' },
+  // A shortcut for "spoke -- not interested" with the reason "salesperson from
+  // another company": the lead is dropped and the number never called again.
+  { value: SALESPERSON, label: 'Salesperson from another company', tone: 'red' },
 ];
 
 /** Tomorrow 11:00 local, formatted for <input type="datetime-local">. */
@@ -52,7 +57,8 @@ export const CallOutcomeModal: React.FC<{
   // Every outcome with a reason list must say why (or, when the call did not get
   // through, what the phone/network said). Only "not interested" and "wrong
   // number" can drop the lead; a lead still in NEW cannot be dropped at all.
-  const reasonOptions = CALL_REASONS_BY_OUTCOME[outcome] || [];
+  const isSalesperson = outcome === SALESPERSON;
+  const reasonOptions = isSalesperson ? [] : CALL_REASONS_BY_OUTCOME[outcome] || [];
   const needsReason = reasonOptions.length > 0;
   const canDrop = lead.status !== 'NEW' && DROPPABLE_CALL_OUTCOMES.includes(outcome);
   const doNotCall = !!reason && (DO_NOT_CALL_REASONS as string[]).includes(reason);
@@ -81,8 +87,12 @@ export const CallOutcomeModal: React.FC<{
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          outcome,
-          ...(needsReason && reason
+          // The salesperson button is "spoke -- not interested" with that reason;
+          // the server always drops a "never call again" lead.
+          ...(isSalesperson
+            ? { outcome: 'CONNECTED_NOT_INTERESTED', reason: SALESPERSON, drop_lead: true }
+            : { outcome }),
+          ...(!isSalesperson && needsReason && reason
             ? { reason, drop_lead: canDrop && (dropLead || doNotCall) }
             : {}),
           notes: notes.trim() || undefined,
@@ -146,6 +156,13 @@ export const CallOutcomeModal: React.FC<{
             </button>
           ))}
         </div>
+
+        {isSalesperson && (
+          <p className="text-[11px] text-red-800 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+            This lead will be dropped and marked &quot;never call again&quot;. Searching this number
+            later shows a do-not-call warning.
+          </p>
+        )}
 
         {needsReason && (
           <div className="space-y-2">

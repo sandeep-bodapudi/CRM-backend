@@ -79,13 +79,18 @@ const STATUS_CONFIG: Record<
   },
 };
 
+import { CustomerPaymentsQueue } from './CustomerPaymentsQueue';
+
 export const FinanceHub: React.FC = () => {
   const { user, fetchWithAuth } = useAuth();
   const [myRefunds, setMyRefunds] = useState<RefundItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchFailed, setFetchFailed] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [activeTab, setActiveTab] = useState<'my' | 'queue'>('my');
+  const canVerifyPayments = user?.permissions?.includes(Permissions.PAYMENTS_UPDATE) ?? false;
+  const [activeTab, setActiveTab] = useState<'payments' | 'my' | 'queue'>(
+    canVerifyPayments ? 'payments' : 'my',
+  );
   const { isSupported, permission, isSubscribing, subscribe } = usePushNotifications();
 
   // Permission-based queue access (canonical values; backend enforces EXPENSES_*)
@@ -197,8 +202,20 @@ export const FinanceHub: React.FC = () => {
       </div>
 
       {/* Tabs (only shown if user has queue access) */}
-      {hasQueueAccess && (
+      {(hasQueueAccess || canVerifyPayments) && (
         <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+          {canVerifyPayments && (
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'payments'
+                  ? 'bg-white text-slate-800 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Customer payments
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('my')}
             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
@@ -209,16 +226,18 @@ export const FinanceHub: React.FC = () => {
           >
             My Submissions
           </button>
-          <button
-            onClick={() => setActiveTab('queue')}
-            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'queue'
-                ? 'bg-white text-slate-800 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {canMdApprove ? 'Approval Queue' : 'Review Queue'}
-          </button>
+          {hasQueueAccess && (
+            <button
+              onClick={() => setActiveTab('queue')}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'queue'
+                  ? 'bg-white text-slate-800 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {canMdApprove ? 'Approval Queue' : 'Review Queue'}
+            </button>
+          )}
         </div>
       )}
 
@@ -304,6 +323,7 @@ export const FinanceHub: React.FC = () => {
 
       {/* Queue Tab */}
       {activeTab === 'queue' && hasQueueAccess && <AccountantRefundQueue isMD={canMdApprove} />}
+      {activeTab === 'payments' && canVerifyPayments && <CustomerPaymentsQueue />}
 
       {/* Submit Form Modal */}
       {showForm && (

@@ -54,10 +54,7 @@ export const SelfieCheckInModal: React.FC<{ onClose: () => void; onDone: () => v
     }
     navigator.geolocation.getCurrentPosition(
       (p) => setPos({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
-      () =>
-        setPosError(
-          'Location is off. Turn it on for a check-in your manager will not need to check.',
-        ),
+      () => setPosError('Location is off. Turn it on so HR does not need to check your check-in.'),
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
     fetchWithAuth(`${API_BASE_URL}/projects?limit=200`)

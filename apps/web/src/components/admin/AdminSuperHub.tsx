@@ -1,3 +1,4 @@
+import { LegalComplianceSettings } from './LegalComplianceSettings';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -71,7 +72,14 @@ export const AdminSuperHub: React.FC = () => {
   const { showToast, showError } = useToast();
 
   const [activeTab, setActiveTab] = useState<
-    'roles' | 'permissions' | 'companies' | 'integrations' | 'advanced' | 'audit' | 'security'
+    | 'roles'
+    | 'permissions'
+    | 'companies'
+    | 'legal'
+    | 'integrations'
+    | 'advanced'
+    | 'audit'
+    | 'security'
   >('roles');
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -248,6 +256,18 @@ export const AdminSuperHub: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('legal')}
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shrink-0 transition-colors ${
+              activeTab === 'legal'
+                ? 'bg-white text-navy-700 shadow-sm border border-slate-200'
+                : 'text-slate-600 hover:bg-slate-100 border border-transparent'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Legal &amp; compliance
+          </button>
+
+          <button
             onClick={() => setActiveTab('integrations')}
             className={`px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shrink-0 transition-colors ${
               activeTab === 'integrations'
@@ -313,6 +333,12 @@ export const AdminSuperHub: React.FC = () => {
           {activeTab === 'companies' && (
             <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
               <CompanyBranchManagement />
+            </div>
+          )}
+
+          {activeTab === 'legal' && (
+            <div className="max-w-5xl mx-auto">
+              <LegalComplianceSettings />
             </div>
           )}
 

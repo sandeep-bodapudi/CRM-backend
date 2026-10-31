@@ -319,7 +319,7 @@ export const AdminAnalyticsPortal: React.FC = () => {
                             <div className="text-[11px] font-bold text-rose-900">
                               {alert.new_value || alert.action}
                             </div>
-                            <div className="text-[9px] font-mono text-rose-500 mt-1">
+                            <div className="text-[10px] font-mono text-rose-500 mt-1">
                               {new Date(alert.created_at).toLocaleString('en-IN')} | ACTOR_ID:{' '}
                               {alert.actor_id}
                             </div>
@@ -349,7 +349,7 @@ export const AdminAnalyticsPortal: React.FC = () => {
                               second: '2-digit',
                             })}
                           </div>
-                          <div className="text-[9px] text-slate-300 font-mono">
+                          <div className="text-[10px] text-slate-300 font-mono">
                             {new Date(log.created_at).toLocaleDateString('en-IN')}
                           </div>
                         </div>
@@ -363,7 +363,7 @@ export const AdminAnalyticsPortal: React.FC = () => {
                             </span>
                             <span className="text-[10px] font-bold text-slate-800">
                               {log.entity_type}{' '}
-                              <span className="text-slate-400 font-mono text-[9px]">
+                              <span className="text-slate-400 font-mono text-[10px]">
                                 #{log.entity_id}
                               </span>
                             </span>

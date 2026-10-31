@@ -798,7 +798,7 @@ export const EmployeeManagement: React.FC = () => {
                     <User className="w-4 h-4 text-navy-700" />
                     <span>Personal & Contact Information</span>
                   </h4>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">
                         Primary Phone
@@ -869,7 +869,7 @@ export const EmployeeManagement: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-200/60 grid grid-cols-3 gap-3">
+                  <div className="pt-2 border-t border-slate-200/60 grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">
                         Emergency Person
@@ -916,7 +916,7 @@ export const EmployeeManagement: React.FC = () => {
                       {showSensitive ? 'Hide Details' : 'Reveal Details'}
                     </button>
                   </div>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">
                         PAN Number
@@ -978,7 +978,7 @@ export const EmployeeManagement: React.FC = () => {
                     <Briefcase className="w-4 h-4 text-navy-700" />
                     <span>Employment Terms & Salary CTC</span>
                   </h4>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">
                         Work Location

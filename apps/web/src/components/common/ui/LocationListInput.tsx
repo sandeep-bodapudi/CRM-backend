@@ -69,7 +69,7 @@ const LocationListInput: React.FC<LocationListInputProps> = ({
               className="inline-flex items-center gap-1 bg-navy-50 text-navy-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-navy-100"
             >
               {idx === 0 && (
-                <span className="text-[9px] uppercase tracking-wide text-navy-400">Primary</span>
+                <span className="text-[10px] uppercase tracking-wide text-navy-400">Primary</span>
               )}
               {loc}
               <button

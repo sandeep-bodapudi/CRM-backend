@@ -7,6 +7,7 @@ import { AppLayout } from './components/common/AppLayout';
 import { LoginForm } from './components/auth/LoginForm';
 import { ChangePasswordModal } from './components/auth/ChangePasswordModal';
 import { DailyReportModal } from './components/reports/DailyReportModal';
+import { ReportDueCard } from './components/myday/ReportDueCard';
 import { NotificationDrawer } from './components/notifications/NotificationDrawer';
 import { ISTClock } from './components/common/ISTClock';
 import { FirstLoginSetup } from './components/auth/FirstLoginSetup';
@@ -109,12 +110,6 @@ const ComplaintManagement = lazy(() =>
     default: m.ComplaintManagement,
   })),
 );
-const PMApprovalsHub = lazy(() =>
-  import('./components/approvals/PMApprovalsHub').then((m) => ({ default: m.PMApprovalsHub })),
-);
-const ActionCenter = lazy(() =>
-  import('./components/md/ActionCenter').then((m) => ({ default: m.ActionCenter })),
-);
 const TaskManager = lazy(() =>
   import('./components/tasks/TaskManager').then((m) => ({ default: m.TaskManager })),
 );
@@ -150,9 +145,6 @@ const HRDashboard = lazy(() =>
     default: m.HRDashboard,
   })),
 );
-const ApprovalsDashboard = lazy(() =>
-  import('./components/hr/ApprovalsDashboard').then((m) => ({ default: m.ApprovalsDashboard })),
-);
 const HRAttendanceDashboard = lazy(() =>
   import('./components/hr/HRAttendanceDashboard').then((m) => ({
     default: m.HRAttendanceDashboard,
@@ -161,11 +153,8 @@ const HRAttendanceDashboard = lazy(() =>
 const RequestsPage = lazy(() =>
   import('./components/attendance/RequestsPage').then((m) => ({ default: m.RequestsPage })),
 );
-const TeamRequestsPage = lazy(() =>
-  import('./components/attendance/TeamRequestsPage').then((m) => ({ default: m.TeamRequestsPage })),
-);
-const WorkLogPage = lazy(() =>
-  import('./components/worklog/WorkLogPage').then((m) => ({ default: m.WorkLogPage })),
+const MyDayPage = lazy(() =>
+  import('./components/myday/MyDayPage').then((m) => ({ default: m.MyDayPage })),
 );
 const MyAttendancePage = lazy(() =>
   import('./components/attendance/MyAttendancePage').then((m) => ({ default: m.MyAttendancePage })),
@@ -196,11 +185,6 @@ const PerformanceAdjustmentPage = lazy(() =>
 const AnalyticsHub = lazy(() =>
   import('./components/analytics/AnalyticsHub').then((m) => ({ default: m.AnalyticsHub })),
 );
-const DailyReportingPage = lazy(() =>
-  import('./components/reports/DailyReportingPage').then((m) => ({
-    default: m.DailyReportingPage,
-  })),
-);
 const KioskManagementPage = lazy(() =>
   import('./components/system/KioskManagementPage').then((m) => ({
     default: m.KioskManagementPage,
@@ -209,8 +193,8 @@ const KioskManagementPage = lazy(() =>
 const TeamTodayPage = lazy(() =>
   import('./components/md/TeamTodayPage').then((m) => ({ default: m.TeamTodayPage })),
 );
-const ApprovalsInboxPage = lazy(() =>
-  import('./components/md/ApprovalsInboxPage').then((m) => ({ default: m.ApprovalsInboxPage })),
+const ApprovalsPage = lazy(() =>
+  import('./components/approvals/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })),
 );
 const AccessControlPage = lazy(() =>
   import('./components/admin/AccessControlPage').then((m) => ({ default: m.AccessControlPage })),
@@ -588,15 +572,18 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
       <Route path="/properties" element={<PropertyManagement />} />
       <Route path="/site-visits" element={<SiteVisitManagement />} />
       <Route path="/demos" element={<DemoManagement />} />
+      <Route path="/action-center" element={<Navigate to="/approvals?tab=listings" replace />} />
+      {/* The old approval pages all live on /approvals now (2026-10-18). */}
+      <Route path="/pm/approvals" element={<Navigate to="/approvals?tab=visits" replace />} />
       <Route
-        path="/action-center"
-        element={isMD ? <ActionCenter /> : <Navigate to="/" replace />}
+        path="/pm/site-visits/approvals"
+        element={<Navigate to="/approvals?tab=visits" replace />}
       />
-      <Route path="/pm/approvals" element={<PMApprovalsHub />} />
-      <Route path="/pm/site-visits/approvals" element={<PMApprovalsHub />} />
-      <Route path="/pm/demos/approvals" element={<PMApprovalsHub />} />
+      <Route path="/pm/demos/approvals" element={<Navigate to="/approvals?tab=visits" replace />} />
       <Route path="/tasks" element={<TaskManager />} />
-      <Route path="/daily-report" element={<DailyReportingPage />} />
+      {/* Work Log and Daily Report are one page now: My Day (2026-10-19). */}
+      <Route path="/my-day" element={<MyDayPage />} />
+      <Route path="/daily-report" element={<Navigate to="/my-day#report" replace />} />
       <Route
         path="/bookings"
         element={canAccessCommercial ? <BookingManagement /> : <Navigate to="/dashboard" replace />}
@@ -608,8 +595,11 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
       <Route path="/profile" element={<UserProfile />} />
       <Route path="/my-attendance" element={<MyAttendancePage />} />
       <Route path="/requests" element={<RequestsPage />} />
-      <Route path="/team-requests" element={<TeamRequestsPage />} />
-      <Route path="/work-log" element={<WorkLogPage />} />
+      <Route
+        path="/team-requests"
+        element={<Navigate to="/approvals?tab=attendance&sub=duty" replace />}
+      />
+      <Route path="/work-log" element={<Navigate to="/my-day" replace />} />
       <Route path="/my-performance" element={<MyPerformanceDashboard />} />
       <Route
         path="/achievements"
@@ -692,10 +682,7 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
           )
         }
       />
-      <Route
-        path="/approvals"
-        element={canManageEmployees ? <ApprovalsDashboard /> : <Navigate to="/" replace />}
-      />
+      <Route path="/approvals" element={<ApprovalsPage />} />
       <Route
         path="/hr-daily-reports"
         element={canManageEmployees ? <DailyReportsView /> : <Navigate to="/" replace />}
@@ -720,10 +707,7 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
           isMD || isTechAdmin || isHRManager ? <TeamTodayPage /> : <Navigate to="/" replace />
         }
       />
-      <Route
-        path="/approvals-inbox"
-        element={isMD || isTechAdmin ? <ApprovalsInboxPage /> : <Navigate to="/" replace />}
-      />
+      <Route path="/approvals-inbox" element={<Navigate to="/approvals" replace />} />
       <Route
         path="/access-control"
         element={isMD || isTechAdmin ? <AccessControlPage /> : <Navigate to="/" replace />}
@@ -778,10 +762,12 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     '/kiosk-management': 'Kiosk Management',
     '/access-control': 'Roles & Access',
     '/approvals-inbox': 'Approvals',
+    '/approvals': 'Approvals',
     '/team-today': 'Team Today',
     '/requests': 'Requests',
     '/team-requests': 'Team requests',
-    '/work-log': 'Work Log',
+    '/my-day': 'My Day',
+    '/hr-daily-reports': 'End-of-day reports',
     '/finance': 'Payments & Refunds',
     '/action-center': 'Action Center',
     '/pm/approvals': 'PM Approvals',
@@ -828,6 +814,7 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
               </div>
             }
           >
+            <ReportDueCard />
             {dashboardElement}
           </Suspense>
         </ErrorBoundary>

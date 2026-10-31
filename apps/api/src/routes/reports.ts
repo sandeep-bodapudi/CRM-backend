@@ -1,59 +1,35 @@
 import { logger } from '../utils/logger';
 import { Router, Response } from 'express';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../middleware/auth';
 import { validateRequestBody } from '../middleware/validate';
 import { DailyReportSchema, Roles } from '../shared';
 import { getISTComponents } from '../utils/time';
-import { WORK_LOG_ACTION, parseWorkLog, countByKind, WorkLogEntry } from './workLog';
-import { splitCalls } from '../services/lead/calls';
-import { measureMetric, periodRange } from '../services/targets.service';
+import { WORK_LOG_ACTION, parseWorkLog } from './workLog';
+import {
+  istDayRange,
+  verifiedActivityToday,
+  judgeToday,
+  buildSheet,
+  reportRole,
+  checkedOutToday,
+  recordedSnapshot,
+  checkTyped,
+  FIELD_LABELS,
+} from '../services/dailyReport';
 
 const router = Router();
 
 const p = prisma;
 
-/** [start, end) of the current IST calendar day as UTC instants. */
-function istTodayRange(now = new Date()) {
-  const { dateString } = getISTComponents(now);
-  const start = new Date(`${dateString}T00:00:00+05:30`);
-  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000), dateString };
-}
+const isExempt = (roles: string[]) => roles.includes(Roles.MD) || roles.includes(Roles.ADMIN);
 
-/**
- * What the system itself recorded for this employee today. Calls are the
- * logged call attempts (POST /leads/:id/calls); leads worked counts every
- * lead they actually acted on (imports excluded).
- */
-async function verifiedActivityToday(employeeId: number) {
-  const { start, end } = istTodayRange();
-  const [loggedCalls, leadsWorked, workLogRows, split] = await Promise.all([
-    p.leadActivity.count({
-      where: {
-        actor_id: employeeId,
-        activity_type: 'CALL_LOGGED',
-        created_at: { gte: start, lt: end },
-      },
-    }),
-    p.leadActivity.findMany({
-      where: {
-        actor_id: employeeId,
-        activity_type: { notIn: ['LEAD_CREATED', 'ASSIGNED_TO_AGENT'] },
-        created_at: { gte: start, lt: end },
-      },
-      select: { lead_id: true },
-      distinct: ['lead_id'],
-    }),
-    p.auditEvent.findMany({
-      where: { actor_id: employeeId, action: WORK_LOG_ACTION, created_at: { gte: start, lt: end } },
-      select: { id: true, new_value: true, created_at: true },
-    }),
-    splitCalls(employeeId, start, end),
-  ]);
-  const workLog = countByKind(workLogRows.map(parseWorkLog).filter((e): e is WorkLogEntry => !!e));
-  // Calls to associates (Channel Partner Managers) are calls too.
-  const calls = loggedCalls + (workLog.ASSOCIATE_CALL || 0) + (workLog.ASSOCIATE_NEW_CALL || 0);
-  return { calls, ...split, leads_worked: leadsWorked.length, work_log: workLog };
+async function todaysReport(employeeId: number) {
+  const { start, end } = istDayRange();
+  return p.dailyReport.findFirst({
+    where: { employee_id: employeeId, submitted_at: { gte: start, lt: end } },
+  });
 }
 
 // GET /api/v1/reports/today-activity - what the system recorded for me today
@@ -71,106 +47,92 @@ router.get(
   },
 );
 
-// POST /api/v1/reports/daily - Submit Daily Report with Below-Target Validation
+// GET /api/v1/reports/today?role= - the end-of-day report form for today:
+// the fields with what the CRM recorded, the live target check, and the
+// report already sent (editable until the QR checkout).
+router.get('/today', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { employeeId, companyId, roles } = req.user!;
+    const role = reportRole(roles, typeof req.query.role === 'string' ? req.query.role : null);
+    const [fields, judged, report, checkedOut, me] = await Promise.all([
+      buildSheet(employeeId, companyId, role),
+      judgeToday(employeeId, companyId, role),
+      todaysReport(employeeId),
+      checkedOutToday(employeeId),
+      p.employee.findUnique({ where: { id: employeeId }, select: { report_required: true } }),
+    ]);
+    return res.status(200).json({
+      role,
+      required: !!me?.report_required && !isExempt(roles),
+      fields,
+      checks: judged.checks,
+      below_target: judged.below,
+      report: report
+        ? {
+            id: report.id,
+            submitted_at: report.submitted_at,
+            summary: report.summary,
+            below_target_reason: report.below_target_reason,
+            target_met: report.target_met,
+            typed: ((report.metrics_json as any)?.typed as Record<string, unknown>) || {},
+          }
+        : null,
+      checked_out: checkedOut,
+      can_edit: !!report && !checkedOut,
+    });
+  } catch (error) {
+    logger.error('Today report form error:', error);
+    return res.status(500).json({ error: "Could not load today's report" });
+  }
+});
+
+// POST /api/v1/reports/daily - Submit the end-of-day report (one per IST day)
 router.post(
   '/daily',
   authenticateToken,
   validateRequestBody(DailyReportSchema),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const employeeId = req.user!.employeeId;
+      const { employeeId, companyId, roles } = req.user!;
       const { role_name, metrics, summary_notes, below_target_reason } = req.body;
       const now = new Date();
 
       // One report per IST day. Several submissions on the same day each
       // earned the "target exceeded" bonus again.
-      const { start: dayStart, end: dayEnd } = istTodayRange(now);
-      const existing = await p.dailyReport.findFirst({
-        where: { employee_id: employeeId, submitted_at: { gte: dayStart, lt: dayEnd } },
-        select: { id: true },
-      });
-      if (existing) {
+      if (await todaysReport(employeeId)) {
         return res.status(409).json({ error: "You have already submitted today's report." });
       }
 
-      // Calls are judged on what the system recorded (logged call attempts),
-      // not the number typed into the form. Points/penalties used to follow
-      // the typed number, which rewarded typing the target (production
-      // reports said "100 calls" on days with zero recorded activity). The
-      // typed figure is still stored, so the two can be compared.
-      const reportedCalls = parseInt(metrics?.callsMade || metrics?.call_count || '0', 10);
-      const verified = await verifiedActivityToday(employeeId);
-      const calls = verified.calls;
-      // Visits and deals are judged on what the system recorded today, like calls
-      // (they used to follow the typed number). What was typed is still stored.
-      const reportedVisits = parseInt(metrics?.siteVisits || metrics?.site_visit_count || '0', 10);
-      const reportedDeals = parseInt(
-        metrics?.leadsQualified || metrics?.closed_deal_count || '0',
-        10,
-      );
-      const { start: todayStart, end: todayEnd } = periodRange('DAY', now);
-      const [visitsBooked, visitsRun, dealsConfirmed] = await Promise.all([
-        measureMetric(employeeId, 'VISITS_BOOKED', todayStart, todayEnd),
-        measureMetric(employeeId, 'VISITS_COMPLETED', todayStart, todayEnd),
-        measureMetric(employeeId, 'BOOKINGS_CONFIRMED', todayStart, todayEnd),
+      const role = reportRole(roles, role_name);
+      const typedValues: Record<string, unknown> = { ...(metrics || {}) };
+      const [fields, judged] = await Promise.all([
+        buildSheet(employeeId, companyId, role),
+        judgeToday(employeeId, companyId, role),
       ]);
-      const visits = visitsBooked + visitsRun;
-      const deals = dealsConfirmed;
+      const typedError = checkTyped(fields, typedValues);
+      if (typedError) return res.status(400).json({ error: typedError });
 
-      // Resolve Active Target for employee/role safely
-      let activeTarget: any = null;
-      if (p.dailyTarget) {
-        activeTarget = await p.dailyTarget.findFirst({
-          where: {
-            company_id: req.user!.companyId,
-            OR: [
-              { employee_id: employeeId },
-              { role_name: role_name || 'Telecaller', employee_id: null },
-            ],
-          },
-          orderBy: [{ employee_id: 'desc' }, { created_at: 'desc' }],
-        });
-      }
-
-      let isBelowTarget = false;
-      let isTargetExceeded = false;
-      const missedMetrics: string[] = [];
-
-      if (activeTarget) {
-        // A target of 0 means "no target for this": never judged.
-        if (activeTarget.calls_target > 0 && calls < activeTarget.calls_target) {
-          isBelowTarget = true;
-          missedMetrics.push(`Calls logged in CRM: ${calls}/${activeTarget.calls_target}`);
-        }
-        if (activeTarget.site_visits_target > 0 && visits < activeTarget.site_visits_target) {
-          isBelowTarget = true;
-          missedMetrics.push(`Site Visits: ${visits}/${activeTarget.site_visits_target}`);
-        }
-        if (activeTarget.closed_deals_target > 0 && deals < activeTarget.closed_deals_target) {
-          isBelowTarget = true;
-          missedMetrics.push(`Deals: ${deals}/${activeTarget.closed_deals_target}`);
-        }
-
-        if (
-          !isBelowTarget &&
-          (calls > activeTarget.calls_target ||
-            visits > activeTarget.site_visits_target ||
-            deals > activeTarget.closed_deals_target)
-        ) {
-          isTargetExceeded = true;
-        }
-      }
-
-      // Require min 15-char reason if below target
+      // Judged on what the CRM recorded, never on the typed numbers: reports
+      // used to say "100 calls" on days with nothing logged. The typed figures
+      // are kept beside the recorded ones so the two can be compared.
+      const { calls, visits, deals, below: isBelowTarget, exceeded: isTargetExceeded } = judged;
+      const missedMetrics = judged.missedMetrics;
       if (isBelowTarget && (!below_target_reason || below_target_reason.trim().length < 15)) {
         return res.status(400).json({
-          error: `Your submitted metrics are below target (${missedMetrics.join(', ')}). A valid explanation (minimum 15 characters) is required.`,
+          error: `Below target (${missedMetrics.join(', ')}). Explain why in at least 15 characters.`,
           isBelowTarget: true,
           missedMetrics,
         });
       }
 
-      // Save Daily Report
+      const num = (v: unknown) => {
+        const n = parseInt(String(v ?? ''), 10);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const reportedCalls = num(
+        typedValues.calls ?? typedValues.callsMade ?? typedValues.totalCalls,
+      );
+
       const report = await p.dailyReport.create({
         data: {
           employee_id: employeeId,
@@ -182,18 +144,17 @@ router.post(
           target_met: !isBelowTarget,
           below_target_reason: isBelowTarget ? below_target_reason : null,
           metrics_json: {
-            ...(metrics || {}),
-            verified_calls: verified.calls,
-            verified_leads_worked: verified.leads_worked,
+            role,
+            typed: typedValues as any,
+            recorded: recordedSnapshot(fields),
+            verified_calls: calls,
+            verified_leads_worked: judged.verified.leads_worked,
             verified_visits: visits,
             verified_deals: deals,
-            reported_visits: reportedVisits,
-            reported_deals: reportedDeals,
           },
         },
       });
 
-      // Write Audit Event safely supporting schema variations
       await p.auditEvent.create({
         data: {
           actor_id: employeeId,
@@ -210,7 +171,7 @@ router.post(
         },
       });
 
-      // Stamp penalty audit event if submitted below target with reason
+      // Penalty / bonus are decided once, at the first submission.
       if (isBelowTarget) {
         await p.auditEvent.create({
           data: {
@@ -233,17 +194,10 @@ router.post(
         });
       }
 
-      // Submitting a report never performs the checkout itself — it only
-      // satisfies routes/attendance/qr.ts's report_required prerequisite,
-      // which still gates the actual checkout on scanning the kiosk QR.
-      // Previously this route also force-closed the attendance log
-      // (check_out_at = submission time) with no time-of-day gate at all, so
-      // submitting a report at any hour immediately logged the employee out
-      // — bypassing the 18:00 / approved-EARLY_CHECKOUT-proposal rule kiosk
-      // checkout enforces. Logout/checkout now happens only via QR kiosk scan.
-
+      // Submitting never checks the person out: that happens only by
+      // scanning the QR (routes/attendance/qr.ts), which needs this report.
       return res.status(201).json({
-        message: 'Daily report submitted successfully. Logout gate unlocked.',
+        message: 'Report sent. You can check out by scanning the QR.',
         reportId: report.id,
         submittedAt: report.submitted_at,
         isBelowTarget,
@@ -255,27 +209,88 @@ router.post(
   },
 );
 
+const DailyReportEditSchema = z.object({
+  metrics: z.record(z.any()).default({}),
+  summary_notes: z.string().trim().min(5, 'Summary must be at least 5 characters'),
+  below_target_reason: z.string().trim().optional().nullable(),
+});
+
+// PUT /api/v1/reports/daily/:id - correct today's report until the QR checkout.
+// The typed parts change; recorded numbers are refreshed; the judgement made at
+// submission (penalty / bonus) stays. Every edit is kept as an audit event.
+router.put(
+  '/daily/:id',
+  authenticateToken,
+  validateRequestBody(DailyReportEditSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { employeeId, companyId, roles } = req.user!;
+      const id = parseInt(req.params.id, 10);
+      const report = await todaysReport(employeeId);
+      if (!report || report.id !== id) {
+        return res.status(404).json({ error: 'Only today’s own report can be changed.' });
+      }
+      if (await checkedOutToday(employeeId)) {
+        return res
+          .status(409)
+          .json({ error: 'You have checked out for today, so the report is final.' });
+      }
+      const { metrics, summary_notes, below_target_reason } = req.body as z.infer<
+        typeof DailyReportEditSchema
+      >;
+      const old = (report.metrics_json as any) || {};
+      const role = reportRole(roles, old.role);
+      const fields = await buildSheet(employeeId, companyId, role);
+      const typedError = checkTyped(fields, metrics);
+      if (typedError) return res.status(400).json({ error: typedError });
+      if (!report.target_met && (!below_target_reason || below_target_reason.length < 15)) {
+        return res
+          .status(400)
+          .json({ error: 'Explain why the target was missed in at least 15 characters.' });
+      }
+
+      const updated = await p.dailyReport.update({
+        where: { id: report.id },
+        data: {
+          summary: summary_notes,
+          below_target_reason: report.target_met ? null : below_target_reason,
+          metrics_json: { ...old, typed: metrics, recorded: recordedSnapshot(fields) },
+        },
+      });
+      await p.auditEvent.create({
+        data: {
+          actor_id: employeeId,
+          action: 'DAILY_REPORT_EDITED',
+          entity_type: 'DAILY_REPORT',
+          entity_id: report.id,
+          old_value: JSON.stringify({
+            summary: report.summary,
+            below_target_reason: report.below_target_reason,
+            typed: old.typed || {},
+          }),
+          new_value: JSON.stringify({
+            summary: summary_notes,
+            below_target_reason,
+            typed: metrics,
+          }),
+        },
+      });
+      return res.status(200).json({ message: 'Report updated.', reportId: updated.id });
+    } catch (error) {
+      logger.error('Edit report error:', error);
+      return res.status(500).json({ error: 'Could not update the report' });
+    }
+  },
+);
+
 // GET /api/v1/reports/today-status - Check report status for Logout Gate
 router.get('/today-status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const employeeId = req.user!.employeeId;
-    const roles = req.user!.roles;
-    const { dateString } = getISTComponents(new Date());
-
-    if (roles.includes(Roles.MD) || roles.includes(Roles.ADMIN)) {
+    if (isExempt(req.user!.roles)) {
       return res.status(200).json({ submitted: true, exempt: true });
     }
-
-    const report = await p.dailyReport.findFirst({
-      where: {
-        employee_id: employeeId,
-        submitted_at: {
-          gte: new Date(`${dateString}T00:00:00.000+05:30`),
-          lte: new Date(`${dateString}T23:59:59.999+05:30`),
-        },
-      },
-    });
-
+    const report = await todaysReport(employeeId);
     return res.status(200).json({
       submitted: !!report,
       exempt: false,
@@ -298,15 +313,8 @@ router.get('/my-history', authenticateToken, async (req: AuthenticatedRequest, r
     pastDate.setDate(pastDate.getDate() - limitDays);
 
     const reports = await p.dailyReport.findMany({
-      where: {
-        employee_id: employeeId,
-        submitted_at: {
-          gte: pastDate,
-        },
-      },
-      orderBy: {
-        submitted_at: 'desc',
-      },
+      where: { employee_id: employeeId, submitted_at: { gte: pastDate } },
+      orderBy: { submitted_at: 'desc' },
     });
 
     return res.status(200).json({ reports });
@@ -316,7 +324,8 @@ router.get('/my-history', authenticateToken, async (req: AuthenticatedRequest, r
   }
 });
 
-// GET /api/v1/reports/all - Fetch all daily reports for HR/MD
+// GET /api/v1/reports/all?date= - the day's reports for HR / MD, plus who has
+// not sent one yet (checked in that day, report required, no report).
 router.get(
   '/all',
   authenticateToken,
@@ -324,47 +333,60 @@ router.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { date } = req.query;
+      const dateString =
+        typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+          ? date
+          : getISTComponents(new Date()).dateString;
+      const start = new Date(`${dateString}T00:00:00+05:30`);
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      const companyId = req.user!.companyId;
 
-      // Determine date range (defaults to today IST)
-      let startDate: Date;
-      let endDate: Date;
-
-      if (date && typeof date === 'string') {
-        startDate = new Date(`${date}T00:00:00.000+05:30`);
-        endDate = new Date(`${date}T23:59:59.999+05:30`);
-      } else {
-        const { dateString } = getISTComponents(new Date());
-        startDate = new Date(`${dateString}T00:00:00.000+05:30`);
-        endDate = new Date(`${dateString}T23:59:59.999+05:30`);
-      }
-
-      const reports = await p.dailyReport.findMany({
-        where: {
-          submitted_at: {
-            gte: startDate,
-            lte: endDate,
+      const [reports, logs] = await Promise.all([
+        p.dailyReport.findMany({
+          where: {
+            submitted_at: { gte: start, lt: end },
+            employee: { company_id: companyId },
           },
-        },
-        include: {
-          employee: {
-            select: {
-              full_name: true,
-              employee_code: true,
-              department: true,
-              roles: {
-                include: {
-                  role: true,
-                },
+          include: {
+            employee: {
+              select: {
+                full_name: true,
+                employee_code: true,
+                department: true,
+                roles: { include: { role: true } },
               },
             },
           },
-        },
-        orderBy: {
-          submitted_at: 'desc',
-        },
-      });
+          orderBy: { submitted_at: 'desc' },
+        }),
+        p.attendanceLog.findMany({
+          where: {
+            check_in_at: { gte: start, lt: end },
+            employee: { company_id: companyId, status: 'ACTIVE', report_required: true },
+          },
+          select: {
+            check_in_at: true,
+            check_out_at: true,
+            employee: { select: { id: true, full_name: true, employee_code: true } },
+          },
+          orderBy: { check_in_at: 'asc' },
+        }),
+      ]);
+      const sent = new Set(reports.map((r) => r.employee_id));
+      const seen = new Set<number>();
+      const missing = logs
+        .filter(
+          (l) => !sent.has(l.employee.id) && !seen.has(l.employee.id) && seen.add(l.employee.id),
+        )
+        .map((l) => ({
+          id: l.employee.id,
+          full_name: l.employee.full_name,
+          employee_code: l.employee.employee_code,
+          checked_in_at: l.check_in_at,
+          checked_out_at: l.check_out_at,
+        }));
 
-      return res.status(200).json({ reports });
+      return res.status(200).json({ date: dateString, reports, missing });
     } catch (error) {
       logger.error('Fetch all reports error:', error);
       return res.status(500).json({ error: 'Failed to fetch reports' });
@@ -372,38 +394,60 @@ router.get(
   },
 );
 
-// GET /api/v1/reports/:id - Fetch single report by ID
+// GET /api/v1/reports/:id - one report, with that day's Work Log and its edits
 router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const reportId = parseInt(req.params.id, 10);
-    const employeeId = req.user!.employeeId;
-    const roles = req.user!.roles;
+    const { employeeId, roles, companyId } = req.user!;
 
     if (isNaN(reportId)) return res.status(400).json({ error: 'Invalid report ID' });
 
     const report = await p.dailyReport.findUnique({
       where: { id: reportId },
       include: {
-        employee: {
-          select: {
-            full_name: true,
-            employee_code: true,
-          },
-        },
+        employee: { select: { full_name: true, employee_code: true, company_id: true } },
       },
     });
 
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
-    // Allow access if it's the user's own report or if they are HR/Admin
+    // Their own report, or HR / MD / Admin of the same company.
     const canAccess =
       report.employee_id === employeeId ||
-      roles.includes(Roles.MD) ||
-      roles.includes(Roles.ADMIN) ||
-      roles.includes(Roles.HR_MANAGER);
+      (report.employee.company_id === companyId &&
+        (roles.includes(Roles.MD) ||
+          roles.includes(Roles.ADMIN) ||
+          roles.includes(Roles.HR_MANAGER)));
     if (!canAccess) return res.status(403).json({ error: 'Unauthorized to view this report' });
 
-    return res.status(200).json({ report });
+    const { start, end } = istDayRange(report.submitted_at);
+    const [workLogRows, edits] = await Promise.all([
+      p.auditEvent.findMany({
+        where: {
+          actor_id: report.employee_id,
+          action: WORK_LOG_ACTION,
+          created_at: { gte: start, lt: end },
+        },
+        select: { id: true, new_value: true, created_at: true },
+        orderBy: { created_at: 'asc' },
+      }),
+      p.auditEvent.findMany({
+        where: { action: 'DAILY_REPORT_EDITED', entity_type: 'DAILY_REPORT', entity_id: report.id },
+        select: { created_at: true, old_value: true, new_value: true },
+        orderBy: { created_at: 'asc' },
+      }),
+    ]);
+
+    return res.status(200).json({
+      report,
+      labels: FIELD_LABELS,
+      work_log: workLogRows.map(parseWorkLog).filter(Boolean),
+      edits: edits.map((e) => ({
+        at: e.created_at,
+        before: JSON.parse(e.old_value || '{}'),
+        after: JSON.parse(e.new_value || '{}'),
+      })),
+    });
   } catch (error) {
     logger.error('Fetch single report error:', error);
     return res.status(500).json({ error: 'Failed to fetch report' });

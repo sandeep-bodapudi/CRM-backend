@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
-import { Permissions } from '../../shared';
+import { Permissions, Roles } from '../../shared';
 import {
   ArrowLeft,
   CheckCircle,
@@ -82,14 +82,81 @@ export const BookingDossier: React.FC = () => {
     }
   };
 
+  // Who may cancel (same rule as the API): a confirmed booking only the MD;
+  // otherwise the MD or the person who made the booking. A reason is required.
+  const cancelBooking = async () => {
+    const reason = window.prompt('Why is this booking being cancelled?')?.trim();
+    if (reason === undefined) return;
+    if (!reason || reason.length < 3) {
+      showError('Write why the booking is being cancelled.');
+      return;
+    }
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/bookings/${id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return handleApiError(res, showError, data);
+      showToast(
+        data.refund_due_count
+          ? `Booking cancelled. ${data.refund_due_count} payment(s) marked "refund due" for Finance.`
+          : 'Booking cancelled.',
+        'success',
+      );
+      fetchBooking();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Finance closes a refund: the money went back, or it never actually arrived.
+  const settleRefund = async (
+    paymentId: number,
+    status: 'REFUNDED' | 'FAILED' | 'SUCCESS',
+    ask = status === 'REFUNDED'
+      ? 'Mark this payment as refunded to the customer?'
+      : 'Mark this payment as never received (nothing to refund)?',
+  ) => {
+    if (!window.confirm(ask)) return;
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/payments/${paymentId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return handleApiError(res, showError, data);
+      showToast(
+        status === 'REFUNDED'
+          ? 'Marked refunded'
+          : status === 'SUCCESS'
+            ? 'Marked received'
+            : 'Marked not received',
+        'success',
+      );
+      fetchBooking();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center text-sm">Loading booking details...</div>;
   if (!booking) return null;
+
+  const isMD = !!user?.roles?.includes(Roles.MD);
+  const isConfirmed = ['CONFIRMED', 'COMPLETED'].includes(booking.status);
+  const madeIt =
+    booking.assigned_employee_id === user?.id || booking.form_submitted_by_id === user?.id;
+  const canCancel = booking.status !== 'CANCELLED' && (isConfirmed ? isMD : isMD || madeIt);
+  const canSettle = !!user?.permissions?.includes(Permissions.PAYMENTS_UPDATE);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <button
         onClick={() => navigate('/bookings')}
-        className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
+        className="tap-inline text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
       >
         <ArrowLeft className="w-4 h-4" /> Back to Bookings
       </button>
@@ -133,15 +200,14 @@ export const BookingDossier: React.FC = () => {
                   </button>
                 </>
               )}
-            {booking.status !== 'CANCELLED' &&
-              user?.permissions?.includes(Permissions.BOOKINGS_CANCEL) && (
-                <button
-                  onClick={() => handleUpdateStatus('CANCELLED')}
-                  className="bg-white border border-rose-200 text-rose-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-rose-50"
-                >
-                  Cancel
-                </button>
-              )}
+            {canCancel && (
+              <button
+                onClick={cancelBooking}
+                className="bg-white border border-rose-200 text-rose-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-rose-50"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
 
@@ -256,10 +322,46 @@ export const BookingDossier: React.FC = () => {
                   </div>
                   <div className="text-right">
                     <span
-                      className={`px-2 py-1 rounded text-[10px] font-bold ${p.status === 'SUCCESS' ? 'bg-navy-100 text-navy-800' : p.status === 'PENDING' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'}`}
+                      className={`px-2 py-1 rounded text-[10px] font-bold ${p.status === 'SUCCESS' ? 'bg-navy-100 text-navy-800' : p.status === 'PENDING' || p.status === 'REFUND_DUE' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'}`}
                     >
-                      {p.status}
+                      {p.status === 'REFUND_DUE' ? 'REFUND DUE' : p.status}
                     </span>
+                    {p.status === 'PENDING' && canSettle && (
+                      <div className="flex gap-1 mt-1.5 justify-end">
+                        <button
+                          onClick={() =>
+                            settleRefund(p.id, 'SUCCESS', 'Mark this payment as received?')
+                          }
+                          className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-bold"
+                        >
+                          Received
+                        </button>
+                        <button
+                          onClick={() =>
+                            settleRefund(p.id, 'FAILED', 'Mark this payment as bounced / failed?')
+                          }
+                          className="px-2 py-1 rounded border border-rose-300 text-rose-700 text-[10px] font-bold"
+                        >
+                          Bounced
+                        </button>
+                      </div>
+                    )}
+                    {p.status === 'REFUND_DUE' && canSettle && (
+                      <div className="flex gap-1 mt-1.5 justify-end">
+                        <button
+                          onClick={() => settleRefund(p.id, 'REFUNDED')}
+                          className="px-2 py-1 rounded bg-navy-600 text-white text-[10px] font-bold"
+                        >
+                          Mark refunded
+                        </button>
+                        <button
+                          onClick={() => settleRefund(p.id, 'FAILED')}
+                          className="px-2 py-1 rounded border border-slate-300 text-slate-600 text-[10px] font-bold"
+                        >
+                          Never received
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

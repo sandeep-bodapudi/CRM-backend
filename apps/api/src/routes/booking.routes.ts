@@ -28,6 +28,8 @@ const CreateBookingSchema = z
 
 const UpdateBookingStatusSchema = z.object({
   status: z.enum(['TOKEN_RECEIVED', 'CONFIRMED', 'CANCELLED', 'COMPLETED']),
+  // Required (checked in the service) when status is CANCELLED.
+  reason: z.string().trim().max(500).optional(),
 });
 
 // ─── Booking Form Wizard Schema ────────────────────────────────────────────────
@@ -186,11 +188,9 @@ router.post(
         dto.is_legacy &&
         !(req.user.permissions || []).includes(Permissions.BOOKINGS_LEGACY_CREATE)
       ) {
-        return res
-          .status(403)
-          .json({
-            error: 'Entering an old (backdated) booking needs the legacy-booking permission.',
-          });
+        return res.status(403).json({
+          error: 'Entering an old (backdated) booking needs the legacy-booking permission.',
+        });
       }
       const booking = await BookingService.initiateBooking(req.user, dto as any);
       res.status(201).json(booking);
@@ -214,11 +214,9 @@ router.post(
         (formData as any).is_legacy &&
         !(req.user.permissions || []).includes(Permissions.BOOKINGS_LEGACY_CREATE)
       ) {
-        return res
-          .status(403)
-          .json({
-            error: 'Entering an old (backdated) booking needs the legacy-booking permission.',
-          });
+        return res.status(403).json({
+          error: 'Entering an old (backdated) booking needs the legacy-booking permission.',
+        });
       }
       const booking = await BookingService.submitBookingForm(
         req.user,
@@ -288,10 +286,12 @@ router.post(
 
 router.post(
   '/:id/cancel',
-  requireAuthz(Permissions.BOOKINGS_CANCEL as any),
+  // Who may cancel depends on the booking (MD for a confirmed one; the MD or
+  // the person who made it otherwise) -- checked in BookingService.assertCanCancel.
+  requireAuthz(Permissions.BOOKINGS_READ as any),
   async (req: any, res, next) => {
     try {
-      const reason = req.body.reason || 'Booking cancelled';
+      const reason = typeof req.body?.reason === 'string' ? req.body.reason : '';
       const booking = await BookingService.cancelBooking(
         req.user,
         parseInt(req.params.id, 10),
@@ -309,11 +309,12 @@ router.put(
   requireAuthz(Permissions.BOOKINGS_UPDATE as any),
   async (req: any, res, next) => {
     try {
-      const { status } = UpdateBookingStatusSchema.parse(req.body);
+      const { status, reason } = UpdateBookingStatusSchema.parse(req.body);
       const booking = await BookingService.updateBookingStatus(
         req.user,
         parseInt(req.params.id, 10),
         status,
+        reason,
       );
       res.json(booking);
     } catch (error) {

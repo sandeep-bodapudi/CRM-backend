@@ -340,7 +340,7 @@ export const UserProfile: React.FC = () => {
           {qrToken && (
             <button
               onClick={() => setIsQRFullscreen(true)}
-              className="flex items-center gap-1.5 text-xs font-bold text-navy-600 hover:text-navy-800 transition-colors"
+              className="tap-inline flex items-center gap-1.5 text-xs font-bold text-navy-600 hover:text-navy-800 transition-colors"
             >
               <Maximize2 className="w-3.5 h-3.5" />
               <span>Full screen</span>
@@ -364,7 +364,7 @@ export const UserProfile: React.FC = () => {
               <div className="mt-4 pt-4 border-t border-slate-100 w-full text-center">
                 <button
                   onClick={() => setIsEmergencyModalOpen(true)}
-                  className="text-xs font-bold text-rose-500 hover:text-rose-600 flex items-center justify-center gap-1.5 mx-auto transition-colors px-3 py-2 rounded-lg hover:bg-rose-50"
+                  className="tap-inline text-xs font-bold text-rose-500 hover:text-rose-600 flex items-center justify-center gap-1.5 mx-auto transition-colors px-3 py-2 rounded-lg hover:bg-rose-50"
                 >
                   <AlertTriangle className="w-4 h-4" />
                   Emergency Early Logout

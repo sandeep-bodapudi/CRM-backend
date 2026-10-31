@@ -467,7 +467,7 @@ export const ProjectDashboard: React.FC = () => {
       >
         <button
           onClick={() => navigate('/projects')}
-          className="flex items-center gap-1.5 text-navy-300 hover:text-white text-xs font-bold mb-4"
+          className="tap-inline flex items-center gap-1.5 text-navy-300 hover:text-white text-xs font-bold mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> All Projects
         </button>

@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger';
 import { Router, Response } from 'express';
+import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { authenticateToken, AuthenticatedRequest, requireRole } from '../../middleware/auth';
 import { validateRequestBody } from '../../middleware/validate';
@@ -34,6 +35,91 @@ router.get(
     } catch (error) {
       logger.error('[Admin] List companies failed:', error);
       return res.status(500).json({ error: 'Failed to list companies' });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Legal & compliance details per company, shown on the brand's website.
+// Entered by the technical admin once the MD has confirmed them.
+// ---------------------------------------------------------------------------
+const opt = (max: number) => z.string().trim().max(max).optional().or(z.literal(''));
+export const LegalInfoSchema = z.object({
+  legal_name: opt(200),
+  registered_address: opt(500),
+  rera_number: opt(100),
+  rera_authority: opt(100),
+  gstin: opt(20),
+  cin: opt(30),
+  grievance_officer_name: opt(120),
+  grievance_officer_email: z.string().trim().email().max(200).optional().or(z.literal('')),
+  grievance_officer_phone: opt(20),
+  support_email: z.string().trim().email().max(200).optional().or(z.literal('')),
+  support_phone: opt(20),
+  website_disclaimer: opt(2000),
+  confirmed_by_md: z.boolean().optional(),
+});
+
+// GET /api/v1/admin/companies/legal - each company's legal details
+router.get(
+  '/companies/legal',
+  authenticateToken,
+  requireAdminOnly,
+  async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+      const companies = await p.company.findMany({
+        where: { deleted_at: null },
+        select: { id: true, name: true, code: true, legal_info: true, updated_at: true },
+        orderBy: { name: 'asc' },
+      });
+      return res.status(200).json({ companies });
+    } catch (error) {
+      logger.error('[Admin] List legal info failed:', error);
+      return res.status(500).json({ error: 'Failed to load legal details' });
+    }
+  },
+);
+
+// PUT /api/v1/admin/companies/:id/legal - save one company's legal details
+router.put(
+  '/companies/:id/legal',
+  authenticateToken,
+  requireAdminOnly,
+  validateRequestBody(LegalInfoSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: 'Invalid company' });
+      const before = await p.company.findUnique({ where: { id }, select: { legal_info: true } });
+      if (!before) return res.status(404).json({ error: 'Company not found' });
+      // Empty strings are stored as absent, so the website hides that line.
+      const clean: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(req.body)) {
+        if (typeof v === 'string' ? v.trim() !== '' : v !== undefined) {
+          clean[k] = typeof v === 'string' ? v.trim() : v;
+        }
+      }
+      clean.updated_at = new Date().toISOString();
+      clean.updated_by = req.user!.employeeId;
+      const company = await p.company.update({
+        where: { id },
+        data: { legal_info: clean as any },
+        select: { id: true, name: true, code: true, legal_info: true },
+      });
+      await p.auditEvent.create({
+        data: {
+          actor_id: req.user!.employeeId,
+          action: 'COMPANY_LEGAL_INFO_UPDATED',
+          entity_type: 'Company',
+          entity_id: id,
+          old_value: JSON.stringify(before.legal_info ?? null).slice(0, 4000),
+          new_value: JSON.stringify(clean).slice(0, 4000),
+        },
+      });
+      return res.status(200).json({ company });
+    } catch (error) {
+      logger.error('[Admin] Save legal info failed:', error);
+      return res.status(500).json({ error: 'Failed to save legal details' });
     }
   },
 );

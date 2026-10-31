@@ -14,7 +14,8 @@ import { API_BASE_URL } from '../../config';
 import { ProposalItem } from '../../types';
 import { Roles } from '../../shared';
 
-export const ApprovalsDashboard: React.FC = () => {
+/** `embedded`: shown inside the Approvals page (compact header). */
+export const ApprovalsDashboard: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { fetchWithAuth, activeRole } = useAuth();
   // Approve/reject is MD/Admin-only on the server (routes/attendance/
   // proposals.ts); HR Managers see the queue read-only instead of buttons
@@ -111,88 +112,92 @@ export const ApprovalsDashboard: React.FC = () => {
     items: ProposalItem[],
     icon: React.ReactNode,
     emptyMsg: string,
-  ) => (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          {icon}
-          {title} ({items.length})
-        </h3>
-      </div>
-      <div className="space-y-3">
-        {items.length === 0 ? (
-          <p className="text-sm text-slate-400 py-6 text-center">{emptyMsg}</p>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {items.map((item) => (
-              <div key={item.id} className="py-4 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-800 text-sm">
-                      {item.employee?.full_name || 'Unknown Employee'} (
-                      {item.employee?.employee_code || '---'})
-                    </span>
-                    <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-mono">
-                      Target: {targetLabel(item)}
-                    </span>
-                    {item.type === 'LEAVE' && (
-                      <span className="text-xs bg-navy-50 text-navy-700 border border-navy-200 px-2 py-0.5 rounded-md font-semibold">
-                        {leaveTypeLabel(item.leave_type)}
+  ) =>
+    // Inside the Approvals page only the queues with something waiting show.
+    embedded && items.length === 0 ? null : (
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            {icon}
+            {title} ({items.length})
+          </h3>
+        </div>
+        <div className="space-y-3">
+          {items.length === 0 ? (
+            <p className="text-sm text-slate-400 py-6 text-center">{emptyMsg}</p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {items.map((item) => (
+                <div key={item.id} className="py-4 flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-800 text-sm">
+                        {item.employee?.full_name || 'Unknown Employee'} (
+                        {item.employee?.employee_code || '---'})
                       </span>
+                      <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-mono">
+                        Target: {targetLabel(item)}
+                      </span>
+                      {item.type === 'LEAVE' && (
+                        <span className="text-xs bg-navy-50 text-navy-700 border border-navy-200 px-2 py-0.5 rounded-md font-semibold">
+                          {leaveTypeLabel(item.leave_type)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-slate-600 mt-2 text-sm font-medium">"{item.reason}"</p>
+                    {item.monthlyStats && (
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                        <span>
+                          This month — Lates:{' '}
+                          <strong className="text-slate-700">{item.monthlyStats.lates}</strong> (
+                          {item.monthlyStats.approvedLates} approved)
+                        </span>
+                        <span>
+                          Half Days Taken:{' '}
+                          <strong className="text-slate-700">
+                            {item.monthlyStats.halfDaysTaken}
+                          </strong>{' '}
+                          ({item.monthlyStats.halfDaysRejected} rejected)
+                        </span>
+                        <span>
+                          Leaves Taken:{' '}
+                          <strong className="text-slate-700">
+                            {item.monthlyStats.leavesTaken}
+                          </strong>{' '}
+                          ({item.monthlyStats.leavesRejected} rejected)
+                        </span>
+                      </div>
                     )}
                   </div>
-                  <p className="text-slate-600 mt-2 text-sm font-medium">"{item.reason}"</p>
-                  {item.monthlyStats && (
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
-                      <span>
-                        This month — Lates:{' '}
-                        <strong className="text-slate-700">{item.monthlyStats.lates}</strong> (
-                        {item.monthlyStats.approvedLates} approved)
-                      </span>
-                      <span>
-                        Half Days Taken:{' '}
-                        <strong className="text-slate-700">
-                          {item.monthlyStats.halfDaysTaken}
-                        </strong>{' '}
-                        ({item.monthlyStats.halfDaysRejected} rejected)
-                      </span>
-                      <span>
-                        Leaves Taken:{' '}
-                        <strong className="text-slate-700">{item.monthlyStats.leavesTaken}</strong>{' '}
-                        ({item.monthlyStats.leavesRejected} rejected)
-                      </span>
+                  {canDecide ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleAction(item.id, 'approve')}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleAction(item.id, 'reject')}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Reject
+                      </button>
                     </div>
+                  ) : (
+                    <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1">
+                      Waiting for MD approval
+                    </span>
                   )}
                 </div>
-                {canDecide ? (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleAction(item.id, 'approve')}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleAction(item.id, 'reject')}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      Reject
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1">
-                    Waiting for MD approval
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
 
   const historyLeaves = history.filter((q) => q.type === 'LEAVE');
   const historyLates = history.filter((q) => q.type === 'LATE_CHECKIN');
@@ -269,12 +274,20 @@ export const ApprovalsDashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto p-4 md:p-6">
-      <div className="bg-gradient-to-r from-navy-900 via-navy-800 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-navy-700/30">
+    <div className={`space-y-6 max-w-5xl mx-auto ${embedded ? '' : 'p-4 md:p-6'}`}>
+      <div
+        className={
+          embedded
+            ? 'bg-navy-900 rounded-2xl p-3 text-white'
+            : 'bg-gradient-to-r from-navy-900 via-navy-800 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-navy-700/30'
+        }
+      >
         <div className="flex items-center justify-between gap-3 mb-2">
           <div className="flex items-center gap-3">
             <ShieldAlert className="w-6 h-6 text-gold-500" />
-            <h1 className="text-2xl font-extrabold tracking-tight">HR Approvals</h1>
+            <h1 className={`${embedded ? 'text-base' : 'text-2xl'} font-extrabold tracking-tight`}>
+              {embedded ? 'Leave, late & work from home' : 'HR Approvals'}
+            </h1>
           </div>
           <div className="flex gap-1 bg-white/10 p-1 rounded-xl text-xs font-semibold shrink-0">
             <button
@@ -297,7 +310,7 @@ export const ApprovalsDashboard: React.FC = () => {
             </button>
           </div>
         </div>
-        <p className="text-sm text-navy-200/80 max-w-2xl">
+        <p className={`text-sm text-navy-200/80 max-w-2xl ${embedded ? 'hidden' : ''}`}>
           {activeTab === 'pending'
             ? 'Review and process pending employee requests: work from home, field work, leave, late arrivals and early checkouts.'
             : 'Recently approved and rejected requests (most recent 100).'}
@@ -306,6 +319,9 @@ export const ApprovalsDashboard: React.FC = () => {
 
       {activeTab === 'pending' ? (
         <div className="grid grid-cols-1 gap-6">
+          {embedded &&
+            wfhs.length + fieldWorks.length + leaves.length + lates.length + earlys.length ===
+              0 && <p className="text-sm text-slate-400 text-center py-8">Nothing waiting.</p>}
           {renderQueueSection(
             'Work from Home',
             wfhs,

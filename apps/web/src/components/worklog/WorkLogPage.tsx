@@ -36,7 +36,7 @@ const t = (iso: string) =>
  * Work Log -- record work done outside the CRM (posts, reels, campaigns,
  * meetings, site trips) so it shows on Team Today next to CRM activity.
  */
-export const WorkLogPage: React.FC = () => {
+export const WorkLogPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { fetchWithAuth, activeRole } = useAuth();
   const queryClient = useQueryClient();
   const isCpm = activeRole === Roles.CHANNEL_PARTNER_MANAGER;
@@ -110,6 +110,8 @@ export const WorkLogPage: React.FC = () => {
         setLink('');
         setCountText('1');
         queryClient.invalidateQueries({ queryKey: ['myWorkLog'] });
+        // The end-of-day report counts these.
+        queryClient.invalidateQueries({ queryKey: ['reportToday'] });
       } else {
         const detail = body.details?.[0]?.message || body.error;
         setMessage({ ok: false, text: detail || 'Could not save.' });
@@ -127,23 +129,28 @@ export const WorkLogPage: React.FC = () => {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) setMessage({ ok: false, text: body.error || 'Could not remove.' });
     queryClient.invalidateQueries({ queryKey: ['myWorkLog'] });
+    queryClient.invalidateQueries({ queryKey: ['reportToday'] });
   };
 
   const entries = data?.entries || [];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-navy-100 text-navy-700 flex items-center justify-center">
-          <NotebookPen className="w-5 h-5" />
+    <div className={embedded ? 'space-y-4' : 'max-w-3xl mx-auto space-y-6'}>
+      {embedded ? (
+        <p className="text-sm text-slate-500">{roleLog.intro}</p>
+      ) : (
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-navy-100 text-navy-700 flex items-center justify-center">
+            <NotebookPen className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Work Log</h1>
+            <p className="text-sm text-slate-500">
+              {roleLog.intro} Your manager sees it on Team Today.
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Work Log</h1>
-          <p className="text-sm text-slate-500">
-            {roleLog.intro} Your manager sees it on Team Today.
-          </p>
-        </div>
-      </div>
+      )}
 
       <form
         onSubmit={submit}
@@ -173,7 +180,7 @@ export const WorkLogPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="mt-1 text-[11px] font-bold text-navy-600 hover:text-navy-800"
+              className="tap-inline mt-1 text-[11px] font-bold text-navy-600 hover:text-navy-800"
             >
               {showAll ? 'Show only my role’s work types' : 'Show all work types'}
             </button>

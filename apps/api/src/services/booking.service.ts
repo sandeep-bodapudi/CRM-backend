@@ -26,6 +26,13 @@ const p = prisma;
 
 // Property reservation lock duration (24h), consistent with Phase 9 inventory locking.
 const LOCK_DURATION_MS = 24 * 60 * 60 * 1000;
+// A booking form waiting for the MD holds its unit until the MD decides
+// (decision 2026-10-17): the lock is simply set far ahead, and the MD's
+// approve / reject (or a cancellation) ends it.
+export const HOLD_UNTIL_DECIDED_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+
+/** Collected or recorded money on a cancelled booking is flagged for Finance to refund. */
+const REFUNDABLE_PAYMENT_STATES = ['PENDING', 'SUCCESS'];
 
 /**
  * Phase 2.8 (2026-09-06): the commercial Property lifecycle — LIVE → LOCKED
@@ -283,7 +290,12 @@ export class BookingService {
     return booking;
   }
 
-  static async updateBookingStatus(user: TokenPayload, id: number, status: string) {
+  static async updateBookingStatus(
+    user: TokenPayload,
+    id: number,
+    status: string,
+    reason?: string,
+  ) {
     // Route CONFIRMED transitions through the MD-authority/KYC/opportunity path.
     if (status === 'CONFIRMED') {
       return BookingService.confirmBooking(user, id);
@@ -292,7 +304,7 @@ export class BookingService {
     // the inventory it holds -- a plain status write here left the unit
     // locked/BOOKED against a cancelled booking.
     if (status === 'CANCELLED') {
-      return BookingService.cancelBooking(user, id);
+      return BookingService.cancelBooking(user, id, reason);
     }
 
     const booking = await BookingService.getBookingById(user, id);
@@ -504,10 +516,73 @@ export class BookingService {
     return result.updated;
   }
 
-  static async cancelBooking(user: TokenPayload, id: number, reason: string = 'Booking cancelled') {
+  /**
+   * Who may cancel (decisions 2026-10-17): a CONFIRMED (or completed) booking
+   * only the MD; one not yet confirmed the MD or the person who made it
+   * (submitted the form / is assigned to it). A reason is always required.
+   */
+  static assertCanCancel(
+    user: TokenPayload,
+    booking: {
+      status: string;
+      assigned_employee_id: number | null;
+      form_submitted_by_id?: number | null;
+    },
+  ) {
+    const isMD = user.roles.includes(Roles.MD);
+    if (['CONFIRMED', 'COMPLETED'].includes(booking.status)) {
+      if (!isMD) {
+        throw new AppError(403, 'Only the Managing Director can cancel a confirmed booking.');
+      }
+      return;
+    }
+    const madeIt =
+      booking.assigned_employee_id === user.employeeId ||
+      booking.form_submitted_by_id === user.employeeId;
+    if (!isMD && !madeIt) {
+      throw new AppError(
+        403,
+        'Only the Managing Director or the person who made this booking can cancel it.',
+      );
+    }
+  }
+
+  /** Tell Finance which payments of a cancelled booking must be refunded. */
+  static async notifyRefundDue(
+    booking: { id: number; company_id: number; booking_code: string },
+    refundDue: { amount: number }[],
+  ) {
+    if (refundDue.length === 0) return;
+    const total = refundDue.reduce((sum, r) => sum + Number(r.amount), 0);
+    const finance = await p.employee.findMany({
+      where: {
+        company_id: booking.company_id,
+        status: 'ACTIVE',
+        roles: { some: { role: { name: Roles.FINANCE } } },
+      },
+      select: { id: true },
+    });
+    if (finance.length === 0) return;
+    await notifyEmployee(
+      finance.map((f) => f.id),
+      {
+        type: 'BOOKING_REFUND_DUE',
+        title: 'Refund due on a cancelled booking',
+        message: `Booking ${booking.booking_code} was cancelled. ${refundDue.length} payment(s), ₹${total.toLocaleString('en-IN')} in all, to refund. Open the booking and mark each one refunded.`,
+        link: `/bookings/${booking.id}`,
+      },
+    );
+  }
+
+  static async cancelBooking(user: TokenPayload, id: number, reason?: string) {
     const booking = await BookingService.getBookingById(user, id);
     if (booking.status === 'CANCELLED') {
       return booking; // already cancelled -- nothing to release or notify
+    }
+    BookingService.assertCanCancel(user, booking as any);
+    reason = (reason || '').trim();
+    if (reason.length < 3) {
+      throw new AppError(400, 'Write why the booking is being cancelled.');
     }
 
     // Cancelling the booking and releasing the inventory it holds must succeed or
@@ -544,7 +619,40 @@ export class BookingService {
 
     const updated = await prisma.$transaction(
       async (tx) => {
-        const cancelled = await tx.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
+        const cancelled = await tx.booking.update({
+          where: { id },
+          data: {
+            status: 'CANCELLED',
+            notes: `${booking.notes ? booking.notes + ' | ' : ''}Cancelled: ${reason}`.slice(
+              0,
+              5000,
+            ),
+          },
+        });
+        // Money recorded on the booking is now owed back: flag it for Finance.
+        const refundDue = await tx.payment.findMany({
+          where: { booking_id: id, status: { in: REFUNDABLE_PAYMENT_STATES } },
+          select: { id: true, amount: true },
+        });
+        if (refundDue.length > 0) {
+          await tx.payment.updateMany({
+            where: { id: { in: refundDue.map((r) => r.id) } },
+            data: { status: 'REFUND_DUE' },
+          });
+        }
+        (cancelled as any)._refundDue = refundDue;
+        await tx.auditEvent.create({
+          data: {
+            actor_id: user.employeeId,
+            action: 'BOOKING_CANCELLED',
+            entity_type: 'Booking',
+            entity_id: id,
+            old_value: booking.status,
+            new_value: 'CANCELLED',
+            reason: reason.slice(0, 500),
+            created_at: new Date(),
+          },
+        });
         const cancelRef = refFromRecord(booking);
         if (cancelRef) {
           await releaseInventoryLock(tx, cancelRef, id);
@@ -581,16 +689,20 @@ export class BookingService {
       { maxWait: 10000, timeout: 30000 },
     );
 
-    if (booking.assigned_employee_id) {
+    if (booking.assigned_employee_id && booking.assigned_employee_id !== user.employeeId) {
       await notifyEmployee(booking.assigned_employee_id, {
         type: 'BOOKING_CANCELLED',
         title: '🚫 Booking Cancelled',
         message: `Booking ${booking.booking_code} was cancelled: ${reason}`,
-        link: '/bookings',
+        link: `/bookings/${id}`,
       });
     }
 
-    return updated;
+    const refundDue: { id: number; amount: number }[] = (updated as any)._refundDue || [];
+    delete (updated as any)._refundDue;
+    await BookingService.notifyRefundDue(booking, refundDue);
+
+    return { ...updated, refund_due_count: refundDue.length };
   }
 
   // ===========================================================================
@@ -697,8 +809,13 @@ export class BookingService {
         } as any,
       });
 
-      // 5. Claim inventory lock
-      await claimInventoryLock(tx, ref, booking.id, new Date(now.getTime() + LOCK_DURATION_MS));
+      // 5. Claim inventory lock -- held until the MD approves or rejects the form.
+      await claimInventoryLock(
+        tx,
+        ref,
+        booking.id,
+        new Date(now.getTime() + HOLD_UNTIL_DECIDED_MS),
+      );
 
       // 6. Audit trail
       await tx.auditEvent.create({
@@ -723,6 +840,12 @@ export class BookingService {
   static async submitBookingForm(user: TokenPayload, id: number, formData: BookingFormInput) {
     const booking = await BookingService.getBookingById(user, id);
 
+    if (booking.status === 'CANCELLED') {
+      throw new AppError(
+        409,
+        'This booking is cancelled (a rejected form releases the unit). Start a new booking instead.',
+      );
+    }
     if (!['DRAFT', 'MD_REJECTED'].includes(booking.form_status as string)) {
       throw new AppError(400, `Cannot resubmit a booking with form_status: ${booking.form_status}`);
     }
@@ -743,6 +866,22 @@ export class BookingService {
         md_rejection_reason: null, // clear any previous rejection
       } as any,
     });
+    // Now waiting for the MD: keep the unit until the MD decides.
+    const heldRef = refFromRecord(booking);
+    if (heldRef) {
+      const until = new Date(now.getTime() + HOLD_UNTIL_DECIDED_MS);
+      if (heldRef.kind === 'PROPERTY') {
+        await prisma.property.updateMany({
+          where: { id: heldRef.id, locked_by_booking_id: id },
+          data: { locked_until: until },
+        });
+      } else {
+        await prisma.projectUnit.updateMany({
+          where: { id: heldRef.id, locked_by_booking_id: id },
+          data: { locked_until: until },
+        });
+      }
+    }
 
     await prisma.auditEvent.create({
       data: {
@@ -871,14 +1010,39 @@ export class BookingService {
       throw new AppError(400, 'Rejection reason is required');
     }
 
+    // A rejected form releases the unit straight away and the booking ends
+    // (decision 2026-10-17); a corrected form is a fresh booking. The lead is
+    // left as it is -- the customer may still buy.
     const now = new Date();
-    const updated = await prisma.booking.update({
-      where: { id },
-      data: {
-        form_status: 'MD_REJECTED',
-        md_rejection_reason: reason,
-      } as any,
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.booking.update({
+        where: { id },
+        data: {
+          form_status: 'MD_REJECTED',
+          md_rejection_reason: reason,
+          status: 'CANCELLED',
+          notes:
+            `${booking.notes ? booking.notes + ' | ' : ''}Form rejected by the MD: ${reason}`.slice(
+              0,
+              5000,
+            ),
+        } as any,
+      });
+      const ref = refFromRecord(booking);
+      if (ref) await releaseInventoryLock(tx, ref, id);
+      const refundDue = await tx.payment.findMany({
+        where: { booking_id: id, status: { in: REFUNDABLE_PAYMENT_STATES } },
+        select: { id: true, amount: true },
+      });
+      if (refundDue.length > 0) {
+        await tx.payment.updateMany({
+          where: { id: { in: refundDue.map((r) => r.id) } },
+          data: { status: 'REFUND_DUE' },
+        });
+      }
+      return { u, refundDue };
     });
+    await BookingService.notifyRefundDue(booking, updated.refundDue);
 
     await prisma.auditEvent.create({
       data: {
@@ -901,11 +1065,11 @@ export class BookingService {
       await notifyEmployee([...rejectRecipients], {
         type: 'BOOKING_FORM_REJECTED',
         title: '❌ Booking Form Rejected',
-        message: `Booking ${booking.booking_code} was rejected by the MD: ${reason}`,
+        message: `Booking ${booking.booking_code} was rejected by the MD: ${reason}. The unit is released; make a new booking once the form is corrected.`,
         link: '/bookings',
       });
     }
 
-    return updated;
+    return updated.u;
   }
 }

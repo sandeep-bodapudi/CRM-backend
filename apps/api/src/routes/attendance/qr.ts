@@ -450,7 +450,8 @@ router.post(
         });
         if (!todayReport) {
           return res.status(400).json({
-            error: 'Please submit your daily report first.',
+            error:
+              'Send your end-of-day report first: open the CRM app → My Day, send it, then scan again.',
           });
         }
       }
