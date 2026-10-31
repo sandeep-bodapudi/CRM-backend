@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext';
 import { toUserFacingError } from '../../utils/userFacingError';
 import { Roles } from '../../shared';
 import { PROPERTY_TYPE_OPTIONS } from '../../constants/propertyTypes';
+import { MANUAL_SOURCE_OPTIONS, getLeadSourceLabel } from '../../constants/leadStatus';
 import type { AssociateRef } from '../worklog/workLogKinds';
 
 interface QuickAddLeadModalProps {
@@ -84,6 +85,7 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   const [source, setSource] = useState(isCpm ? 'ASSOCIATE' : 'ORGANIC_SEARCH');
+  const [sourceDetail, setSourceDetail] = useState(''); // the name when source is Other
   // CPMs must choose explicitly. Pool roles keep the old default (Pool); the rest default to Me.
   const [ownershipType, setOwnershipType] = useState<'POOL' | 'DIRECT' | 'COLLEAGUE' | null>(
     isCpm ? null : canUsePool ? 'POOL' : 'DIRECT',
@@ -146,6 +148,7 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
 
   const validate = () => {
     if (!customerName || !phone) return fail('Name and Phone are required');
+    if (source === 'OTHER' && !sourceDetail.trim()) return fail('Enter where this lead came from');
     if (!ownershipType) return fail('Choose who the lead is assigned to');
     if (ownershipType === 'COLLEAGUE' && !colleagueId) return fail('Choose the colleague');
     if (fromAssociate && (!agentName.trim() || !agentPhone.trim() || !agentId.trim())) {
@@ -187,6 +190,7 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
           customer_name: customerName,
           phone,
           source,
+          ...(source === 'OTHER' ? { source_detail: sourceDetail.trim() } : {}),
           ownership_type: ownershipType === 'COLLEAGUE' ? 'DIRECT' : ownershipType,
           ...(ownershipType === 'COLLEAGUE'
             ? { assign_to_employee_id: parseInt(colleagueId, 10) }
@@ -358,12 +362,21 @@ export const QuickAddLeadModal: React.FC<QuickAddLeadModalProps> = ({ onClose, o
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-navy-500/20 focus:border-navy-500 transition-all appearance-none"
             >
               {isCpm && <option value="ASSOCIATE">Associate</option>}
-              <option value="ORGANIC_SEARCH">Organic Search</option>
-              <option value="SOCIAL_MEDIA">Social Media</option>
-              <option value="REFERRAL">Referral</option>
-              <option value="BILLBOARD">Billboard</option>
-              <option value="DIRECT_TRAFFIC">Direct Traffic</option>
+              {MANUAL_SOURCE_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {getLeadSourceLabel(s)}
+                </option>
+              ))}
             </select>
+            {source === 'OTHER' && (
+              <input
+                value={sourceDetail}
+                onChange={(e) => setSourceDetail(e.target.value)}
+                maxLength={80}
+                placeholder="Where did this lead come from? e.g. 99acres, newspaper ad *"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-navy-500/20 focus:border-navy-500 transition-all"
+              />
+            )}
           </div>
 
           {fromAssociate && (

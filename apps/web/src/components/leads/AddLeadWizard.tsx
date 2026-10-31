@@ -21,6 +21,7 @@ import { useToast } from '../../context/ToastContext';
 import { PROPERTY_TYPE_OPTIONS, getPropertyTypeLabel } from '../../constants/propertyTypes';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
 import { LocationListInput } from '../common/ui/LocationListInput';
+import { MANUAL_SOURCE_OPTIONS, getLeadSourceLabel } from '../../constants/leadStatus';
 
 interface AddLeadWizardProps {
   onClose: () => void;
@@ -40,6 +41,7 @@ export const AddLeadWizard: React.FC<AddLeadWizardProps> = ({ onClose, onSuccess
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [source, setSource] = useState('ORGANIC_SEARCH');
+  const [sourceDetail, setSourceDetail] = useState(''); // the name when source is Other
 
   // Phase 4: Marketing Attribution
   const [campaign, setCampaign] = useState('');
@@ -75,6 +77,10 @@ export const AddLeadWizard: React.FC<AddLeadWizardProps> = ({ onClose, onSuccess
       showError({ message: 'Name and Phone are required' });
       return;
     }
+    if (source === 'OTHER' && !sourceDetail.trim()) {
+      showError({ message: 'Enter where this lead came from' });
+      return;
+    }
 
     setIsLoading(true);
 
@@ -96,6 +102,7 @@ export const AddLeadWizard: React.FC<AddLeadWizardProps> = ({ onClose, onSuccess
           phone,
           email,
           source,
+          ...(source === 'OTHER' ? { source_detail: sourceDetail.trim() } : {}),
           property_type_preference: propertyType,
           preferred_locations: preferredLocations,
           notes: structuredNotes,
@@ -223,14 +230,21 @@ export const AddLeadWizard: React.FC<AddLeadWizardProps> = ({ onClose, onSuccess
                     onChange={(e) => setSource(e.target.value)}
                     className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500 text-sm font-semibold"
                   >
-                    <option value="ORGANIC_SEARCH">Organic / Website</option>
-                    <option value="FACEBOOK_ADS">Facebook / Instagram Ads</option>
-                    <option value="GOOGLE_ADS">Google Ads</option>
-                    <option value="HOUSING_COM">Housing.com</option>
-                    <option value="WALK_IN">Direct Walk-in</option>
-                    <option value="REFERRAL">Referral</option>
-                    <option value="MANUAL_ENTRY">Manual Entry</option>
+                    {MANUAL_SOURCE_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {getLeadSourceLabel(s)}
+                      </option>
+                    ))}
                   </select>
+                  {source === 'OTHER' && (
+                    <input
+                      value={sourceDetail}
+                      onChange={(e) => setSourceDetail(e.target.value)}
+                      maxLength={80}
+                      placeholder="Where did this lead come from? *"
+                      className="mt-2 w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500 text-sm"
+                    />
+                  )}
                 </div>
               </div>
 
