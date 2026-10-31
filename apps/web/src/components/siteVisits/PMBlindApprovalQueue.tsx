@@ -56,6 +56,12 @@ interface BlindSiteVisit {
   lead?: { preferred_location?: string };
 }
 
+/** A visit booked for a project outside the CRM keeps its name in the notes ("Other project: X. ..."). */
+const otherProjectName = (notes?: string | null) => {
+  const m = /^Other project: (.+?)(?:\. |$)/.exec(notes || '');
+  return m ? `${m[1]} (not in CRM)` : null;
+};
+
 export const PMBlindApprovalQueue: React.FC = () => {
   const { fetchWithAuth } = useAuth();
   const { showToast, showError } = useToast();
@@ -199,7 +205,7 @@ export const PMBlindApprovalQueue: React.FC = () => {
     }
     if (visit.property) return visit.property.title;
     if (visit.project) return visit.project.name;
-    return 'General Inquiry';
+    return otherProjectName(visit.verification_call_notes) || 'General Inquiry';
   };
 
   /** Get the project name from any of the linked items */
@@ -211,7 +217,7 @@ export const PMBlindApprovalQueue: React.FC = () => {
       if (lnk.property) return null; // property has no guaranteed project name
     }
     if (visit.project_unit) return visit.project_unit.project.name;
-    return null;
+    return otherProjectName(visit.verification_call_notes);
   };
 
   if (isLoading) {
