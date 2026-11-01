@@ -238,6 +238,17 @@ const TopUtilityBar: React.FC<{ title?: string }> = ({ title }) => {
 
 const DefaultRedirect: React.FC<{ user: unknown }> = () => <Navigate to="/dashboard" replace />;
 
+// A page the person can't use goes back to the dashboard instead of opening
+// and then failing with "Permission Denied" popups. Uses the same
+// permission the server checks for that page's data.
+const RequirePermission: React.FC<{ perm: string; children: React.ReactElement }> = ({
+  perm,
+  children,
+}) => {
+  const { user } = useAuth();
+  return user?.permissions?.includes(perm) ? children : <Navigate to="/dashboard" replace />;
+};
+
 // AppShell provides the global layout shell: compact left sidebar, top utility bar,
 // responsive 12-column content grid, and optional right rail. The Routes and
 // internal modal logic are rendered as children inside the AppLayout content canvas.
@@ -555,23 +566,100 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
         }
       />
 
-      <Route path="/leads" element={<LeadManagement />} />
-      <Route path="/leads-clients" element={<LeadManagement />} />
-      <Route path="/leads/:id" element={<LeadManagement />} />
-      <Route path="/sales-pipeline" element={<SalesPipelineManagement />} />
+      <Route
+        path="/leads"
+        element={
+          <RequirePermission perm={Permissions.LEADS_READ}>
+            <LeadManagement />
+          </RequirePermission>
+        }
+      />
+      <Route
+        path="/leads-clients"
+        element={
+          <RequirePermission perm={Permissions.LEADS_READ}>
+            <LeadManagement />
+          </RequirePermission>
+        }
+      />
+      <Route
+        path="/leads/:id"
+        element={
+          <RequirePermission perm={Permissions.LEADS_READ}>
+            <LeadManagement />
+          </RequirePermission>
+        }
+      />
+      <Route
+        path="/sales-pipeline"
+        element={
+          <RequirePermission perm={Permissions.LEADS_READ}>
+            <SalesPipelineManagement />
+          </RequirePermission>
+        }
+      />
       <Route
         path="/customers"
         element={
           canAccessCommercial ? <CustomerManagement /> : <Navigate to="/dashboard" replace />
         }
       />
-      <Route path="/complaints" element={<ComplaintManagement />} />
-      <Route path="/projects" element={<ProjectManagement />} />
-      <Route path="/projects/:id" element={<ProjectDashboard />} />
-      <Route path="/projects/:projectId/units/:unitId" element={<UnitDetail />} />
-      <Route path="/properties" element={<PropertyManagement />} />
-      <Route path="/site-visits" element={<SiteVisitManagement />} />
-      <Route path="/demos" element={<DemoManagement />} />
+      <Route
+        path="/complaints"
+        element={
+          <RequirePermission perm={Permissions.COMPLAINTS_READ}>
+            <ComplaintManagement />
+          </RequirePermission>
+        }
+      />
+      <Route
+        path="/projects"
+        element={
+          <RequirePermission perm={Permissions.PROJECTS_READ}>
+            <ProjectManagement />
+          </RequirePermission>
+        }
+      />
+      <Route
+        path="/projects/:id"
+        element={
+          <RequirePermission perm={Permissions.PROJECTS_READ}>
+            <ProjectDashboard />
+          </RequirePermission>
+        }
+      />
+      <Route
+        path="/projects/:projectId/units/:unitId"
+        element={
+          <RequirePermission perm={Permissions.PROJECTS_READ}>
+            <UnitDetail />
+          </RequirePermission>
+        }
+      />
+      <Route
+        path="/properties"
+        element={
+          <RequirePermission perm={Permissions.PROPERTIES_READ}>
+            <PropertyManagement />
+          </RequirePermission>
+        }
+      />
+      <Route
+        path="/site-visits"
+        element={
+          <RequirePermission perm={Permissions.SITE_VISITS_READ}>
+            <SiteVisitManagement />
+          </RequirePermission>
+        }
+      />
+      <Route
+        path="/demos"
+        element={
+          <RequirePermission perm={Permissions.DEMOS_READ}>
+            <DemoManagement />
+          </RequirePermission>
+        }
+      />
       <Route path="/action-center" element={<Navigate to="/approvals?tab=listings" replace />} />
       {/* The old approval pages all live on /approvals now (2026-10-18). */}
       <Route path="/pm/approvals" element={<Navigate to="/approvals?tab=visits" replace />} />
