@@ -159,9 +159,15 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
       }
 
       for (const regionId of removedRegionIds) {
-        await fetchWithAuth(`${API_BASE_URL}/projects/layout-regions/${regionId}`, {
+        const res = await fetchWithAuth(`${API_BASE_URL}/projects/layout-regions/${regionId}`, {
           method: 'DELETE',
         });
+        // A refused removal used to be ignored and "Layout pins saved" shown anyway.
+        if (!res.ok) {
+          await handleApiError(res, showError);
+          setIsSaving(false);
+          return;
+        }
       }
 
       showToast('Layout pins saved', 'success');

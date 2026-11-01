@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { MessageSquareText, Save, ToggleLeft, ToggleRight, Eye } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
 import {
   substituteTemplatePreview,
   SAMPLE_PREVIEW_CONTEXT,
@@ -91,6 +93,7 @@ const TEMPLATE_DEFS: { key: string; name: string; defaultBody: string }[] = [
 
 export const MessageTemplatesManager: React.FC = () => {
   const { fetchWithAuth } = useAuth();
+  const { showError } = useToast();
   const [savedTemplates, setSavedTemplates] = useState<Record<string, MessageTemplate>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [activeState, setActiveState] = useState<Record<string, boolean>>({});
@@ -160,8 +163,11 @@ export const MessageTemplatesManager: React.FC = () => {
     const next = !(activeState[def.key] ?? true);
     setActiveState((prev) => ({ ...prev, [def.key]: next }));
     if (isCustomized(def.key)) {
+      // Put the switch back if the change was not saved (it used to stay
+      // flipped on screen even when the server refused it).
+      const revert = () => setActiveState((prev) => ({ ...prev, [def.key]: !next }));
       try {
-        await fetchWithAuth(
+        const res = await fetchWithAuth(
           `${API_BASE_URL}/message-templates/${encodeURIComponent(def.key)}/active`,
           {
             method: 'PATCH',
@@ -169,8 +175,15 @@ export const MessageTemplatesManager: React.FC = () => {
             body: JSON.stringify({ is_active: next }),
           },
         );
-      } catch (e) {
-        console.error(e);
+        if (!res.ok) {
+          revert();
+          await handleApiError(res, showError);
+        }
+      } catch {
+        revert();
+        showError(
+          toUserFacingError({ message: 'No connection. The change was not saved.', body: {} }),
+        );
       }
     }
   };
