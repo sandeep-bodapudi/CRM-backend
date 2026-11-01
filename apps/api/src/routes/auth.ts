@@ -394,6 +394,7 @@ router.post(
       const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
       const tokenEmployeeId = Number(refreshPayload?.employeeId);
 
+      const REUSE_GRACE_MS = 30 * 1000;
       const revokeFamily = async (familyToken: string, employeeId: number) => {
         await p.authSession.updateMany({
           where: { family_token: familyToken },
@@ -442,10 +443,18 @@ router.post(
       if (!session) return fail('Invalid session');
       if (consumed.count === 0) {
         if (session.revoked) return fail('Session revoked');
-        // Already consumed: reuse of an old refresh token, or two refreshes
-        // racing with the same one. Either way revoke the whole family.
-        await revokeFamily(session.family_token, session.employee_id);
-        return fail('Session compromised');
+        // Already consumed. Two tabs (or the app and its background sync)
+        // refreshing at the same moment send the same key; that used to
+        // revoke the whole sign-in as "token reuse" and log people out 1-4
+        // times a day (audit 2026-11-01). A reuse within a few seconds of the
+        // first use is that race: give this request its own new key in the
+        // same sign-in. Anything later is still treated as a stolen key.
+        const justUsed =
+          session.consumed && Date.now() - new Date(session.updated_at).getTime() < REUSE_GRACE_MS;
+        if (!justUsed) {
+          await revokeFamily(session.family_token, session.employee_id);
+          return fail('Session compromised');
+        }
       }
       if (!employee || employee.id !== session.employee_id || employee.status !== 'ACTIVE') {
         return fail('Account inactive');
