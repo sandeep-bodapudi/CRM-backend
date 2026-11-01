@@ -46,6 +46,7 @@ import demoRoutes from './routes/demos';
 import customerRoutes from './routes/customers';
 import publicRoutes from './routes/public';
 import publicWebsiteRoutes from './routes/publicWebsite';
+import myPropertyRoutes from './routes/myProperty';
 import adminRoutes from './routes/admin';
 import expenseRefundRoutes from './routes/expenseRefunds';
 import pushRoutes from './routes/pushSubscriptions';
@@ -301,10 +302,9 @@ if (mountPublic) {
 }
 
 if (mountPortal) {
-  // The customer-portal login/booking/payment-proof/document routes land
-  // here once built (consolidation plan, Decision 1) — deliberately kept
-  // separate from `mountInternal` so a future portal-only process doesn't
-  // also carry the full internal CRM surface.
+  // My Property portal (customers). Kept separate from `mountInternal` so a
+  // portal-only process doesn't also carry the full internal CRM surface.
+  app.use('/api/v1/customer', myPropertyRoutes);
 }
 
 // Fallback for unknown API routes
