@@ -17,7 +17,7 @@ const WHATSAPP_TEMPLATES: Record<WhatsAppTemplateId, string> = {
   RESCHEDULE_REQUEST:
     'Hi {{customer_name}}, we noticed you requested a reschedule for your site visit at {{project_name}}. Could you let us know your preferred new date and time?',
   CREDENTIAL_DELIVERY:
-    'Hi {{customer_name}}, welcome to RRH! You can track your site visits and properties on our customer portal. Your login is: {{phone}} and your temporary password is: {{password}}.',
+    'Hi {{customer_name}}, welcome to {{company_name}}! You can follow your property, payments and construction updates on My Property: {{portal_url}}\n\nLog in with your mobile number {{phone}} and this temporary password: {{password}}\nIt works for 24 hours, and you will choose your own password the first time.',
   PROPERTY_SHARE:
     'Hi {{customer_name}}, here are the details for the property we discussed: {{property_link}}',
   SITE_VISIT_FEEDBACK:

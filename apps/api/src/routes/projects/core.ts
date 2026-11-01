@@ -14,6 +14,11 @@ import {
 } from '../../shared';
 import { validateRequestBody } from '../../middleware/validate';
 import { ProjectService } from '../../services/project.service';
+import {
+  ProjectUpdateService,
+  PROJECT_UPDATE_KINDS,
+  MAX_UPDATE_PHOTOS,
+} from '../../services/projectUpdate.service';
 import { memoryUpload, imageOnlyUpload } from '../../services/storage.service';
 import { prisma } from '../../lib/prisma';
 import { buildProjectScope } from '../../authz/dataScope';
@@ -625,6 +630,83 @@ router.delete(
       logger.error('Delete project media error:', error);
       if (error.status) return res.status(error.status).json({ error: error.message });
       return res.status(500).json({ error: 'Failed to delete media' });
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────
+// Customer updates (My Property): construction progress + announcements
+// ─────────────────────────────────────────────────────────────
+
+const updateError = (res: Response, error: any, fallback: string) => {
+  if (error?.statusCode) return res.status(error.statusCode).json({ error: error.message });
+  logger.error(`${fallback}:`, error);
+  return res.status(500).json({ error: fallback });
+};
+
+// GET /api/v1/projects/:id/updates
+router.get(
+  '/:id/updates',
+  authenticateToken,
+  requireAuthz(Permissions.PROJECTS_READ),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      return res.json(await ProjectUpdateService.list(req.user!, parseInt(req.params.id, 10)));
+    } catch (error: any) {
+      return updateError(res, error, 'Failed to load customer updates');
+    }
+  },
+);
+
+// POST /api/v1/projects/:id/updates (multipart: kind, title, message, photos[])
+router.post(
+  '/:id/updates',
+  authenticateToken,
+  requireAuthz(Permissions.PROJECTS_UPDATE, projectInScope()),
+  imageOnlyUpload.array('photos', MAX_UPDATE_PHOTOS) as any,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const kind = String(req.body?.kind || 'PROGRESS');
+    const title = String(req.body?.title || '').trim();
+    const message = String(req.body?.message || '').trim();
+    if (!(PROJECT_UPDATE_KINDS as readonly string[]).includes(kind)) {
+      return res.status(400).json({ error: 'Choose construction progress or announcement' });
+    }
+    if (title.length < 3 || title.length > 120) {
+      return res.status(400).json({ error: 'Give the update a heading (3 to 120 characters)' });
+    }
+    if (message.length < 3 || message.length > 3000) {
+      return res.status(400).json({ error: 'Write the update (up to 3000 characters)' });
+    }
+    try {
+      const result = await ProjectUpdateService.post(
+        req.user!,
+        parseInt(req.params.id, 10),
+        { kind, title, message },
+        ((req as any).files as { buffer: Buffer }[]) || [],
+      );
+      return res.status(201).json(result);
+    } catch (error: any) {
+      return updateError(res, error, 'Failed to post the update');
+    }
+  },
+);
+
+// DELETE /api/v1/projects/:id/updates/:updateId
+router.delete(
+  '/:id/updates/:updateId',
+  authenticateToken,
+  requireAuthz(Permissions.PROJECTS_UPDATE, projectInScope()),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      return res.json(
+        await ProjectUpdateService.remove(
+          req.user!,
+          parseInt(req.params.id, 10),
+          parseInt(req.params.updateId, 10),
+        ),
+      );
+    } catch (error: any) {
+      return updateError(res, error, 'Failed to remove the update');
     }
   },
 );

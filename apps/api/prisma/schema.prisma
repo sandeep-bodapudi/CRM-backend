@@ -412,6 +412,7 @@ model Employee {
   overrode_unit_prices          ProjectUnit[]                @relation("OverrodeUnitPrices")
   project_media_uploaded        ProjectMedia[]               @relation("ProjectMediaUploaded")
   project_documents_uploaded    ProjectDocument[]            @relation("ProjectDocumentsUploaded")
+  project_updates_posted        ProjectUpdate[]              @relation("ProjectUpdatesPosted")
   project_unit_images_uploaded  ProjectUnitImage[]           @relation("ProjectUnitImagesUploaded")
   project_unit_docs_uploaded    ProjectUnitDocument[]        @relation("ProjectUnitDocsUploaded")
 
@@ -1161,6 +1162,7 @@ model Project {
   project_amenities ProjectAmenity[]
   media             ProjectMedia[]
   documents         ProjectDocument[]
+  customer_updates  ProjectUpdate[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -1547,6 +1549,27 @@ model ProjectMedia {
   uploaded_by Employee? @relation("ProjectMediaUploaded", fields: [uploaded_by_id], references: [id])
 
   @@index([project_id, kind])
+}
+
+/// My Property: construction progress and announcements staff post for a
+/// project's buyers. Each post also notifies the buyers (CustomerNotification).
+model ProjectUpdate {
+  id             Int      @id @default(autoincrement())
+  company_id     Int
+  project_id     Int
+  kind           String   @default("PROGRESS") // PROGRESS | ANNOUNCEMENT
+  title          String
+  message        String   @db.Text
+  photos         Json? // array of image URLs
+  notified_count Int      @default(0)
+  posted_by_id   Int?
+  created_at     DateTime @default(now())
+
+  project   Project   @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  posted_by Employee? @relation("ProjectUpdatesPosted", fields: [posted_by_id], references: [id], onDelete: SetNull)
+
+  @@index([project_id, created_at])
+  @@index([company_id])
 }
 
 model ProjectDocument {

@@ -121,3 +121,50 @@ export function listProjectActivity(fetchWithAuth: FetchWithAuth, projectId: num
     asJson<{ events: ProjectActivityEvent[] }>(res),
   );
 }
+
+// ─── Customer updates (My Property) ─────────────────────────────────────────
+
+export type ProjectUpdateKind = 'PROGRESS' | 'ANNOUNCEMENT';
+
+export interface ProjectUpdate {
+  id: number;
+  kind: ProjectUpdateKind;
+  title: string;
+  message: string;
+  photos: string[] | null;
+  notified_count: number;
+  created_at: string;
+  posted_by: { id: number; full_name: string | null } | null;
+}
+
+export function listProjectUpdates(fetchWithAuth: FetchWithAuth, projectId: number) {
+  return fetchWithAuth(`${API_BASE_URL}/projects/${projectId}/updates`).then((res) =>
+    asJson<{ updates: ProjectUpdate[]; buyerCount: number }>(res),
+  );
+}
+
+export function postProjectUpdate(
+  fetchWithAuth: FetchWithAuth,
+  projectId: number,
+  input: { kind: ProjectUpdateKind; title: string; message: string; photos: File[] },
+) {
+  const form = new FormData();
+  form.append('kind', input.kind);
+  form.append('title', input.title);
+  form.append('message', input.message);
+  input.photos.forEach((f) => form.append('photos', f));
+  return fetchWithAuth(`${API_BASE_URL}/projects/${projectId}/updates`, {
+    method: 'POST',
+    body: form,
+  }).then((res) => asJson<{ update: ProjectUpdate }>(res));
+}
+
+export function deleteProjectUpdate(
+  fetchWithAuth: FetchWithAuth,
+  projectId: number,
+  updateId: number,
+) {
+  return fetchWithAuth(`${API_BASE_URL}/projects/${projectId}/updates/${updateId}`, {
+    method: 'DELETE',
+  }).then((res) => asJson<{ ok: boolean }>(res));
+}

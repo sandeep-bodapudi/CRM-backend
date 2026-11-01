@@ -18,6 +18,27 @@ export class AppError extends Error {
   }
 }
 
+/** What staff see about a customer's portal account (never the password). */
+export function portalStatus(c: {
+  password_hash?: string | null;
+  force_password_reset?: boolean;
+  temp_password_expiry?: Date | null;
+}) {
+  if (!c.password_hash) return { status: 'NOT_INVITED' as const, expiresAt: null };
+  if (!c.force_password_reset) return { status: 'ACTIVE' as const, expiresAt: null };
+  const expired = !c.temp_password_expiry || c.temp_password_expiry < new Date();
+  return {
+    status: expired ? ('EXPIRED' as const) : ('INVITED' as const),
+    expiresAt: c.temp_password_expiry ?? null,
+  };
+}
+
+/** Staff never get the password hash; they get the portal account state. */
+function withPortalStatus<T extends { password_hash?: string | null }>(c: T) {
+  const { password_hash: _hash, ...rest } = c;
+  return { ...rest, portal: portalStatus(c as any) };
+}
+
 export class CustomerService {
   private static async generateNextCustomerCode(tx: any = p): Promise<string> {
     const currentYear = new Date().getFullYear();
@@ -47,7 +68,7 @@ export class CustomerService {
       p.customer.count({ where: whereCondition }),
     ]);
 
-    return { customers, total };
+    return { customers: customers.map(withPortalStatus), total };
   }
 
   static async getCustomerById(user: TokenPayload, id: number) {
@@ -65,7 +86,7 @@ export class CustomerService {
       throw new AppError(404, 'Customer not found or access denied');
     }
 
-    return customer;
+    return withPortalStatus(customer);
   }
 
   static async createCustomer(user: TokenPayload, dto: any) {
@@ -110,11 +131,11 @@ export class CustomerService {
   static async updateCustomer(user: TokenPayload, id: number, dto: any) {
     const customer = await this.getCustomerById(user, id);
 
-    if (!CustomerPolicy.canMutate(user, customer)) {
+    if (!CustomerPolicy.canMutate(user, customer as any)) {
       throw new AppError(403, 'You do not have permission to update this customer');
     }
 
-    return await p.customer.update({
+    const updated = await p.customer.update({
       where: { id },
       data: {
         first_name: dto.first_name,
@@ -124,6 +145,7 @@ export class CustomerService {
         status: dto.status,
       },
     });
+    return withPortalStatus(updated);
   }
 
   static async convertFromLead(user: TokenPayload, leadId: number) {

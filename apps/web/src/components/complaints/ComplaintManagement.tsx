@@ -711,6 +711,10 @@ export const ComplaintManagement: React.FC = () => {
                 onChange={(e) => setResolutionText(e.target.value)}
                 className="w-full px-3 py-2 bg-surface border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 text-sm"
               />
+              <p className="text-xs text-slate-500">
+                The customer sees this answer in the My Property portal and gets a notification, so
+                write it to them.
+              </p>
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   onClick={() => setResolvingId(null)}

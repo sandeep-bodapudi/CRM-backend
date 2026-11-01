@@ -307,6 +307,20 @@ export class ComplaintService {
           resolved_at: new Date(),
         },
       });
+      // The customer sees the answer in My Property.
+      await tx.customerNotification.create({
+        data: {
+          company_id: updated.company_id,
+          customer_id: updated.customer_id,
+          booking_id: updated.booking_id,
+          type: 'REQUEST_ANSWERED',
+          title: `Answer to your request: ${updated.title}`.slice(0, 190),
+          message:
+            resolutionDescription.length > 500
+              ? `${resolutionDescription.slice(0, 497)}...`
+              : resolutionDescription,
+        },
+      });
       await ComplaintService.audit(tx, user, 'resolved', id, c.status, 'RESOLVED');
       return updated;
     });

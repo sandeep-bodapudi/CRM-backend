@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Pause,
   X,
+  Megaphone,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -43,6 +44,7 @@ import { resolveImageUrl } from '../../utils/imageUtils';
 import { ProjectMediaTab } from './ProjectMediaTab';
 import { ProjectDocumentsTab } from './ProjectDocumentsTab';
 import { ProjectActivityTab } from './ProjectActivityTab';
+import { ProjectCustomerUpdatesTab } from './ProjectCustomerUpdatesTab';
 import {
   listProjectUnits,
   getInventorySummary,
@@ -61,6 +63,7 @@ type Tab =
   | 'location'
   | 'media'
   | 'documents'
+  | 'customer-updates'
   | 'activity'
   | 'settings';
 
@@ -72,6 +75,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'location', label: 'Location', icon: MapPin },
   { id: 'media', label: 'Media', icon: ImageIcon },
   { id: 'documents', label: 'Documents', icon: FileText },
+  { id: 'customer-updates', label: 'Buyer updates', icon: Megaphone },
   { id: 'activity', label: 'Activity', icon: Activity },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
@@ -1081,6 +1085,11 @@ export const ProjectDashboard: React.FC = () => {
         {activeTab === 'documents' && (
           <div className="animate-fadeIn">
             <ProjectDocumentsTab projectId={projectId} />
+          </div>
+        )}
+        {activeTab === 'customer-updates' && (
+          <div className="animate-fadeIn">
+            <ProjectCustomerUpdatesTab projectId={projectId} canEdit={!!canEdit} />
           </div>
         )}
         {activeTab === 'activity' && (

@@ -3,8 +3,9 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { TokenPayload } from '../utils/jwt';
-import { CustomerService } from './customer.service';
+import { CustomerService, AppError } from './customer.service';
 import { generateWhatsAppLink } from '../utils/whatsapp';
+import { buildCustomerScope } from '../authz/dataScope';
 
 /**
  * §6 — Customer conversion & portal handoff (stub).
@@ -69,6 +70,28 @@ class StubCustomerPortalProvisioner implements CustomerPortalProvisioner {
 // Single switch-point for the real implementation later.
 const provisioner: CustomerPortalProvisioner = new StubCustomerPortalProvisioner();
 
+/** Where customers log in (the My Property portal). */
+export const MY_PROPERTY_URL =
+  process.env.MY_PROPERTY_URL || 'https://myproperty.sonthilluconstructions.com';
+const TEMP_PASSWORD_HOURS = 24;
+
+/** Gives the customer a new temporary password; they must change it on first login. */
+async function setTemporaryPassword(tx: Prisma.TransactionClient, customerId: number) {
+  const tempPassword = crypto.randomBytes(5).toString('hex'); // 10 chars
+  await tx.customer.update({
+    where: { id: customerId },
+    data: {
+      password_hash: await bcrypt.hash(tempPassword, 12),
+      temp_password_expiry: new Date(Date.now() + TEMP_PASSWORD_HOURS * 60 * 60 * 1000),
+      force_password_reset: true,
+    },
+  });
+  return tempPassword;
+}
+
+const companyName = async (tx: Prisma.TransactionClient, companyId: number) =>
+  (await tx.company.findUnique({ where: { id: companyId }, select: { name: true } }))?.name || 'us';
+
 export class CustomerPortalService {
   /**
    * Convert the lead to a customer (reusing CustomerService) and attempt portal
@@ -84,19 +107,8 @@ export class CustomerPortalService {
     //    Customer.origin_lead_id unique constraint).
     const customer = await CustomerService.upsertFromLead(user, lead.id, tx);
 
-    // 2. Generate a cryptographically secure temporary password (8 chars)
-    const tempPassword = crypto.randomBytes(4).toString('hex').toLowerCase();
-    const passwordHash = await bcrypt.hash(tempPassword, 12);
-
-    // 3. Set temporary credentials and force reset on first login
-    await tx.customer.update({
-      where: { id: customer.id },
-      data: {
-        password_hash: passwordHash,
-        temp_password_expiry: new Date(Date.now() + 24 * 60 * 60 * 1000), // expires in 24 hours
-        force_password_reset: true,
-      },
-    });
+    // 2-3. Temporary password (24 h), changed on first login
+    const tempPassword = await setTemporaryPassword(tx, customer.id);
 
     // 4. Provision via the (stub) portal provisioner.
     const result = await provisioner.provision({
@@ -110,6 +122,8 @@ export class CustomerPortalService {
     // 5. Generate WhatsApp credential-delivery message for the PM to send manually
     const whatsappLink = generateWhatsAppLink(lead.phone, 'CREDENTIAL_DELIVERY', {
       customer_name: lead.customer_name,
+      company_name: await companyName(tx, lead.company_id),
+      portal_url: MY_PROPERTY_URL,
       phone: lead.phone,
       password: tempPassword,
     });
@@ -141,6 +155,55 @@ export class CustomerPortalService {
     }
     return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       return await CustomerPortalService.provisionStub(tx, lead, user);
+    });
+  }
+
+  /**
+   * "Give portal access" in the CRM: a fresh temporary password for an existing
+   * customer, plus the WhatsApp message staff send them. Also used when a
+   * customer forgets their password. Logs them out of every device.
+   */
+  static async issueAccess(user: TokenPayload, customerId: number) {
+    const scope = await buildCustomerScope(user);
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, ...scope },
+      select: {
+        id: true,
+        company_id: true,
+        first_name: true,
+        last_name: true,
+        phone: true,
+        status: true,
+      },
+    });
+    if (!customer) throw new AppError(404, 'Customer not found');
+    if (customer.status !== 'ACTIVE') {
+      throw new AppError(400, 'This customer is not active, so they cannot get portal access');
+    }
+    return prisma.$transaction(async (tx) => {
+      const password = await setTemporaryPassword(tx, customer.id);
+      await tx.auditEvent.create({
+        data: {
+          actor_id: user.employeeId,
+          action: 'CUSTOMER_PORTAL_ACCESS_ISSUED',
+          entity_type: 'CUSTOMER',
+          entity_id: customer.id,
+          new_value: JSON.stringify({ expires_in_hours: TEMP_PASSWORD_HOURS }),
+        },
+      });
+      const name = [customer.first_name, customer.last_name].filter(Boolean).join(' ');
+      return {
+        password,
+        expiresAt: new Date(Date.now() + TEMP_PASSWORD_HOURS * 60 * 60 * 1000),
+        portalUrl: MY_PROPERTY_URL,
+        whatsappLink: generateWhatsAppLink(customer.phone, 'CREDENTIAL_DELIVERY', {
+          customer_name: customer.first_name || name,
+          company_name: await companyName(tx, customer.company_id),
+          portal_url: MY_PROPERTY_URL,
+          phone: customer.phone,
+          password,
+        }),
+      };
     });
   }
 }
