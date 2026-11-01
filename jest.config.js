@@ -4,6 +4,8 @@ module.exports = {
   testEnvironment: 'node',
   rootDir: '.',
   roots: ['<rootDir>/tests/api'],
+  // env.ts runs first and refuses any non-local database.
+  setupFiles: ['<rootDir>/tests/api/env.ts'],
   setupFilesAfterEnv: ['<rootDir>/tests/api/setup.ts'],
   testMatch: ['**/*.test.ts'],
   moduleNameMapper: {
