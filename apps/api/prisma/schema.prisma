@@ -798,14 +798,22 @@ model AuditEvent {
   action      String // LOGIN, QR_SCAN, DAILY_REPORT_SUBMIT, BELOW_TARGET_SUBMIT, UNINFORMED_ABSENT, PERMISSION_CHANGE
   entity_type String
   entity_id   Int
-  old_value   String?
-  new_value   String?
+  // Text, not VARCHAR(191): before/after snapshots of a price rule or unit
+  // did not fit (audit 2026-11-01).
+  old_value   String?  @db.Text
+  new_value   String?  @db.Text
   reason      String?  @db.Text
+  // Filled automatically for every write made during a request (lib/prisma.ts):
+  // whose company, from which address and device.
+  company_id  Int?
+  ip          String?  @db.VarChar(64)
+  user_agent  String?  @db.VarChar(255)
   created_at  DateTime @default(now())
 
   @@index([actor_id])
   @@index([action, created_at])
   @@index([actor_id, action, created_at])
+  @@index([company_id, created_at])
 }
 
 model Notification {

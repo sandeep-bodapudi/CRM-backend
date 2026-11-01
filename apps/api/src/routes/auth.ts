@@ -187,6 +187,18 @@ router.post(
       // Only this account's own counter -- see loginRateLimitKey.
       loginRateLimiter.resetKey(loginRateLimitKey(req));
 
+      // Successful sign-ins were never recorded, so "who signed in when, from
+      // where" could not be answered. IP and device are added automatically.
+      await p.auditEvent.create({
+        data: {
+          actor_id: employee.id,
+          action: 'LOGIN',
+          entity_type: 'EMPLOYEE',
+          entity_id: employee.id,
+          company_id: employee.company_id,
+        },
+      });
+
       // Set httpOnly refresh cookie
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
