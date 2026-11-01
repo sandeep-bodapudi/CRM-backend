@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { blankAsAbsent } from './zodHelpers';
+import { blankAsAbsent, phoneNumber } from './zodHelpers';
 
 export const EmptyBodySchema = z.object({}).strict();
 
 export const EmployeeSelfUpdateSchema = z.object({
   full_name: blankAsAbsent(z.string().min(1).optional()),
-  phone: blankAsAbsent(z.string().min(10).optional()),
+  phone: blankAsAbsent(phoneNumber().optional()),
   secondary_phone: z.string().optional().nullable(),
   whatsapp_number: z.string().optional().nullable(),
   current_address: z.string().optional().nullable(),
@@ -43,7 +43,7 @@ export const EmployeeSelfUpdateSchema = z.object({
 
 export const EmployeeCreateSchema = z.object({
   full_name: z.string().min(1, 'Please enter a valid full name'),
-  phone: z.string().min(10, 'Phone number must be at least 10 digits'),
+  phone: phoneNumber(),
   role_name: z.string().min(1, 'Please specify a role'),
   branch_id: z.union([z.string(), z.number()]),
   secondary_phone: z.string().optional().nullable(),

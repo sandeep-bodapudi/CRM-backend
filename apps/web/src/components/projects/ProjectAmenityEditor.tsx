@@ -318,6 +318,7 @@ export const ProjectAmenityEditor: React.FC<{ projectId: number }> = ({ projectI
                                 <input
                                   className={inputCls}
                                   type="number"
+                                  min={0}
                                   value={draft.charge_amount}
                                   onChange={(e) =>
                                     updateDraft(amenity.id, { charge_amount: e.target.value })

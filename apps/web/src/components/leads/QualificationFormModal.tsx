@@ -118,6 +118,7 @@ export const QualificationFormModal: React.FC<QualificationFormModalProps> = ({
               <InputField
                 label="Min Budget (₹)"
                 type="number"
+                min={0}
                 value={formData.budget_min ?? ''}
                 onChange={(e) =>
                   setFormData({
@@ -130,6 +131,7 @@ export const QualificationFormModal: React.FC<QualificationFormModalProps> = ({
               <InputField
                 label="Max Budget (₹)"
                 type="number"
+                min={0}
                 value={formData.budget_max ?? ''}
                 onChange={(e) =>
                   setFormData({

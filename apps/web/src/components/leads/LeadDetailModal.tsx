@@ -1787,6 +1787,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                   </label>
                   <input
                     type="number"
+                    min={0}
                     value={demominBudget}
                     onChange={(e) => setDemominBudget(e.target.value)}
                     placeholder={lead.budget_min ? String(lead.budget_min) : 'e.g. 5000000'}
@@ -1801,6 +1802,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                   </label>
                   <input
                     type="number"
+                    min={0}
                     value={demomaxBudget}
                     onChange={(e) => setDemomaxBudget(e.target.value)}
                     placeholder={lead.budget_max ? String(lead.budget_max) : 'e.g. 15000000'}

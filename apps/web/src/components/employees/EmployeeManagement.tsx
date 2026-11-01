@@ -1190,6 +1190,7 @@ export const EmployeeManagement: React.FC = () => {
                 </label>
                 <input
                   type="number"
+                  min={0}
                   placeholder={String(dossierEmp.salaryCtc || '')}
                   value={promoteSalary}
                   onChange={(e) => setPromoteSalary(e.target.value)}

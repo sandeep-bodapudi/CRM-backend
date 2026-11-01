@@ -9,6 +9,7 @@ import { generateNextLeadCode, calculateLeadScore, syncLeadPreferredLocations } 
 import { findBestAssigneeForLead } from '../../utils/distributionService';
 import { notifyEmployee } from '../../utils/notifyEmployee';
 import { logger } from '../../utils/logger';
+import { cleanPhone } from '../../shared/zodHelpers';
 const p = prisma;
 
 export async function createLead(
@@ -41,6 +42,10 @@ export async function createLead(
   // definition ever changes, no client-supplied value can override attribution.
   // ─────────────────────────────────────────────────────────────────────────
   delete dto.created_by_id;
+
+  // Same phone format as every form (shared/zodHelpers.ts cleanPhone): also
+  // covers callers that skip the schema, such as walk-in visits.
+  if (typeof dto.phone === 'string') dto.phone = cleanPhone(dto.phone);
 
   // 1. DUPLICATE DETECTION (Same Company Only)
   if (!dto.phone) {

@@ -333,6 +333,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={plotCount}
                   onChange={(e) => setPlotCount(parseInt(e.target.value, 10) || 1)}
                 />
@@ -342,6 +343,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={plotDefaultArea}
                   onChange={(e) =>
                     setPlotDefaultArea(e.target.value === '' ? '' : parseFloat(e.target.value))
@@ -366,6 +368,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={floorsCount}
                   onChange={(e) => setFloorsCount(parseInt(e.target.value, 10) || 1)}
                 />
@@ -375,6 +378,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={unitsPerFloor}
                   onChange={(e) => setUnitsPerFloor(parseInt(e.target.value, 10) || 1)}
                 />
@@ -384,6 +388,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={flatDefaultArea}
                   onChange={(e) =>
                     setFlatDefaultArea(e.target.value === '' ? '' : parseFloat(e.target.value))
@@ -408,6 +413,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={villaCount}
                   onChange={(e) => setVillaCount(parseInt(e.target.value, 10) || 1)}
                 />
@@ -426,6 +432,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={villaDefaultArea}
                   onChange={(e) =>
                     setVillaDefaultArea(e.target.value === '' ? '' : parseFloat(e.target.value))
@@ -491,6 +498,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                             <input
                               className={inputCls + ' !py-1 !text-xs w-24'}
                               type="number"
+                              min={0}
                               value={
                                 mode === 'VILLA'
                                   ? (r.plot_area_sqyd ?? '')

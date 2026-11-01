@@ -171,6 +171,7 @@ const SampleUnitCalculator: React.FC<{ projectId: number }> = ({ projectId }) =>
           <input
             className={inputCls}
             type="number"
+            min={0}
             value={sample.unit_type === 'PLOT' ? sample.plot_area_sqyd : sample.area_value}
             onChange={(e) =>
               setSample((s) =>

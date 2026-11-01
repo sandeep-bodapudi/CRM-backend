@@ -473,6 +473,7 @@ const AddFeatureForm: React.FC<{
         <input
           className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs w-28"
           type="number"
+          min={0}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />
@@ -559,6 +560,7 @@ const OverrideModal: React.FC<{
         <input
           className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
           type="number"
+          min={0}
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           placeholder="Override price"

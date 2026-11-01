@@ -591,6 +591,7 @@ export function BulkUnitWizard({ onSuccess, onClose, preselectedProjectId }: Bul
                   <FieldLabel required>Price per {isLand ? 'Sq.Yd' : 'Sq.Ft'} (₹)</FieldLabel>
                   <input
                     type="number"
+                    min={0}
                     value={projectPricing.base_price_per_unit || ''}
                     onChange={(e) =>
                       setProjectPricing((p) => ({
@@ -633,6 +634,7 @@ export function BulkUnitWizard({ onSuccess, onClose, preselectedProjectId }: Bul
                     <FieldLabel>{f.label}</FieldLabel>
                     <input
                       type="number"
+                      min={0}
                       value={(projectPricing as any)[f.key] || ''}
                       onChange={(e) =>
                         setProjectPricing((p) => ({ ...p, [f.key]: Number(e.target.value) }))
@@ -658,6 +660,7 @@ export function BulkUnitWizard({ onSuccess, onClose, preselectedProjectId }: Bul
                     </FieldLabel>
                     <input
                       type="number"
+                      min={0}
                       value={(projectPricing as any)[f.key] || ''}
                       onChange={(e) =>
                         setProjectPricing((p) => ({ ...p, [f.key]: Number(e.target.value) }))
@@ -798,6 +801,7 @@ export function BulkUnitWizard({ onSuccess, onClose, preselectedProjectId }: Bul
                         render: (unit) => (
                           <input
                             type="number"
+                            min={0}
                             value={unit.area || ''}
                             onChange={(e) =>
                               updateUnit(

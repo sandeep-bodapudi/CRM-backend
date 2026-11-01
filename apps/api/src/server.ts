@@ -339,7 +339,16 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     return res.status(err.statusCode || err.status || 400).json({ error: err.message });
   }
   if (err && err.name === 'ZodError') {
-    return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    // Same readable message as validateRequestBody ("amount: Number must be
+    // greater than 0"), instead of a bare "Validation failed".
+    const issues: { path: (string | number)[]; message: string }[] = err.errors || [];
+    return res.status(400).json({
+      error:
+        issues
+          .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
+          .join(', ') || 'Validation failed',
+      details: issues.map((i) => ({ field: i.path.join('.'), message: i.message })),
+    });
   }
   // 3. Prisma Errors
   if (err && err.name === 'PrismaClientKnownRequestError') {
