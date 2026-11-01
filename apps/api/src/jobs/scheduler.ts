@@ -156,6 +156,13 @@ export const initJobs = () => {
     );
   }
 
+  // Same for the 3:00 session clean-up, which a sleeping host never runs.
+  if (process.env.DISABLE_JOB_SESSION_CLEANUP !== 'true') {
+    tasks
+      .expiredSessionCleanupJob()
+      .catch((err) => logger.error({ err }, '[Jobs] Session clean-up on start failed'));
+  }
+
   // The host sleeps when idle, so the 23:58 rollup is routinely missed --
   // run it on wake-up instead if last night's run never happened.
   if (process.env.DISABLE_JOB_ATTENDANCE_ROLLUP !== 'true') {

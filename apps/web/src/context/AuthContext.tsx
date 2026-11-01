@@ -158,10 +158,30 @@ const refreshAccessToken = async (): Promise<RefreshResult> => {
   return refreshPromise;
 };
 
+// PAN, Aadhaar and bank details stay in memory only: the profile copy kept in
+// the browser (for a fast start) is readable by any script on the page and
+// outlives the session, so they are left out of it.
+const SENSITIVE_PROFILE_KEYS = [
+  'panNumber',
+  'aadhaarNumber',
+  'bankName',
+  'bankAccountNumber',
+  'bankIfsc',
+  'bankBranch',
+] as const;
+const storeUser = (u: object) => {
+  const copy: Record<string, unknown> = { ...u };
+  for (const k of SENSITIVE_PROFILE_KEYS) delete copy[k];
+  localStorage.setItem('rrh_user', JSON.stringify(copy));
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('rrh_user');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    storeUser(parsed); // drop details saved by older versions
+    return parsed;
   });
 
   // Access token strictly in memory
@@ -312,7 +332,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .then((data) => {
               if (data.user && isMounted) {
                 setUser(data.user);
-                localStorage.setItem('rrh_user', JSON.stringify(data.user));
+                storeUser(data.user);
                 const currentActiveRole = localStorage.getItem('rrh_active_role');
                 if (!currentActiveRole || !data.user.roles.includes(currentActiveRole)) {
                   const newRole = data.user.roles?.[0] || 'Employee';
@@ -360,7 +380,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     const isDone = Boolean(userData.firstLoginDone);
     setFirstLoginDoneState(isDone);
-    localStorage.setItem('rrh_user', JSON.stringify({ ...userData, firstLoginDone: isDone }));
+    storeUser({ ...userData, firstLoginDone: isDone });
     localStorage.removeItem('rrh_token'); // Make sure it's strictly removed
     setAuthStatus('authenticated');
   };
@@ -370,7 +390,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       const updated = { ...user, firstLoginDone: done };
       setUser(updated);
-      localStorage.setItem('rrh_user', JSON.stringify(updated));
+      storeUser(updated);
     }
   };
 
@@ -378,7 +398,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       const updated = { ...user, ...partialUser };
       setUser(updated);
-      localStorage.setItem('rrh_user', JSON.stringify(updated));
+      storeUser(updated);
     }
   };
 
@@ -423,6 +443,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.status === 403) {
       const clone = res.clone();
       const body = await clone.json().catch(() => ({}));
+      // The first-login screen is already asking for the new password; no
+      // "Permission Denied" popup for background calls blocked until then.
+      if (body.code === 'PASSWORD_CHANGE_REQUIRED') return res;
       window.dispatchEvent(
         new CustomEvent('auth:forbidden', {
           detail: body.error || 'Forbidden: Insufficient permissions',

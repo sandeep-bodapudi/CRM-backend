@@ -70,6 +70,11 @@ export const authenticateServiceToken = (
   next();
 };
 
+// What a person may still call before changing their temporary password:
+// their own profile, the password change, signing out and app-lock setup.
+const FIRST_LOGIN_ALLOWED =
+  /^\/api\/v1\/auth\/(me|change-password|logout|sessions|app-lock)(\/|\?|$)/;
+
 export const authenticateToken = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -98,7 +103,7 @@ export const authenticateToken = async (
 
     const employee = await prisma.employee.findUnique({
       where: { id: payload.employeeId },
-      select: { status: true, token_version: true },
+      select: { status: true, token_version: true, first_login_done: true },
     });
 
     if (!employee) {
@@ -121,6 +126,16 @@ export const authenticateToken = async (
     if (payload.tokenVersion !== employee.token_version) {
       logger.error('AUTH_FAIL: Token version stale');
       return res.status(401).json({ error: 'Token version stale', code: 'TOKEN_EXPIRED' });
+    }
+
+    // A temporary password must be changed before anything else works. This
+    // was only enforced by the web app's own screen, so the API itself
+    // accepted a temporary password for everything.
+    if (!employee.first_login_done && !FIRST_LOGIN_ALLOWED.test(req.originalUrl)) {
+      return res.status(403).json({
+        error: 'Change your temporary password first.',
+        code: 'PASSWORD_CHANGE_REQUIRED',
+      });
     }
 
     req.user = payload;

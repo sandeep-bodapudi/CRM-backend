@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { get as idbGet } from 'idb-keyval';
 import { useAuth } from '../../context/AuthContext';
+import { API_BASE_URL } from '../../config';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
@@ -40,6 +42,43 @@ import {
 
 export const UserSettings: React.FC = () => {
   const { user, logout, fetchWithAuth, appLockEnabled, setAppLockEnabled } = useAuth();
+
+  // Other phones / browsers still signed in to this account.
+  const [devices, setDevices] = useState<number | null>(null);
+  const [signOutState, setSignOutState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
+  const [signOutError, setSignOutError] = useState('');
+  const loadDevices = () =>
+    fetchWithAuth(`${API_BASE_URL}/auth/sessions`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setDevices(d.devices))
+      .catch(() => {});
+  useEffect(() => {
+    loadDevices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const signOutOthers = async () => {
+    setSignOutState('busy');
+    setSignOutError('');
+    try {
+      // The server keeps the sign-in this refresh key belongs to.
+      const refreshToken = await idbGet('rrh_refresh_token');
+      const res = await fetchWithAuth(`${API_BASE_URL}/auth/sessions/sign-out-others`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(refreshToken ? { 'x-refresh-token': String(refreshToken) } : {}),
+        },
+        body: '{}',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not sign out the other devices');
+      setSignOutState('done');
+      loadDevices();
+    } catch (err: any) {
+      setSignOutState('error');
+      setSignOutError(err?.message || 'No connection. Try again.');
+    }
+  };
   const { isSupported, permission, isActive, isEnabled, isSubscribing, subscribe, unsubscribe } =
     usePushNotifications();
   const { canInstall, install } = usePWAInstall();
@@ -571,6 +610,45 @@ export const UserSettings: React.FC = () => {
               Update &rarr;
             </span>
           </button>
+
+          <div className="p-3 rounded-xl border border-slate-100 dark:border-slate-700 space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+                  Signed-in devices
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {devices === null
+                    ? 'Checking...'
+                    : devices <= 1
+                      ? 'Only this device is signed in.'
+                      : `Signed in on ${devices} devices, including this one.`}{' '}
+                  Devices not used for 30 days are signed out automatically.
+                </p>
+              </div>
+            </div>
+            {devices !== null && devices > 1 && signOutState !== 'done' && (
+              <button
+                type="button"
+                onClick={signOutOthers}
+                disabled={signOutState === 'busy'}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-60"
+              >
+                {signOutState === 'busy' ? 'Signing out...' : 'Sign out all other devices'}
+              </button>
+            )}
+            {signOutState === 'done' && (
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                All other devices are signed out.
+              </p>
+            )}
+            {signOutState === 'error' && (
+              <p className="text-xs font-semibold text-red-600 dark:text-red-400">{signOutError}</p>
+            )}
+          </div>
 
           <button
             onClick={logout}

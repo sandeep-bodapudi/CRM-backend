@@ -40,16 +40,20 @@ export const generateAccessToken = (payload: TokenPayload, expiresIn: string = '
   return jwt.sign(finalPayload, JWT_ACCESS_SECRET, { expiresIn } as jwt.SignOptions);
 };
 
-// 400 days (~13 months) — long enough that an active employee's session
-// renews indefinitely via the existing rotating-refresh flow (every use
-// issues a fresh 400-day token), while still being a bounded, real
-// expiry rather than a literal "never" that some tooling handles oddly.
-// Revocation stays instant and independent of this via token_version
-// (apps/api/src/middleware/auth.ts) — extending this does NOT weaken that.
-export const REFRESH_TOKEN_TTL_MS = 400 * 24 * 60 * 60 * 1000;
+// 30 days, renewed on every use: someone who opens the app at least once a
+// month stays signed in; a phone or browser left unused for 30 days is
+// signed out. Was 400 days, so every old device stayed signed in for over a
+// year (audit 2026-11-01: 97 live sign-ins for 14 staff, up to 27 each) and
+// a stolen refresh key worked just as long. Revocation stays instant and
+// independent of this via token_version (middleware/auth.ts).
+export const REFRESH_TOKEN_TTL_DAYS = 30;
+export const REFRESH_TOKEN_TTL_MS = REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 export const generateRefreshToken = (payload: TokenPayload): string => {
-  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '400d', jwtid: crypto.randomUUID() });
+  return jwt.sign(payload, JWT_REFRESH_SECRET, {
+    expiresIn: `${REFRESH_TOKEN_TTL_DAYS}d`,
+    jwtid: crypto.randomUUID(),
+  });
 };
 
 export const verifyAccessToken = (token: string): TokenPayload => {

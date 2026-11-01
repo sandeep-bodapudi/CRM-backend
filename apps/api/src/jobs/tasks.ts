@@ -621,10 +621,20 @@ export const expiredSessionCleanupJob = async () => {
   // anything (the /auth/refresh route already rejects an expired token), so
   // this is pure housekeeping. Naturally idempotent: DELETE WHERE expires_at
   // < now() matches nothing on a re-run once already cleaned.
+  // Also drop used-up rows: every refresh leaves the old row behind as
+  // consumed, and sign-outs leave revoked ones, so the table only ever grew
+  // (6,767 rows for 15 staff on 2026-11-01). Two weeks of history is kept so
+  // a reused old refresh key is still recognised (and its sign-in revoked).
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const result = await prisma.authSession.deleteMany({
-    where: { expires_at: { lt: new Date() } },
+    where: {
+      OR: [
+        { expires_at: { lt: new Date() } },
+        { OR: [{ consumed: true }, { revoked: true }], updated_at: { lt: twoWeeksAgo } },
+      ],
+    },
   });
-  logger.info(`Cleaned up ${result.count} expired session(s).`);
+  logger.info(`Cleaned up ${result.count} expired or used session(s).`);
 };
 
 // 5. Commission calculation batch

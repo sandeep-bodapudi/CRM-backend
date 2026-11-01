@@ -8,7 +8,12 @@ import { generateAccessToken, generateRefreshToken, REFRESH_TOKEN_TTL_MS } from 
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { LoginSchema, ChangePasswordSchema, Roles } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
-import { loginRateLimiter, loginRateLimitKey, refreshRateLimiter } from '../middleware/rateLimiter';
+import {
+  clientIp,
+  loginRateLimiter,
+  loginRateLimitKey,
+  refreshRateLimiter,
+} from '../middleware/rateLimiter';
 import { publicAssetUrl } from '../utils/media';
 import { decryptData } from '../utils/crypto';
 import { getEffectivePermissionNames, getRoleNames } from '../utils/effectivePermissions';
@@ -49,6 +54,22 @@ const mapEmployeeToUser = (employee: any, roleNames: string[], permissions: stri
   bankBranch: decryptData(employee.bank_branch),
 });
 
+// Account lockout. The per-IP limit alone allowed ~7,200 guesses a day per
+// address (and unlimited across addresses). After LOCK_AFTER wrong passwords
+// within LOCK_WINDOW_MS the account refuses every attempt -- right or wrong --
+// until the window has passed.
+const LOCK_AFTER = 10;
+const LOCK_WINDOW_MS = 15 * 60 * 1000;
+const recentFailedLogins = (employeeId: number) =>
+  p.auditEvent.count({
+    where: {
+      action: 'SECURITY_ALERT',
+      entity_type: 'AUTH_FAILED',
+      entity_id: employeeId,
+      created_at: { gte: new Date(Date.now() - LOCK_WINDOW_MS) },
+    },
+  });
+
 // POST /api/v1/auth/login
 router.post(
   '/login',
@@ -75,17 +96,27 @@ router.post(
         },
       });
 
+      const ip = clientIp(req);
       if (!employee || employee.status !== 'ACTIVE') {
         await p.auditEvent.create({
           data: {
             actor_id: 0,
             action: 'SECURITY_ALERT',
             entity_type: 'AUTH_FAILED',
-            entity_id: 0,
-            new_value: `Attempted login with invalid/inactive code`,
+            entity_id: employee?.id ?? 0,
+            // The code that was tried and from where, so repeated guessing is visible.
+            new_value: `Login with ${employee ? 'inactive' : 'unknown'} code "${String(employee_code).slice(0, 40)}" from ${ip}`,
           },
         });
         return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      if ((await recentFailedLogins(employee.id)) >= LOCK_AFTER) {
+        return res.status(429).json({
+          error:
+            'This account is locked for 15 minutes after too many wrong passwords. Try again later, or ask Admin to reset your password.',
+          code: 'ACCOUNT_LOCKED',
+        });
       }
 
       const isMatch = await bcrypt.compare(password, employee.password_hash);
@@ -96,9 +127,20 @@ router.post(
             action: 'SECURITY_ALERT',
             entity_type: 'AUTH_FAILED',
             entity_id: employee.id,
-            new_value: `Invalid password attempt`,
+            new_value: `Invalid password attempt from ${ip}`,
           },
         });
+        if ((await recentFailedLogins(employee.id)) === LOCK_AFTER) {
+          await p.auditEvent.create({
+            data: {
+              actor_id: employee.id,
+              action: 'SECURITY_ALERT',
+              entity_type: 'ACCOUNT_LOCKED',
+              entity_id: employee.id,
+              new_value: `Locked for 15 minutes after ${LOCK_AFTER} wrong passwords (last from ${ip})`,
+            },
+          });
+        }
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
@@ -467,5 +509,86 @@ router.post('/logout', validateRequestBody(EmptyBodySchema), async (req, res: Re
   res.clearCookie('refreshToken', { path: '/' });
   return res.status(200).json({ message: 'Logged out successfully' });
 });
+
+// Sign-ins = token families still usable on some device.
+const activeFamilies = async (employeeId: number) => {
+  const rows = await p.authSession.findMany({
+    where: {
+      employee_id: employeeId,
+      consumed: false,
+      revoked: false,
+      expires_at: { gt: new Date() },
+    },
+    select: { family_token: true },
+  });
+  return new Set(rows.map((r: { family_token: string }) => r.family_token));
+};
+
+const currentFamily = async (req: any): Promise<string | null> => {
+  const refreshToken = req.cookies?.refreshToken || req.headers['x-refresh-token'];
+  if (typeof refreshToken !== 'string' || !refreshToken) return null;
+  const hash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  const session = await p.authSession.findFirst({
+    where: { refresh_token_hash: hash, employee_id: req.user.employeeId },
+    select: { family_token: true },
+  });
+  return session?.family_token || null;
+};
+
+// GET /api/v1/auth/sessions -- how many devices this person is signed in on.
+router.get('/sessions', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const families = await activeFamilies(req.user!.employeeId);
+    return res.json({ devices: families.size });
+  } catch (error) {
+    logger.error('List sessions error:', error);
+    return res.status(500).json({ error: 'Could not load your sign-ins' });
+  }
+});
+
+// POST /api/v1/auth/sessions/sign-out-others -- sign out every other phone or
+// browser (a lost phone, a shared computer), keeping this one.
+router.post(
+  '/sessions/sign-out-others',
+  authenticateToken,
+  validateRequestBody(EmptyBodySchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employeeId = req.user!.employeeId;
+      const keep = await currentFamily(req);
+      if (!keep) {
+        return res.status(400).json({ error: 'Sign in again on this device, then try once more.' });
+      }
+      const result = await p.$transaction(
+        async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+          const revoked = await tx.authSession.updateMany({
+            where: { employee_id: employeeId, revoked: false, NOT: { family_token: keep } },
+            data: { revoked: true, revocation_reason: 'SIGNED_OUT_OTHER_DEVICES' },
+          });
+          // Their access tokens would otherwise keep working until they expire;
+          // this device simply gets a fresh one on its next refresh.
+          await tx.employee.update({
+            where: { id: employeeId },
+            data: { token_version: { increment: 1 } },
+          });
+          await tx.auditEvent.create({
+            data: {
+              actor_id: employeeId,
+              action: 'SIGNED_OUT_OTHER_DEVICES',
+              entity_type: 'EMPLOYEE',
+              entity_id: employeeId,
+              new_value: JSON.stringify({ sessions: revoked.count }),
+            },
+          });
+          return revoked.count;
+        },
+      );
+      return res.json({ message: 'Signed out of all other devices', sessions: result });
+    } catch (error) {
+      logger.error('Sign out other devices error:', error);
+      return res.status(500).json({ error: 'Could not sign out the other devices' });
+    }
+  },
+);
 
 export default router;
