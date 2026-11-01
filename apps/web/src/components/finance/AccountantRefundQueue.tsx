@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config';
+import { useToast } from '../../context/ToastContext';
+import { toUserFacingError } from '../../utils/userFacingError';
 
 interface RefundItem {
   id: number;
@@ -71,8 +73,11 @@ interface Props {
 
 export const AccountantRefundQueue: React.FC<Props> = ({ isMD }) => {
   const { fetchWithAuth } = useAuth();
+  const { showToast, showError } = useToast();
   const [refunds, setRefunds] = useState<RefundItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed load used to look exactly like "nothing pending".
+  const [loadError, setLoadError] = useState(false);
   const [actionId, setActionId] = useState<number | null>(null);
   const [noteModal, setNoteModal] = useState<{
     id: number;
@@ -90,15 +95,17 @@ export const AccountantRefundQueue: React.FC<Props> = ({ isMD }) => {
   const fetchQueue = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       // Explicit high limit: the backend previously had no limit at all
       // (now defaults to 2000) — refund requests accumulate continuously
       // company-wide with no date filter.
       const res = await fetchWithAuth(`${API_BASE_URL}/expense-refunds/queue?limit=1000`);
+      if (!res.ok) throw new Error('load failed');
       const data = await res.json();
       setRefunds(data.refunds || []);
       setVisibleRefundCount(REFUNDS_PAGE_SIZE);
     } catch {
-      // noop
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -108,52 +115,80 @@ export const AccountantRefundQueue: React.FC<Props> = ({ isMD }) => {
     fetchQueue();
   }, [fetchQueue]);
 
+  // Approve / reject / mark refunded used to ignore the server's reply: a
+  // refused or failed request closed the dialog as if it had worked.
+  const sendDecision = async (id: number, path: string, body: object | null, done: string) => {
+    setActionId(id);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/expense-refunds/${id}/${path}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showError(
+          toUserFacingError({ message: data.error || 'The change was not saved.', body: data }),
+        );
+        return false;
+      }
+      showToast(done, 'success');
+      fetchQueue();
+      return true;
+    } catch {
+      showError(
+        toUserFacingError({ message: 'No connection. The change was not saved.', body: {} }),
+      );
+      return false;
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const closeNote = () => {
+    setNoteModal(null);
+    setNoteText('');
+  };
+
   const handleAccountantDecision = async (
     id: number,
     decision: 'APPROVE' | 'REJECT',
     note: string,
   ) => {
-    setActionId(id);
-    try {
-      await fetchWithAuth(`${API_BASE_URL}/expense-refunds/${id}/accountant-review`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decision, note }),
-      });
-      fetchQueue();
-    } finally {
-      setActionId(null);
-      setNoteModal(null);
-      setNoteText('');
-    }
+    const ok = await sendDecision(
+      id,
+      'accountant-review',
+      { decision, note },
+      decision === 'APPROVE' ? 'Refund approved' : 'Refund rejected',
+    );
+    if (ok) closeNote();
   };
 
   const handleMDDecision = async (id: number, decision: 'APPROVE' | 'REJECT', note: string) => {
-    setActionId(id);
-    try {
-      await fetchWithAuth(`${API_BASE_URL}/expense-refunds/${id}/md-review`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decision, note }),
-      });
-      fetchQueue();
-    } finally {
-      setActionId(null);
-      setNoteModal(null);
-      setNoteText('');
-    }
+    const ok = await sendDecision(
+      id,
+      'md-review',
+      { decision, note },
+      decision === 'APPROVE' ? 'Refund approved' : 'Refund rejected',
+    );
+    if (ok) closeNote();
   };
 
   const handleMarkRefunded = async (id: number) => {
-    setActionId(id);
+    await sendDecision(id, 'mark-refunded', null, 'Marked as refunded');
+  };
+
+  // The bill is private: a plain link carries no login, so fetch it here.
+  const openProof = async (id: number) => {
+    const win = window.open('', '_blank');
     try {
-      await fetchWithAuth(`${API_BASE_URL}/expense-refunds/${id}/mark-refunded`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      fetchQueue();
-    } finally {
-      setActionId(null);
+      const res = await fetchWithAuth(`${API_BASE_URL}/expense-refunds/${id}/proof`);
+      if (!res.ok) throw new Error('missing');
+      const url = URL.createObjectURL(await res.blob());
+      if (win) win.location.href = url;
+    } catch {
+      win?.close();
+      showError(toUserFacingError({ message: 'The bill could not be loaded.', body: {} }));
     }
   };
 
@@ -162,6 +197,21 @@ export const AccountantRefundQueue: React.FC<Props> = ({ isMD }) => {
       <div className="flex items-center justify-center py-16 text-slate-400 gap-3">
         <Loader2 className="w-5 h-5 animate-spin" />
         <span className="text-sm">Loading refund queue...</span>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 text-sm text-slate-600">
+        <span>The refund queue could not be loaded.</span>
+        <button
+          type="button"
+          onClick={fetchQueue}
+          className="px-4 py-2 rounded-lg border border-slate-200 font-semibold hover:bg-slate-50"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -258,15 +308,14 @@ export const AccountantRefundQueue: React.FC<Props> = ({ isMD }) => {
               <div className="flex flex-wrap gap-2 pt-1">
                 {/* View Proof */}
                 {r.proof_image_url && (
-                  <a
-                    href={`${API_BASE_URL}/expense-refunds/${r.id}/proof`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => openProof(r.id)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     View Bill
-                  </a>
+                  </button>
                 )}
 
                 {/* Accountant Actions */}

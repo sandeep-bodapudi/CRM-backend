@@ -1037,7 +1037,9 @@ export const SiteVisitManagement: React.FC = () => {
                     )}
                     {visit.proof_photo_url && (
                       <li>
-                        {visit.proof_photo_url.startsWith('/uploads/visit-proofs/') ? (
+                        {/* Our own visit photos are private: always fetch them through
+                            the logged-in route (FTP storage saves a full site URL). */}
+                        {visit.proof_photo_url.includes('/uploads/visit-proofs/') ? (
                           <button
                             type="button"
                             onClick={() => openVisitPhoto(visit.id)}
