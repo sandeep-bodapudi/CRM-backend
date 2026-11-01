@@ -143,6 +143,8 @@ export class BookingService {
       where: { company_id: user.companyId },
       orderBy: { id: 'desc' },
       include: BOOKING_DISPLAY_INCLUDE,
+      // Newest 1,000: the list had no limit and grows forever.
+      take: 1000,
     });
     return bookings;
   }
