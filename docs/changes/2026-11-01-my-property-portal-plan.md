@@ -35,9 +35,19 @@
    - Send announcements to a project's customers.
    - Answer customer requests.
    - See which customers have activated the portal.
+
+   **Done 2026-11-01 (local, not deployed):**
+   - New table `ProjectUpdate` (`apps/api/prisma/manual-migrations/2026-11-01_project_updates.sql`). Run it on staging, then production, before the code goes live.
+   - CRM, Projects → project → **Buyer updates**: post construction progress (up to 6 photos) or an announcement. Every buyer (booking not draft/cancelled) gets a notification. Removing a post also hides its notifications.
+   - CRM, Customers: a **Portal** column (Not invited / Invited / Invite expired / Using the portal), and **Give portal access** in the customer details. It issues a 24-hour temporary password and a WhatsApp message with the portal link (`MY_PROPERTY_URL`, default myproperty.sonthilluconstructions.com). The same button resets a forgotten password.
+   - Requests: the employee on the booking (else the customer's assigned employee) is notified of a new request. Resolving a complaint notifies the customer and shows the answer in the portal.
+   - The customer API no longer sends `password_hash` to staff.
+   - Portal: Updates shows site posts with photos. Home shows the latest site post that has photos.
+   - Checks: `D:/HYD/claude-work/scripts/my-property-phase3-check.mjs` (26/26), plus phase 1 (17/17).
+
 4. **Go live.**
    - Deploy to myproperty.sonthilluconstructions.com, with an `.htaccess` fallback so links work. Add a Radha address if wanted.
-   - Switch the booking flow's credential message to the portal link.
+   - ~~Switch the booking flow's credential message to the portal link.~~ Done in phase 3. Set `MY_PROPERTY_URL` on the API if the address changes.
    - Retire the old portal server and DB.
 
 ## Security fixes carried over from the 31 Oct audit

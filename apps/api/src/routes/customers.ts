@@ -11,6 +11,7 @@ import {
 } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
 import { CustomerService, AppError } from '../services/customer.service';
+import { CustomerPortalService } from '../services/customerPortal.service';
 import { KycService } from '../services/kyc.service';
 import { prisma } from '../lib/prisma';
 
@@ -98,6 +99,23 @@ router.patch(
         message: 'Customer updated successfully',
         ...result,
       });
+    } catch (error: any) {
+      return handleServiceError(error, res);
+    }
+  },
+);
+
+// POST /api/v1/customers/:id/portal-access - New temporary My Property password
+// (first invite, or a customer who forgot theirs). Returns it once, with the
+// WhatsApp message to send; it is never stored or shown again.
+router.post(
+  '/:id/portal-access',
+  authenticateToken,
+  requireAuthz(Permissions.CUSTOMERS_UPDATE),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = await CustomerPortalService.issueAccess(req.user!, parseInt(req.params.id));
+      return res.status(200).json(result);
     } catch (error: any) {
       return handleServiceError(error, res);
     }

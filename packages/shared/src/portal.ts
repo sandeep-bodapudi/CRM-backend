@@ -196,6 +196,8 @@ export const CustomerNotificationType = {
   PORTAL_ACTIVATED: 'PORTAL_ACTIVATED',
   KYC_STATUS_UPDATED: 'KYC_STATUS_UPDATED',
   PAYMENT_STATUS_UPDATED: 'PAYMENT_STATUS_UPDATED', // Phase 11 Packet 3F
+  PROJECT_UPDATE: 'PROJECT_UPDATE', // My Property: construction progress / announcement
+  REQUEST_ANSWERED: 'REQUEST_ANSWERED', // My Property: staff answered a customer request
 } as const;
 
 export type CustomerNotificationTypeValue =

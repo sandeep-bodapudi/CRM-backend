@@ -15,6 +15,7 @@ import { API_BASE_URL } from '../../config';
 import { Permissions } from '../../shared';
 import { CreateBookingModal } from '../commercial/CreateBookingModal';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
+import { PortalAccessPanel, PortalBadge, PortalState } from './PortalAccessPanel';
 
 interface Customer {
   id: number;
@@ -35,6 +36,7 @@ interface Customer {
     status?: string;
   };
   created_at: string;
+  portal?: PortalState;
 }
 
 export const CustomerManagement: React.FC = () => {
@@ -214,12 +216,15 @@ export const CustomerManagement: React.FC = () => {
                 <th scope="col" className="px-4 py-3 sm:px-6 sm:py-4">
                   Assigned To
                 </th>
+                <th scope="col" className="px-4 py-3 sm:px-6 sm:py-4">
+                  Portal
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400">
+                  <td colSpan={6} className="p-8 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="w-6 h-6 border-2 border-navy-600 border-t-transparent rounded-full animate-spin"></div>
                       <span className="font-semibold text-xs uppercase tracking-widest">
@@ -230,7 +235,7 @@ export const CustomerManagement: React.FC = () => {
                 </tr>
               ) : filteredCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-500">
+                  <td colSpan={6} className="p-8 text-center text-slate-500">
                     <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-3" />
                     <p className="font-semibold">No customers found.</p>
                   </td>
@@ -287,6 +292,9 @@ export const CustomerManagement: React.FC = () => {
                       ) : (
                         <span className="text-xs text-slate-400 italic">Unassigned</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 sm:px-6 sm:py-4">
+                      <PortalBadge portal={cust.portal} />
                     </td>
                   </tr>
                 ))
@@ -376,6 +384,18 @@ export const CustomerManagement: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* My Property portal */}
+              <PortalAccessPanel
+                key={dossierCustomer.id}
+                customerId={dossierCustomer.id}
+                portal={dossierCustomer.portal}
+                canIssue={
+                  !!user?.permissions?.includes(Permissions.CUSTOMERS_UPDATE) &&
+                  dossierCustomer.status === 'ACTIVE'
+                }
+                onIssued={fetchCustomers}
+              />
 
               {/* Ownership */}
               <div>

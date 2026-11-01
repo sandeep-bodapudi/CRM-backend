@@ -8,6 +8,7 @@ import { validateRequestBody } from '../middleware/validate';
 import { requireCustomer } from '../middleware/customerAuth';
 import { clientIp } from '../middleware/rateLimiter';
 import { MyPropertyService } from '../services/myProperty.service';
+import { ProjectUpdateService } from '../services/projectUpdate.service';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -102,6 +103,12 @@ router.get(
   '/bookings/:id',
   requireCustomer(),
   handle((req) => MyPropertyService.booking(req.customer, Number(req.params.id) || 0)),
+);
+
+router.get(
+  '/updates',
+  requireCustomer(),
+  handle((req) => ProjectUpdateService.forCustomer(req.customer)),
 );
 
 router.get(

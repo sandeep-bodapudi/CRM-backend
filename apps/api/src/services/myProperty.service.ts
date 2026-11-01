@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { AppError } from './lead/errors';
 import { generateCustomerToken, passwordFingerprint } from '../utils/customerJwt';
+import { notifyEmployee } from '../utils/notifyEmployee';
+import { logger } from '../utils/logger';
 
 // My Property portal: what a customer (buyer) can do and see. Every read is
 // scoped to the logged-in customer's own records.
@@ -449,6 +451,17 @@ export class MyPropertyService {
             assigned_employee_id: (booking as any)?.assigned_employee_id ?? null,
           },
         });
+        // Someone on the team has to see it: the booking's employee, else
+        // whoever looks after the customer.
+        const staffId = complaint.assigned_employee_id ?? customer.assigned_to_id ?? null;
+        if (staffId) {
+          notifyEmployee(staffId, {
+            type: 'CUSTOMER_REQUEST',
+            title: 'New request from a customer',
+            message: `${customer.first_name}: ${complaint.title} (${complaint.complaint_code})`,
+            link: '/complaints',
+          }).catch((err) => logger.warn('Customer request notify failed', err));
+        }
         return {
           request: { id: complaint.id, code: complaint.complaint_code, status: complaint.status },
         };
