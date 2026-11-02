@@ -81,6 +81,17 @@ router.get(
         }
       }
 
+      // People who have left (RESIGNED) stay out of every picker and list.
+      // Only the employee directory asks for them, with ?include_left=1.
+      if (req.query.include_left !== '1') {
+        const activeOnly = { status: 'ACTIVE' };
+        if (whereClause.AND) {
+          whereClause.AND.push(activeOnly);
+        } else {
+          whereClause.AND = [activeOnly];
+        }
+      }
+
       if (roleQuery) {
         // Callers may send either the enum KEY (e.g. "PROJECT_MANAGER", as
         // PropertyAssignmentsWidget.tsx does) or the actual Roles.* VALUE
@@ -246,6 +257,7 @@ router.get('/managers', authenticateToken, async (req: AuthenticatedRequest, res
     const managers = await prisma.employee.findMany({
       where: {
         company_id: req.user!.companyId,
+        status: 'ACTIVE',
         roles: {
           some: {
             role: {

@@ -142,6 +142,15 @@ export const EmployeeManagement: React.FC = () => {
     qrBadgeEmp ? `/attendance/employee-qr/${qrBadgeEmp.id}` : null,
   );
   const [resetPwdEmp, setResetPwdEmp] = useState<Employee | null>(null);
+  // A password the admin has to pass on. Kept in its own box until they close
+  // it: a top-of-page banner with a 4-second timer was easy to miss on a phone.
+  const [issuedPassword, setIssuedPassword] = useState<{
+    name: string;
+    code: string;
+    password: string;
+    isNew: boolean;
+  } | null>(null);
+  const [pwdCopied, setPwdCopied] = useState(false);
 
   // Employee lifecycle actions (resign / promote / convert employment type) --
   // operate on whichever employee the dossier modal is currently showing.
@@ -208,7 +217,7 @@ export const EmployeeManagement: React.FC = () => {
         // not editable — this page has no pagination UI at all) for any
         // company with more than 20 staff. Found via the Phase 10 manual QA
         // pass: an HR account for a 214-employee company saw "Total Staff: 20".
-        fetchWithAuth(`${API_BASE_URL}/employees?limit=1000`),
+        fetchWithAuth(`${API_BASE_URL}/employees?limit=1000&include_left=1`),
         fetchWithAuth(`${API_BASE_URL}/employees/branches`),
         fetchWithAuth(`${API_BASE_URL}/employees/managers`),
         fetchWithAuth(`${API_BASE_URL}/employees/companies`),
@@ -338,6 +347,15 @@ export const EmployeeManagement: React.FC = () => {
       setSuccessMessage(
         `Employee ${data.employee.fullName} (${data.employee.employeeCode}) onboarded successfully!`,
       );
+      if (data.employee.defaultPassword) {
+        setPwdCopied(false);
+        setIssuedPassword({
+          name: data.employee.fullName,
+          code: data.employee.employeeCode,
+          password: data.employee.defaultPassword,
+          isNew: true,
+        });
+      }
       setShowAddModal(false);
       resetForm();
       fetchEmployeesAndMetadata();
@@ -363,9 +381,13 @@ export const EmployeeManagement: React.FC = () => {
       );
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setSuccessMessage(
-          `Password for ${resetPwdEmp.fullName} reset. Temporary password: ${data.temporaryPassword} — share this with them directly, it won't be shown again.`,
-        );
+        setPwdCopied(false);
+        setIssuedPassword({
+          name: resetPwdEmp.fullName,
+          code: resetPwdEmp.employeeCode,
+          password: data.temporaryPassword,
+          isNew: false,
+        });
         setResetPwdEmp(null);
       } else {
         // Used to fall through here silently -- a failed reset (missing
@@ -1302,6 +1324,70 @@ export const EmployeeManagement: React.FC = () => {
                 Confirm Reset
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {issuedPassword && (
+        <div className="fixed inset-0 z-[70] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-xl border border-slate-100 text-center animate-scaleUp">
+            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Key className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-slate-800 text-base">
+              {issuedPassword.isNew ? 'Login details' : 'New temporary password'}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1 mb-4 leading-relaxed">
+              For <strong>{issuedPassword.name}</strong> ({issuedPassword.code}). Share it with them
+              directly. They must change it at their next login. It won't be shown again.
+            </p>
+            <div
+              className="font-mono text-lg font-bold tracking-wider text-slate-800 bg-slate-50 border border-slate-200 rounded-xl py-3 px-2 select-all break-all"
+              data-testid="issued-password"
+            >
+              {issuedPassword.password}
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(issuedPassword.password);
+                    setPwdCopied(true);
+                  } catch {
+                    setPwdCopied(false);
+                  }
+                }}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+              >
+                {pwdCopied ? 'Copied' : 'Copy'}
+              </button>
+              {typeof navigator !== 'undefined' && 'share' in navigator && (
+                <button
+                  onClick={() =>
+                    navigator
+                      .share({
+                        text: `RRH CRM login
+Employee ID: ${issuedPassword.code}
+Temporary password: ${issuedPassword.password}
+Change it after you log in.`,
+                      })
+                      .catch(() => {})
+                  }
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                >
+                  Share
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setIssuedPassword(null);
+                setPwdCopied(false);
+              }}
+              className="w-full mt-2 py-3 bg-navy-700 hover:bg-navy-800 text-white font-bold text-xs rounded-xl shadow-md"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}

@@ -644,6 +644,8 @@ router.get(
         where: {
           // Packet D (15-16): company-scoped to req.user.companyId
           company_id: req.user!.companyId,
+          // Leavers only on request (?include_left=1).
+          ...(req.query.include_left === '1' ? {} : { status: 'ACTIVE' }),
           // Filter out Admin or invisible system roles per SDD Golden Rule #2
           roles: {
             none: {

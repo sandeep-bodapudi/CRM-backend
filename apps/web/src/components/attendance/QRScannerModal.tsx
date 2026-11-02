@@ -32,9 +32,12 @@ export const QRScannerModal: React.FC = () => {
 
   useEffect(() => {
     // Attendance Exemption Guard (MD, HR Manager, Admin, Marketing Director or attendanceRequired = false)
-    const isManagementRole = (
-      [Roles.MD, Roles.HR_MANAGER, Roles.ADMIN, Roles.MARKETING_DIRECTOR] as string[]
-    ).includes(activeRole);
+    // A Technical Manager has Admin's access but marks attendance like any employee.
+    const isManagementRole =
+      !user?.roles?.includes(Roles.TECHNICAL_MANAGER) &&
+      ([Roles.MD, Roles.HR_MANAGER, Roles.ADMIN, Roles.MARKETING_DIRECTOR] as string[]).includes(
+        activeRole,
+      );
     if (user?.attendanceRequired === false || isManagementRole) {
       setAttendanceStamped(true);
       return;

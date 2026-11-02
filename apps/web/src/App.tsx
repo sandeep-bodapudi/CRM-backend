@@ -307,15 +307,17 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
   }, [accessToken]);
 
   // Report Exemption Logic (for logout gate only — attendance gating removed)
+  // A Technical Manager has Admin's access but reports like any employee.
   const isExemptFromReport =
     user?.reportRequired === false ||
-    user?.roles?.some(
-      (r) =>
-        r === Roles.MD ||
-        r === Roles.HR_MANAGER ||
-        r === Roles.ADMIN ||
-        r === Roles.MARKETING_DIRECTOR,
-    );
+    (!user?.roles?.includes(Roles.TECHNICAL_MANAGER) &&
+      user?.roles?.some(
+        (r) =>
+          r === Roles.MD ||
+          r === Roles.HR_MANAGER ||
+          r === Roles.ADMIN ||
+          r === Roles.MARKETING_DIRECTOR,
+      ));
 
   const [showLogoutIntentModal, setShowLogoutIntentModal] = useState(false);
 

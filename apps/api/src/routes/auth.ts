@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import { generateAccessToken, generateRefreshToken, REFRESH_TOKEN_TTL_MS } from '../utils/jwt';
 import { authenticateToken, AuthenticatedRequest, needsTwoStep } from '../middleware/auth';
 import { newTotpSecret, totpUri, verifyTotp } from '../utils/totp';
-import { LoginSchema, ChangePasswordSchema, Roles } from '../shared';
+import { LoginSchema, ChangePasswordSchema, Roles, withRoleAliases } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
 import {
   clientIp,
@@ -178,7 +178,7 @@ router.post(
         await p.employee.update({ where: { id: employee.id }, data: { totp_last_step: step } });
       }
 
-      const roleNames = employee.roles.map((r: any) => r.role.name);
+      const roleNames = withRoleAliases(employee.roles.map((r: any) => r.role.name));
       const permissionsSet = new Set<string>();
       employee.roles.forEach((r: any) => {
         if (r.role.permissions) {
@@ -326,7 +326,7 @@ router.post(
         return res.status(404).json({ error: 'Employee not found' });
       }
 
-      const roleNames = updatedEmployee.roles.map((r: any) => r.role.name);
+      const roleNames = withRoleAliases(updatedEmployee.roles.map((r: any) => r.role.name));
       const permissionsSet = new Set<string>();
       updatedEmployee.roles.forEach((r: any) => {
         if (r.role.permissions) {

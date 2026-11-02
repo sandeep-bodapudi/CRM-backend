@@ -546,6 +546,10 @@ router.get('/team', authenticateToken, async (req: AuthenticatedRequest, res: Re
     const year = req.query.year ? Number(req.query.year) : istYear;
     const month = req.query.month ? Number(req.query.month) : istMonth;
     const { startOfMonth, endOfMonth } = getISTMonthRange(Number(year), Number(month));
+    // Leavers only show for a month they still worked in.
+    whereClause.AND.push({
+      OR: [{ status: 'ACTIVE' }, { last_working_day: { gte: startOfMonth } }],
+    });
 
     // The dailyAttendanceRollupJob cron runs at 05:30 AM IST (Midnight UTC) on the morning *after*
     // the day it evaluates. To correctly group these overnight events into the calendar month they
