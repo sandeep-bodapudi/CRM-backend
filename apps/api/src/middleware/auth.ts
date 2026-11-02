@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { verifyAccessToken, TokenPayload } from '../utils/jwt';
 import { prisma } from '../lib/prisma';
+import { lastWorkingDayPassed } from '../utils/time';
 import { PERMISSIONS_VERSION } from '../shared/auth';
 
 export interface AuthenticatedRequest extends Request {
@@ -103,7 +104,7 @@ export const authenticateToken = async (
 
     const employee = await prisma.employee.findUnique({
       where: { id: payload.employeeId },
-      select: { status: true, token_version: true, first_login_done: true },
+      select: { status: true, token_version: true, first_login_done: true, last_working_day: true },
     });
 
     if (!employee) {
@@ -111,7 +112,9 @@ export const authenticateToken = async (
       return res.status(401).json({ error: 'User not found', code: 'UNAUTHORIZED' });
     }
 
-    if (employee.status !== 'ACTIVE') {
+    // Serving notice: still ACTIVE until the nightly job runs, but locked out
+    // from 00:00 IST the day after the last working day either way.
+    if (employee.status !== 'ACTIVE' || lastWorkingDayPassed(employee.last_working_day)) {
       logger.error('AUTH_FAIL: User status is not ACTIVE');
       return res.status(401).json({ error: 'User is inactive or suspended', code: 'UNAUTHORIZED' });
     }

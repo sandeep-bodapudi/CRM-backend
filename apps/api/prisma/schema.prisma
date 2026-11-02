@@ -366,6 +366,10 @@ model Employee {
   background_education String? // Qualifications, Degrees & Certifications
   resignation_date     DateTime? // when the employee submitted/was recorded as resigning
   last_working_day     DateTime? // final day of employment; may be in the future at time of recording
+  // Serving notice: who takes over their open work on the last working day, and
+  // when the last-day step (lock out + hand over) ran. NULL = not offboarded yet.
+  handover_to_id       Int?
+  offboarded_at        DateTime?
 
   company Company @relation(fields: [company_id], references: [id])
   branch  Branch? @relation(fields: [branch_id], references: [id])
@@ -436,6 +440,8 @@ model Employee {
   // Hierarchy Management
   manager                    Employee?               @relation("EmployeeManager", fields: [reporting_manager_id], references: [id])
   direct_reports             Employee[]              @relation("EmployeeManager")
+  handover_to                Employee?               @relation("EmployeeHandover", fields: [handover_to_id], references: [id])
+  handovers_received         Employee[]              @relation("EmployeeHandover")
   complaints                 Complaint[]             @relation("AssignedComplaints")
   webauthn_credentials       WebAuthnCredential[]
   received_feedback          SiteVisitFeedback[]     @relation("RatedInFeedback")

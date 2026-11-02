@@ -20,6 +20,7 @@ import {
   getISTComponents,
   getISTDayOfWeek,
   getISTMidnightInstant,
+  lastWorkingDayPassed,
   toHolidayDateKey,
 } from '../../utils/time';
 import { Roles, AttendanceQRPayloadSchema } from '../../shared';
@@ -243,7 +244,11 @@ router.post(
       if (scannedEmployee.company_id !== targetCompanyId) {
         return res.status(403).json({ error: 'Company mismatch.' });
       }
-      if (scannedEmployee.status !== 'ACTIVE' || !scannedEmployee.attendance_required) {
+      if (
+        scannedEmployee.status !== 'ACTIVE' ||
+        lastWorkingDayPassed(scannedEmployee.last_working_day) ||
+        !scannedEmployee.attendance_required
+      ) {
         return res.status(403).json({ error: 'Not eligible for attendance.' });
       }
       if (Number(payload.version) === 3) {

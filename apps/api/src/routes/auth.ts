@@ -16,6 +16,7 @@ import {
 } from '../middleware/rateLimiter';
 import { publicAssetUrl } from '../utils/media';
 import { decryptData } from '../utils/crypto';
+import { lastWorkingDayPassed } from '../utils/time';
 import { getEffectivePermissionNames, getRoleNames } from '../utils/effectivePermissions';
 
 const router = Router();
@@ -97,7 +98,11 @@ router.post(
       });
 
       const ip = clientIp(req);
-      if (!employee || employee.status !== 'ACTIVE') {
+      if (
+        !employee ||
+        employee.status !== 'ACTIVE' ||
+        lastWorkingDayPassed(employee.last_working_day)
+      ) {
         await p.auditEvent.create({
           data: {
             actor_id: 0,
@@ -468,7 +473,12 @@ router.post(
           return fail('Session compromised');
         }
       }
-      if (!employee || employee.id !== session.employee_id || employee.status !== 'ACTIVE') {
+      if (
+        !employee ||
+        employee.id !== session.employee_id ||
+        employee.status !== 'ACTIVE' ||
+        lastWorkingDayPassed(employee.last_working_day)
+      ) {
         return fail('Account inactive');
       }
 

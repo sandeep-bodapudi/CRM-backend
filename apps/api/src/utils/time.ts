@@ -82,6 +82,16 @@ export const toHolidayDateKey = (dateString: string): Date => new Date(`${dateSt
 export const getISTMidnightInstant = (dateString: string): Date =>
   new Date(`${dateString}T00:00:00+05:30`);
 
+/** Today's IST calendar date as UTC midnight -- the key date-only fields are stored as. */
+export const todayKeyIST = (): Date => toHolidayDateKey(getISTComponents().dateString);
+
+/**
+ * True once an employee's last working day is over (from 00:00 IST the next
+ * day). last_working_day is a date-only field stored as UTC midnight.
+ */
+export const lastWorkingDayPassed = (lastWorkingDay: Date | null | undefined): boolean =>
+  !!lastWorkingDay && lastWorkingDay < todayKeyIST();
+
 /**
  * IST-safe [startOfMonth, endOfMonth] instants for a given IST calendar year
  * and month (1-12), for use as Prisma `gte`/`lte` DateTime range bounds.
