@@ -24,3 +24,5 @@ if (!['127.0.0.1', 'localhost', '::1'].includes(host)) {
 }
 process.env.DATABASE_URL = url;
 process.env.NODE_ENV = 'test';
+// Test users sign in with a password only (2-step login has its own tests).
+process.env.TWO_STEP_DISABLED = 'true';

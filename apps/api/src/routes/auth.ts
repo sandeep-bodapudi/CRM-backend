@@ -5,7 +5,8 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { generateAccessToken, generateRefreshToken, REFRESH_TOKEN_TTL_MS } from '../utils/jwt';
-import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { authenticateToken, AuthenticatedRequest, needsTwoStep } from '../middleware/auth';
+import { newTotpSecret, totpUri, verifyTotp } from '../utils/totp';
 import { LoginSchema, ChangePasswordSchema, Roles } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
 import {
@@ -15,7 +16,7 @@ import {
   refreshRateLimiter,
 } from '../middleware/rateLimiter';
 import { publicAssetUrl } from '../utils/media';
-import { decryptData } from '../utils/crypto';
+import { decryptData, encryptData } from '../utils/crypto';
 import { lastWorkingDayPassed } from '../utils/time';
 import { getEffectivePermissionNames, getRoleNames } from '../utils/effectivePermissions';
 
@@ -149,6 +150,34 @@ router.post(
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
+      // 2-step login: right password, now the authenticator-app code. A wrong
+      // code counts toward the same lockout as a wrong password.
+      if (employee.totp_enabled_at && employee.totp_secret) {
+        if (!req.body.otp) {
+          return res.status(401).json({
+            error: 'Enter the 6-digit code from your authenticator app.',
+            code: 'OTP_REQUIRED',
+          });
+        }
+        const step = verifyTotp(decryptData(employee.totp_secret) || '', req.body.otp);
+        if (step === null || (employee.totp_last_step ?? -1) >= step) {
+          await p.auditEvent.create({
+            data: {
+              actor_id: employee.id,
+              action: 'SECURITY_ALERT',
+              entity_type: 'AUTH_FAILED',
+              entity_id: employee.id,
+              new_value: `Wrong 2-step code from ${ip}`,
+            },
+          });
+          return res.status(401).json({
+            error: 'That code is wrong or already used. Wait for the next code and try again.',
+            code: 'OTP_INVALID',
+          });
+        }
+        await p.employee.update({ where: { id: employee.id }, data: { totp_last_step: step } });
+      }
+
       const roleNames = employee.roles.map((r: any) => r.role.name);
       const permissionsSet = new Set<string>();
       employee.roles.forEach((r: any) => {
@@ -219,6 +248,7 @@ router.post(
         refreshToken, // Return in body for IndexedDB storage fallback
         firstLoginDone: employee.first_login_done,
         attendanceRequired: employee.attendance_required,
+        twoStepSetupRequired: !employee.totp_enabled_at && needsTwoStep(roleNames),
         user: mapEmployeeToUser(employee, roleNames, permissions),
       });
     } catch (error) {
@@ -618,6 +648,194 @@ router.post(
     } catch (error) {
       logger.error('Sign out other devices error:', error);
       return res.status(500).json({ error: 'Could not sign out the other devices' });
+    }
+  },
+);
+
+// ---- 2-step login (authenticator app) ----------------------------------
+// Required for MD, Admin and Finance (middleware/auth.ts TWO_STEP_ROLES),
+// available to anyone. Setup: /setup gives a secret + QR link, /enable
+// checks the first code and turns it on.
+
+const OtpSchema = z.object({ otp: z.string().trim().min(6).max(10) }).strict();
+const DisableTwoStepSchema = z
+  .object({ password: z.string().min(1), otp: z.string().trim().min(6).max(10) })
+  .strict();
+
+// GET /api/v1/auth/two-step -- is it on, and must it be?
+router.get('/two-step', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const employee = await p.employee.findUnique({
+      where: { id: req.user!.employeeId },
+      select: { totp_enabled_at: true },
+    });
+    return res.json({
+      enabled: !!employee?.totp_enabled_at,
+      enabledAt: employee?.totp_enabled_at ?? null,
+      required: needsTwoStep(req.user!.roles),
+    });
+  } catch (error) {
+    logger.error('2-step status error:', error);
+    return res.status(500).json({ error: 'Could not load 2-step login' });
+  }
+});
+
+// POST /api/v1/auth/two-step/setup -- a fresh secret (not active until /enable).
+router.post(
+  '/two-step/setup',
+  authenticateToken,
+  validateRequestBody(EmptyBodySchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employee = await p.employee.findUnique({
+        where: { id: req.user!.employeeId },
+        select: { employee_code: true, totp_enabled_at: true },
+      });
+      if (!employee) return res.status(404).json({ error: 'Employee not found' });
+      if (employee.totp_enabled_at) {
+        return res.status(409).json({ error: '2-step login is already on.' });
+      }
+      const secret = newTotpSecret();
+      await p.employee.update({
+        where: { id: req.user!.employeeId },
+        data: { totp_secret: encryptData(secret), totp_last_step: null },
+      });
+      return res.json({ secret, uri: totpUri(secret, employee.employee_code) });
+    } catch (error) {
+      logger.error('2-step setup error:', error);
+      return res.status(500).json({ error: 'Could not start 2-step login setup' });
+    }
+  },
+);
+
+// POST /api/v1/auth/two-step/enable -- first code from the app turns it on.
+router.post(
+  '/two-step/enable',
+  authenticateToken,
+  validateRequestBody(OtpSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employeeId = req.user!.employeeId;
+      const employee = await p.employee.findUnique({
+        where: { id: employeeId },
+        select: { totp_secret: true, totp_enabled_at: true },
+      });
+      if (!employee?.totp_secret) {
+        return res.status(400).json({ error: 'Start the setup again.' });
+      }
+      if (employee.totp_enabled_at) {
+        return res.status(409).json({ error: '2-step login is already on.' });
+      }
+      const step = verifyTotp(decryptData(employee.totp_secret) || '', req.body.otp);
+      if (step === null) {
+        return res.status(400).json({
+          error:
+            'That code did not match. Check the phone clock is right and enter the newest code.',
+        });
+      }
+      await p.employee.update({
+        where: { id: employeeId },
+        data: { totp_enabled_at: new Date(), totp_last_step: step },
+      });
+      await p.auditEvent.create({
+        data: {
+          actor_id: employeeId,
+          action: 'TWO_STEP_ENABLED',
+          entity_type: 'EMPLOYEE',
+          entity_id: employeeId,
+        },
+      });
+      return res.json({ message: '2-step login is on' });
+    } catch (error) {
+      logger.error('2-step enable error:', error);
+      return res.status(500).json({ error: 'Could not turn on 2-step login' });
+    }
+  },
+);
+
+// POST /api/v1/auth/two-step/disable -- only for people who don't need it;
+// MD/Admin/Finance ask a colleague to reset it instead (lost phone).
+router.post(
+  '/two-step/disable',
+  authenticateToken,
+  validateRequestBody(DisableTwoStepSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (needsTwoStep(req.user!.roles)) {
+        return res.status(403).json({ error: 'Your role must keep 2-step login on.' });
+      }
+      const employeeId = req.user!.employeeId;
+      const employee = await p.employee.findUnique({
+        where: { id: employeeId },
+        select: { password_hash: true, totp_secret: true, totp_enabled_at: true },
+      });
+      if (!employee?.totp_enabled_at || !employee.totp_secret) {
+        return res.status(400).json({ error: '2-step login is not on.' });
+      }
+      const passwordOk = await bcrypt.compare(req.body.password, employee.password_hash);
+      const step = verifyTotp(decryptData(employee.totp_secret) || '', req.body.otp);
+      if (!passwordOk || step === null) {
+        return res.status(400).json({ error: 'Password or code is wrong.' });
+      }
+      await p.employee.update({
+        where: { id: employeeId },
+        data: { totp_secret: null, totp_enabled_at: null, totp_last_step: null },
+      });
+      await p.auditEvent.create({
+        data: {
+          actor_id: employeeId,
+          action: 'TWO_STEP_DISABLED',
+          entity_type: 'EMPLOYEE',
+          entity_id: employeeId,
+        },
+      });
+      return res.json({ message: '2-step login is off' });
+    } catch (error) {
+      logger.error('2-step disable error:', error);
+      return res.status(500).json({ error: 'Could not turn off 2-step login' });
+    }
+  },
+);
+
+// POST /api/v1/auth/two-step/reset/:employeeId -- MD or Admin clears someone
+// else's 2-step login (lost or new phone); they set it up again on next use.
+router.post(
+  '/two-step/reset/:employeeId',
+  authenticateToken,
+  validateRequestBody(EmptyBodySchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const roles = req.user!.roles || [];
+      if (!roles.includes(Roles.MD) && !roles.includes(Roles.ADMIN)) {
+        return res.status(403).json({ error: 'Only the MD or Admin can reset 2-step login.' });
+      }
+      const targetId = Number(req.params.employeeId);
+      if (!Number.isInteger(targetId) || targetId <= 0 || targetId === req.user!.employeeId) {
+        return res.status(400).json({ error: 'Pick another employee.' });
+      }
+      const target = await p.employee.findFirst({
+        where: { id: targetId, company_id: req.user!.companyId },
+        select: { id: true },
+      });
+      if (!target) return res.status(404).json({ error: 'Employee not found' });
+      await p.employee.update({
+        where: { id: targetId },
+        data: { totp_secret: null, totp_enabled_at: null, totp_last_step: null },
+      });
+      await p.auditEvent.create({
+        data: {
+          actor_id: req.user!.employeeId,
+          action: 'TWO_STEP_RESET',
+          entity_type: 'EMPLOYEE',
+          entity_id: targetId,
+        },
+      });
+      return res.json({
+        message: '2-step login reset. They will set it up again at their next sign-in.',
+      });
+    } catch (error) {
+      logger.error('2-step reset error:', error);
+      return res.status(500).json({ error: 'Could not reset 2-step login' });
     }
   },
 );

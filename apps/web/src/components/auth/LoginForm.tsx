@@ -18,6 +18,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [debugDetails, setDebugDetails] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
+  // 2-step login: shown once the server says this account needs a code.
+  const [otpNeeded, setOtpNeeded] = useState(false);
+  const [otp, setOtp] = useState('');
 
   const handleCodeChange = (val: string) => {
     const formatted = val.toUpperCase().trim();
@@ -50,11 +53,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       return;
     }
 
+    if (otpNeeded && otp.length !== 6) {
+      setErrorMessage('Enter the 6-digit code from your authenticator app.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       const loginUrl = `${API_BASE_URL}/auth/login`;
-      console.log(`[Auth] Attempting login for ${employeeCode}`);
 
       const res = await fetch(loginUrl, {
         method: 'POST',
@@ -66,6 +73,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         body: JSON.stringify({
           employee_code: employeeCode,
           password: password,
+          ...(otpNeeded ? { otp } : {}),
         }),
       });
 
@@ -78,6 +86,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       }
 
       if (!res.ok) {
+        const code = (responseJson as { code?: string })?.code;
+        if (code === 'OTP_REQUIRED') {
+          setOtpNeeded(true);
+          return;
+        }
+        if (code === 'OTP_INVALID') setOtp('');
         const errorText = responseJson?.error || responseJson?.message || responseText;
         if (res.status === 404) {
           setErrorMessage('System authentication is temporarily unavailable.');
@@ -192,6 +206,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             icon={<Lock className="w-4 h-4" />}
           />
         </div>
+
+        {otpNeeded && (
+          <div>
+            <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Code from your authenticator app
+            </label>
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              maxLength={6}
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-600 focus:bg-white text-center font-mono text-lg tracking-[0.4em] text-slate-800 font-bold"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Lost your phone? Ask the MD or Admin to reset your 2-step login.
+            </p>
+          </div>
+        )}
 
         {/* Submit Button */}
         <button

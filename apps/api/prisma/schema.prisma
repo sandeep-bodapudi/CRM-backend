@@ -317,7 +317,12 @@ model Employee {
   token_version       Int     @default(1)
   attendance_required Boolean @default(true)
   first_login_done    Boolean @default(false)
-  report_required     Boolean @default(true) // derived from employment_type at create; overridable per employee
+  // 2-step login with an authenticator app (required for MD, Admin, Finance).
+  // Secret is encrypted (encryptData); last_step stops one code being used twice.
+  totp_secret         String?   @db.Text
+  totp_enabled_at     DateTime?
+  totp_last_step      Int?
+  report_required    Boolean @default(true) // derived from employment_type at create; overridable per employee
 
   // Printed badge + PIN at the kiosk (F-12, decision D2): for staff with no phone or
   // data. Off for everyone; HR turns it on one person at a time. Kiosk-only.

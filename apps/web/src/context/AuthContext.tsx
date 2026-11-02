@@ -445,7 +445,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const body = await clone.json().catch(() => ({}));
       // The first-login screen is already asking for the new password; no
       // "Permission Denied" popup for background calls blocked until then.
-      if (body.code === 'PASSWORD_CHANGE_REQUIRED') return res;
+      if (body.code === 'PASSWORD_CHANGE_REQUIRED' || body.code === 'TWO_STEP_SETUP_REQUIRED')
+        return res;
       window.dispatchEvent(
         new CustomEvent('auth:forbidden', {
           detail: body.error || 'Forbidden: Insufficient permissions',

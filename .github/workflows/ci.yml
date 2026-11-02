@@ -1,0 +1,69 @@
+# Checks on every push and pull request (architecture review 2026-11-01, #13).
+# Production (api-rscrm) deploys straight from main, so a red "build" here
+# means: do not merge / push to main until it is fixed.
+#
+# - build: type-checks and builds the server and the web app. Blocking.
+# - api-tests: the API test suite against a throw-away MySQL. Report-only for
+#   now (continue-on-error) because 144 older tests already fail; make it
+#   blocking once those are fixed or skipped.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Type-check and build the server
+        run: npm run build --workspace=apps/api
+      - name: Type-check and build the web app
+        run: npm run build --workspace=apps/web
+        env:
+          VITE_API_BASE_URL: https://api-rscrm.onrender.com/api/v1
+
+  api-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    services:
+      mysql:
+        image: mariadb:10.11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+          MARIADB_DATABASE: rrh_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      CI: 'true'
+      DATABASE_URL_TEST: mysql://root@127.0.0.1:3306/rrh_test
+      JWT_ACCESS_SECRET: ci-only-access-secret
+      JWT_REFRESH_SECRET: ci-only-refresh-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Create the test database
+        run: npm run db:push:test-local
+      - name: Run the API tests
+        run: npm run test:api -- --ci

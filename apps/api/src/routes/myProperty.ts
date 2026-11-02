@@ -27,6 +27,22 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// The limit above counts per address, so someone switching addresses could
+// keep guessing one customer's password. This one counts per mobile number
+// alone: 20 tries an hour, after which that number waits.
+const phoneLockout = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req: any) =>
+    `phone:${String(req.body?.phone || '')
+      .replace(/\D/g, '')
+      .slice(-10)}`,
+  skipSuccessfulRequests: true,
+  message: { error: 'Too many wrong passwords for this number. Please try again in an hour.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const LoginSchema = z.object({
   phone: z.string().min(10, 'Enter your mobile number'),
   password: z.string().min(1, 'Enter your password'),
@@ -64,6 +80,7 @@ const handle = (fn: (req: any) => Promise<unknown>) => async (req: any, res: Res
 router.post(
   '/auth/login',
   loginLimiter,
+  phoneLockout,
   validateRequestBody(LoginSchema),
   handle((req) => MyPropertyService.login(req.body.phone, req.body.password, req.body.company_id)),
 );

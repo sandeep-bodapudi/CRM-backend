@@ -643,6 +643,8 @@ export const LoginSchema = z.object({
     .min(1, 'Employee ID is required')
     .regex(EMPLOYEE_CODE_REGEX, 'Invalid Employee ID format. Expected format: RRH-XX-000'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
+  // 6-digit authenticator-app code, for accounts with 2-step login on.
+  otp: z.string().trim().max(10).optional(),
 });
 
 export type LoginInput = z.infer<typeof LoginSchema>;

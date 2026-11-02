@@ -5,6 +5,7 @@ import { API_BASE_URL } from '../../config';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
+import { TwoStepSettingsCard } from '../auth/TwoStepSetup';
 import {
   Moon,
   Sun,
@@ -649,6 +650,8 @@ export const UserSettings: React.FC = () => {
               <p className="text-xs font-semibold text-red-600 dark:text-red-400">{signOutError}</p>
             )}
           </div>
+
+          <TwoStepSettingsCard />
 
           <button
             onClick={logout}

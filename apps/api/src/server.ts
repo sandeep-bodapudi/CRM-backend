@@ -81,7 +81,12 @@ app.set('trust proxy', 1);
 // Forward-everything mode: this server only passes requests on to the new
 // production server (see utils/forwarder.ts). Registered first, so nothing
 // below runs and no database connection is opened.
-const FORWARD_ALL_TO = process.env.FORWARD_ALL_TO || '';
+// The old Render service (crm-backend) deploys from the same branch and kept
+// running every scheduled job against production a second time, so it
+// forwards by default -- Render sets RENDER_SERVICE_NAME on each service.
+const FORWARD_ALL_TO =
+  process.env.FORWARD_ALL_TO ||
+  (process.env.RENDER_SERVICE_NAME === 'crm-backend' ? 'https://api-rscrm.onrender.com' : '');
 if (FORWARD_ALL_TO) app.use(forwardAll(FORWARD_ALL_TO, clientIp));
 // Who / from where, for audit records written during this request.
 app.use(requestContext);

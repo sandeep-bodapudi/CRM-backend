@@ -9,6 +9,7 @@ import { correlationId } from '../middleware/correlationId';
 import { authenticatePublicKey } from '../middleware/publicApiKey';
 import { getOrCreateSystemEmployee } from '../utils/systemActor';
 import { createLead } from '../services/lead/create';
+import { cache } from '../utils/cache';
 
 const router = Router();
 
@@ -230,6 +231,32 @@ const PUBLIC_PROPERTY_DETAIL_SELECT: Prisma.PropertySelect = {
 router.use(correlationId);
 router.use(publicReadLimiter);
 router.use(authenticatePublicKey);
+
+// Every website visitor made this server query the database in Mumbai from
+// Singapore for the same lists. Keep the answer for a minute per company and
+// address (filters included). Details are not cached: they re-check
+// availability on every request.
+const LIST_CACHE_SECONDS = 60;
+const cachedList = (req: any, res: Response, next: () => void) => {
+  const key = `public:${req.apiKeyContext?.company_id}:${req.originalUrl}`;
+  const hit = cache.get<{ body: unknown; total?: string }>(key);
+  if (hit) {
+    if (hit.total) res.setHeader('X-Total-Count', hit.total);
+    return res.status(200).json(hit.body);
+  }
+  const json = res.json.bind(res);
+  res.json = (body: any) => {
+    if (res.statusCode === 200) {
+      const total = res.getHeader('X-Total-Count');
+      cache.set(key, { body, total: total ? String(total) : undefined }, LIST_CACHE_SECONDS);
+    }
+    return json(body);
+  };
+  next();
+};
+router.get('/:brand/properties', cachedList);
+router.get('/:brand/projects', cachedList);
+router.get('/:brand/legal', cachedList);
 
 // GET /api/v1/public/:brand/properties
 router.get('/:brand/properties', async (req: any, res: Response) => {

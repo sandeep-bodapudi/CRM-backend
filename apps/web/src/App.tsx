@@ -11,6 +11,11 @@ import { ReportDueCard } from './components/myday/ReportDueCard';
 import { NotificationDrawer } from './components/notifications/NotificationDrawer';
 import { ISTClock } from './components/common/ISTClock';
 import { FirstLoginSetup } from './components/auth/FirstLoginSetup';
+import {
+  TwoStepRequiredScreen,
+  TWO_STEP_ROLES,
+  useTwoStepStatus,
+} from './components/auth/TwoStepSetup';
 import { MDExecutiveDashboard } from './components/dashboards/MDExecutiveDashboard';
 import { AdminCommandCenter } from './components/dashboards/AdminCommandCenter';
 import { TelecallerDashboard } from './components/dashboards/TelecallerDashboard';
@@ -267,6 +272,11 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     appLockEnabled,
     lock,
   } = useAuth();
+  // MD/Admin/Finance must turn on 2-step login before using the app.
+  const twoStepRole = !!user?.roles?.some((r: string) => TWO_STEP_ROLES.includes(r));
+  const { status: twoStep, reload: reloadTwoStep } = useTwoStepStatus(
+    twoStepRole && firstLoginDone,
+  );
   const navigate = useNavigate();
   const location = useLocation();
   const activeTab = location.pathname.replace('/', '') || 'dashboard';
@@ -463,6 +473,10 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
 
   if (!firstLoginDone) {
     return <FirstLoginSetup />;
+  }
+
+  if (twoStep?.required && !twoStep.enabled) {
+    return <TwoStepRequiredScreen onDone={reloadTwoStep} />;
   }
 
   const isMD = activeRole === Roles.MD || activeRole === Roles.ADMIN;

@@ -653,6 +653,17 @@ export const expiredSessionCleanupJob = async () => {
     },
   });
   logger.info(`Cleaned up ${result.count} expired or used session(s).`);
+
+  // Notifications only ever grew too (15k by 2026-11-01). Read or dismissed
+  // ones older than six months are no longer shown to anyone.
+  const sixMonthsAgo = new Date(Date.now() - 183 * 24 * 60 * 60 * 1000);
+  const old = await prisma.notification.deleteMany({
+    where: {
+      created_at: { lt: sixMonthsAgo },
+      OR: [{ is_read: true }, { is_dismissed: true }],
+    },
+  });
+  logger.info(`Cleaned up ${old.count} old read notification(s).`);
 };
 
 // 5. Commission calculation batch
