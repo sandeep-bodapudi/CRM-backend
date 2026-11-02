@@ -226,6 +226,9 @@ export function ruleMatchesUnit(rule: PricingRule, unit: PricingUnitInput): bool
   if (rule.is_active === false) return false;
 
   if (rule.applies_to_unit_type && rule.applies_to_unit_type !== unit.unit_type) return false;
+  // Plot sales carry no GST (owner, 2026-11-02): a project-wide tax rule in a
+  // mixed project still never lands on a plot.
+  if ((rule.kind === 'TAX' || rule.is_tax) && unit.unit_type === 'PLOT') return false;
 
   if (!matchesString(rule.match_facing, unit.facing)) return false;
   if (!matchesString(rule.match_bhk, unit.bhk)) return false;

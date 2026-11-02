@@ -110,7 +110,17 @@ export class InventoryService {
     const unitWhere: any = {
       project: projectScope,
     };
-    if (wantAvailableOnly) unitWhere.sales_status = 'AVAILABLE';
+    if (wantAvailableOnly) {
+      unitWhere.sales_status = 'AVAILABLE';
+      // Only units of MD-approved, live projects can be offered for a booking
+      // or a site visit — the scope alone let MD/Admin/PMs pick units of
+      // drafts and rejected projects.
+      unitWhere.project = {
+        ...projectScope,
+        verification_status: 'VERIFIED',
+        status: { notIn: ['CANCELLED', 'ON_HOLD'] },
+      };
+    }
     if (filters.type) unitWhere.unit_type = filters.type;
 
     // Overfetch a page's worth from each source so a merge-and-slice still

@@ -11,15 +11,16 @@ import {
   ProjectDMVerifyAsIsSchema,
   ProjectMDApprovalSchema,
   Permissions,
+  Roles,
 } from '../../shared';
 import { validateRequestBody } from '../../middleware/validate';
-import { ProjectService } from '../../services/project.service';
+import { ProjectService, notifyProjectReview } from '../../services/project.service';
 import {
   ProjectUpdateService,
   PROJECT_UPDATE_KINDS,
   MAX_UPDATE_PHOTOS,
 } from '../../services/projectUpdate.service';
-import { memoryUpload, imageOnlyUpload } from '../../services/storage.service';
+import { memoryUpload, imageOnlyUpload, projectMediaUpload } from '../../services/storage.service';
 import { prisma } from '../../lib/prisma';
 import { buildProjectScope } from '../../authz/dataScope';
 
@@ -64,9 +65,11 @@ router.get(
       // polish projects — mirrors properties/crud.ts's isDMExecutiveOnly.
       const userRoles: string[] = req.user!.roles || [];
       const isDMExecutiveOnly =
-        userRoles.includes('digital marketing executive') &&
+        userRoles.includes(Roles.DIGITAL_MARKETING_EXECUTIVE) &&
         !userRoles.some((r: string) =>
-          ['Digital Marketing head(manager)', 'Marketing Director', 'md', 'admin'].includes(r),
+          [Roles.DIGITAL_MARKETING_HEAD, Roles.MARKETING_DIRECTOR, Roles.MD, Roles.ADMIN].includes(
+            r as any,
+          ),
         );
       if (isDMExecutiveOnly && !filters.dm_executive_id) {
         filters.dm_executive_id = req.user!.employeeId;
@@ -278,6 +281,7 @@ router.post(
         },
       });
       logger.info(`Project ${projectId} submitted for review by employee ${req.user!.employeeId}`);
+      await notifyProjectReview('SUBMITTED', updated, req.user!.employeeId);
       return res
         .status(200)
         .json({ message: 'Project submitted for Marketing review.', project: updated });
@@ -318,6 +322,7 @@ router.post(
         },
       });
       logger.info(`Project ${projectId} DM-polished by employee ${req.user!.employeeId}`);
+      await notifyProjectReview('TO_MD', updated, req.user!.employeeId);
       return res.status(200).json({
         message: `Project "${updated.name}" polished by DM team and submitted for MD Approval`,
         project: updated,
@@ -349,6 +354,17 @@ router.post(
           error: `Project is not pending DM polish (current: ${project.verification_status})`,
         });
       }
+      // "As-is" skips the polish step, so it is the DM Head's call (MD/Admin
+      // may also do it) — a DM Executive shares the polish permission but
+      // must not wave their own work through.
+      const roles = req.user!.roles || [];
+      if (
+        !roles.some((r) => [Roles.DIGITAL_MARKETING_HEAD, Roles.MD, Roles.ADMIN].includes(r as any))
+      ) {
+        return res
+          .status(403)
+          .json({ error: 'Only the Digital Marketing Head can pass a project on without polish.' });
+      }
       const { notes } = req.body;
       const updated = await p.project.update({
         where: { id: projectId },
@@ -358,6 +374,7 @@ router.post(
         },
       });
       logger.info(`Project ${projectId} DM-verified-as-is by employee ${req.user!.employeeId}`);
+      await notifyProjectReview('TO_MD', updated, req.user!.employeeId);
       return res.status(200).json({
         message: `Project "${updated.name}" verified as-is by DM Head and submitted for MD Approval`,
         project: updated,
@@ -374,7 +391,9 @@ router.post(
 router.post(
   '/:id/md-approve',
   authenticateToken,
-  requireAuthz(Permissions.PROJECTS_VERIFY),
+  // Scoped like every other project write: the project must be in the
+  // approver's own data scope (it was looked up by id alone).
+  requireAuthz(Permissions.PROJECTS_VERIFY, projectInScope()),
   validateRequestBody(ProjectMDApprovalSchema),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -389,17 +408,40 @@ router.post(
         });
       }
       const newStatus = approved ? 'VERIFIED' : 'REJECTED';
-      const updated = await p.project.update({
-        where: { id: projectId },
-        data: {
-          verification_status: newStatus,
-          verified_by_id: req.user!.employeeId,
-          verified_at: new Date(),
-          verification_notes: notes || null,
-          // MD approval is what puts a project on the public websites (the
-          // public API also requires VERIFIED); a rejection takes it off.
-          is_published: approved,
-        },
+      const updated = await p.$transaction(async (tx) => {
+        const proj = await tx.project.update({
+          where: { id: projectId },
+          data: {
+            verification_status: newStatus,
+            verified_by_id: req.user!.employeeId,
+            verified_at: new Date(),
+            verification_notes: notes || null,
+            // MD approval is what puts a project on the public websites (the
+            // public API also requires VERIFIED); a rejection takes it off.
+            is_published: approved,
+          },
+        });
+        // Its units go on (or come off) the websites with it. The public
+        // detail shows a published unit only while it is AVAILABLE, so sold
+        // or held units drop off without touching this flag. Nothing set it
+        // before, so the websites showed no units at all.
+        await tx.projectUnit.updateMany({
+          where: { project_id: projectId },
+          data: { is_published: approved },
+        });
+        // Marks where "changed after approval" starts in the History tab.
+        await tx.auditEvent.create({
+          data: {
+            actor_id: req.user!.employeeId!,
+            action: 'DETAILS_CHANGE:MD review',
+            entity_type: 'PROJECT',
+            entity_id: projectId,
+            old_value: 'Waiting for MD approval',
+            new_value: approved ? 'Approved' : 'Rejected',
+            reason: notes || null,
+          },
+        });
+        return proj;
       });
       logger.info(`Project ${projectId} ${newStatus} by MD employee ${req.user!.employeeId}`);
 
@@ -429,9 +471,16 @@ router.post(
           );
       }
 
+      const told = await notifyProjectReview(
+        approved ? 'APPROVED' : 'REJECTED',
+        updated,
+        req.user!.employeeId,
+        notes,
+      );
+      const informed = told ? ` The PM and the person who added it have been notified.` : '';
       const msg = approved
-        ? `Project "${project.name}" approved and is now visible to all staff.`
-        : `Project "${project.name}" rejected. The PM has been informed.`;
+        ? `Project "${project.name}" approved and is now visible to all staff.${informed}`
+        : `Project "${project.name}" rejected.${informed}`;
       return res.status(200).json({ message: msg, project: updated });
     } catch (error: any) {
       logger.error('MD Approve project error:', error);
@@ -575,7 +624,7 @@ router.post(
   '/:id/media',
   authenticateToken,
   requireAuthz(Permissions.PROJECTS_UPDATE, projectInScope()),
-  imageOnlyUpload.single('file') as any,
+  projectMediaUpload.single('file') as any,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const projectId = parseInt(req.params.id, 10);

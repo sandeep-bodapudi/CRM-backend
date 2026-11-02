@@ -198,6 +198,8 @@ export interface InventorySummary {
 }
 
 export interface PricingRuleInput {
+  /** Needed when the project is already approved; kept in its History. */
+  change_reason?: string;
   label: string;
   kind: PricingRuleKind;
   category: ChargeCategory;
@@ -438,9 +440,16 @@ export function updatePricingRule(
   }).then((res) => asJson<{ message: string; rule: PricingRule }>(res));
 }
 
-export function deletePricingRule(fetchWithAuth: FetchWithAuth, projectId: number, ruleId: number) {
+export function deletePricingRule(
+  fetchWithAuth: FetchWithAuth,
+  projectId: number,
+  ruleId: number,
+  changeReason?: string,
+) {
   return fetchWithAuth(`${API_BASE_URL}/projects/${projectId}/pricing-rules/${ruleId}`, {
     method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ change_reason: changeReason }),
   }).then((res) => asJson<{ deactivated: boolean }>(res));
 }
 

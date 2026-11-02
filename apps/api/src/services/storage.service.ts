@@ -41,6 +41,45 @@ export const imageOnlyUpload = multer({
 
 export const propertyImageUpload = imageOnlyUpload;
 
+/** Largest file each project-media kind may be (checked in ProjectService.uploadMedia). */
+export const PROJECT_MEDIA_LIMITS = {
+  IMAGE: 10 * 1024 * 1024,
+  PDF: 20 * 1024 * 1024,
+  VIDEO: 50 * 1024 * 1024,
+};
+const PROJECT_MEDIA_TYPES: Record<string, string[]> = {
+  'application/pdf': ['.pdf'],
+  'video/mp4': ['.mp4'],
+  'video/webm': ['.webm'],
+  'video/quicktime': ['.mov'],
+};
+
+/**
+ * Project Media uploader: images plus PDF (brochures, plans) and MP4/WebM/MOV
+ * video. Declared type and extension must agree, so nothing is stored under
+ * an extension a browser would run. The service then checks the bytes and
+ * the per-kind size (images still go through processImageBuffer).
+ */
+export const projectMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: PROJECT_MEDIA_LIMITS.VIDEO },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const isImage = ALLOWED_IMAGE_MIME.has(file.mimetype) && ALLOWED_IMAGE_EXT.has(ext);
+    const isOther = (PROJECT_MEDIA_TYPES[file.mimetype] || []).includes(ext);
+    if (isImage || isOther) cb(null, true);
+    else
+      cb(
+        Object.assign(
+          new Error('Upload an image (JPG/PNG/WebP/GIF), a PDF, or an MP4/WebM/MOV video.'),
+          {
+            statusCode: 400,
+          },
+        ),
+      );
+  },
+});
+
 export const memoryUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_SIZE },

@@ -1346,6 +1346,11 @@ model ProjectUnit {
 
   // Inventory tables get filtered hard — every one of these backs a real filter
   // on the Units tab.
+  /// One "Plot 12" per project, enforced by the database so two people saving
+  /// the same number at the same instant cannot both succeed (2026-11-02;
+  /// older duplicates are renamed first, see
+  /// docs/changes/sql/2026-11-02_unit_number_unique.sql).
+  @@unique([project_id, unit_number])
   @@index([project_id, sales_status])
   @@index([project_id, unit_type])
   @@index([project_id, tower, floor])

@@ -574,7 +574,8 @@ const OverrideModal: React.FC<{
         <div className="flex justify-between gap-2">
           {currentOverride != null && (
             <button
-              onClick={() => onSubmit(null, null)}
+              // An approved project needs the reason for clearing it too.
+              onClick={() => onSubmit(null, reason.trim() || null)}
               className="px-4 py-2 text-rose-600 font-bold text-sm"
             >
               Clear Override

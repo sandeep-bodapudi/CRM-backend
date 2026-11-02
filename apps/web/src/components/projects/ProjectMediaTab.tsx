@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Upload, Trash2, Loader2, Star, ImageIcon } from 'lucide-react';
+import { Upload, Trash2, Loader2, Star, ImageIcon, FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { resolveImageUrl } from '../../utils/imageUtils';
@@ -10,6 +10,28 @@ import {
   ProjectMedia,
   ProjectMediaKind,
 } from '../../api/projectMedia';
+
+// What each kind may be (the API checks the same, and the real file bytes).
+const ACCEPT_BY_KIND: Record<string, string> = {
+  COVER: 'image/jpeg,image/png,image/webp,image/gif',
+  GALLERY: 'image/jpeg,image/png,image/webp,image/gif',
+  VIDEO: 'video/mp4,video/webm,video/quicktime',
+  BROCHURE: 'application/pdf,image/jpeg,image/png,image/webp',
+  MASTER_PLAN: 'application/pdf,image/jpeg,image/png,image/webp',
+  LAYOUT_PLAN: 'application/pdf,image/jpeg,image/png,image/webp',
+  FLOOR_PLAN: 'application/pdf,image/jpeg,image/png,image/webp',
+};
+const HINT_BY_KIND: Record<string, string> = {
+  VIDEO: 'MP4, WebM or MOV, up to 50 MB.',
+  BROCHURE: 'PDF up to 20 MB, or an image.',
+  MASTER_PLAN: 'PDF up to 20 MB, or an image.',
+  LAYOUT_PLAN: 'PDF up to 20 MB, or an image.',
+  FLOOR_PLAN: 'PDF up to 20 MB, or an image.',
+};
+const fileTypeOf = (url: string) => {
+  const ext = (url.split('?')[0].split('.').pop() || '').toLowerCase();
+  return ext === 'pdf' ? 'pdf' : ['mp4', 'webm', 'mov'].includes(ext) ? 'video' : 'image';
+};
 
 const KIND_LABELS: { value: ProjectMediaKind; label: string }[] = [
   { value: 'COVER', label: 'Cover Image' },
@@ -114,12 +136,13 @@ export const ProjectMediaTab: React.FC<{ projectId: number; onCoverChanged?: () 
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept={ACCEPT_BY_KIND[uploadKind] || 'image/*'}
           className="hidden"
           onChange={handleFileSelect}
         />
         <p className="text-xs text-slate-400">
-          Images are auto-optimized to WebP. Setting a new Cover Image replaces the current one.
+          {HINT_BY_KIND[uploadKind] ||
+            'Images up to 10 MB, auto-optimized to WebP. A new Cover Image replaces the current one.'}
         </p>
       </div>
 
@@ -128,7 +151,7 @@ export const ProjectMediaTab: React.FC<{ projectId: number; onCoverChanged?: () 
           <ImageIcon size={32} className="mx-auto mb-2 opacity-40" />
           <p className="font-bold text-slate-500">No media uploaded yet</p>
           <p className="text-xs mt-1">
-            Upload a cover image, gallery photos, brochure, or plan images above.
+            Upload a cover image, gallery photos, a video, a brochure PDF, or plans above.
           </p>
         </div>
       ) : (
@@ -145,11 +168,32 @@ export const ProjectMediaTab: React.FC<{ projectId: number; onCoverChanged?: () 
                     key={item.id}
                     className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-100 aspect-video"
                   >
-                    <img
-                      src={resolveImageUrl(item.url)}
-                      alt={item.title || group.label}
-                      className="w-full h-full object-cover"
-                    />
+                    {fileTypeOf(item.url) === 'video' ? (
+                      <video
+                        src={resolveImageUrl(item.url)}
+                        controls
+                        preload="metadata"
+                        className="w-full h-full object-cover bg-black"
+                      />
+                    ) : fileTypeOf(item.url) === 'pdf' ? (
+                      <a
+                        href={resolveImageUrl(item.url)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-600 hover:text-navy-700"
+                      >
+                        <FileText size={28} />
+                        <span className="text-xs font-bold px-2 text-center line-clamp-2">
+                          {item.title || `${group.label} (PDF)`}
+                        </span>
+                      </a>
+                    ) : (
+                      <img
+                        src={resolveImageUrl(item.url)}
+                        alt={item.title || group.label}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                     {item.kind === 'COVER' && (
                       <div className="absolute top-1.5 left-1.5 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-1">
                         <Star size={10} fill="currentColor" /> COVER
@@ -158,7 +202,8 @@ export const ProjectMediaTab: React.FC<{ projectId: number; onCoverChanged?: () 
                     <button
                       onClick={() => handleDelete(item)}
                       disabled={deletingId === item.id}
-                      className="absolute top-1.5 right-1.5 bg-rose-600/90 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                      aria-label={`Delete ${item.title || group.label}`}
+                      className="absolute top-1.5 right-1.5 bg-rose-600/90 text-white p-1.5 rounded-full sm:opacity-0 sm:group-hover:opacity-100 transition-opacity disabled:opacity-50"
                     >
                       {deletingId === item.id ? (
                         <Loader2 size={12} className="animate-spin" />

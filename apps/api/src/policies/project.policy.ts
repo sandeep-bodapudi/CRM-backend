@@ -43,6 +43,11 @@ export class ProjectPolicy {
   }
 
   /**
+   * NOT what decides who can see a project: routes apply object policies only
+   * for writes (middleware/authz.ts), and reads follow buildProjectScope in
+   * authz/dataScope.ts (e.g. a Telecaller sees every VERIFIED project, PLANNING
+   * included). Kept for reference only — don't rely on it for access checks.
+   *
    * Determines whether a user may read (view) a specific Project.
    * - Management: may read any project in their company.
    * - Project Manager: may only read projects explicitly assigned to them.

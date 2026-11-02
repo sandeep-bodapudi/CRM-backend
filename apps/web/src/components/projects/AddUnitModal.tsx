@@ -18,6 +18,7 @@ import {
   UnitType,
   PriceComputation,
 } from '../../api/projectUnits';
+import { UNIT_TYPE_LABEL, PRICE_BASIS_BY_UNIT_TYPE, unitTypesForProject } from './unitTypeProfile';
 
 // A dropdown with a free-text "Other" escape hatch (#14) — falls open to the
 // text box automatically when the unit's current bhk value (legacy free
@@ -75,18 +76,11 @@ const BhkSelect: React.FC<{
 interface AddUnitModalProps {
   projectId: number;
   projectName: string;
+  /** Project.project_type — limits the unit types offered (a plotted venture only adds plots). */
+  projectType?: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }
-
-const UNIT_TYPES: { value: UnitType; label: string }[] = [
-  { value: 'PLOT', label: 'Plot' },
-  { value: 'FLAT', label: 'Flat' },
-  { value: 'VILLA', label: 'Villa' },
-  { value: 'HOUSE', label: 'House' },
-  { value: 'COMMERCIAL', label: 'Commercial' },
-  { value: 'OTHER', label: 'Other' },
-];
 
 const FACING_OPTIONS = [
   'EAST',
@@ -99,30 +93,31 @@ const FACING_OPTIONS = [
   'SOUTH_WEST',
 ];
 
-const PRICE_BASIS_BY_TYPE: Record<UnitType, ProjectUnitInput['price_basis']> = {
-  PLOT: 'PLOT_AREA',
-  FLAT: 'SUPER_BUILT_UP',
-  VILLA: 'BUILT_UP',
-  HOUSE: 'BUILT_UP',
-  COMMERCIAL: 'SUPER_BUILT_UP',
-  OTHER: 'LUMPSUM',
-};
+// Switching unit type starts from a clean form, so a plot's area never rides
+// along into a flat's price (or the reverse). Only what every type shares is kept.
+const freshForm = (unitType: UnitType, prev?: ProjectUnitInput): ProjectUnitInput => ({
+  unit_number: prev?.unit_number ?? '',
+  unit_type: unitType,
+  price_basis: PRICE_BASIS_BY_UNIT_TYPE[unitType],
+  facing: prev?.facing ?? null,
+  listing_type: prev?.listing_type ?? null,
+  base_rate: prev?.base_rate ?? null,
+  discount_amount: prev?.discount_amount ?? null,
+});
 
 export const AddUnitModal: React.FC<AddUnitModalProps> = ({
   projectId,
   projectName,
+  projectType,
   onClose,
   onSuccess,
 }) => {
+  const unitTypes = unitTypesForProject(projectType);
   const { fetchWithAuth } = useAuth();
   const { showToast, showError } = useToast();
 
-  const [unitType, setUnitType] = useState<UnitType>('PLOT');
-  const [form, setForm] = useState<ProjectUnitInput>({
-    unit_number: '',
-    unit_type: 'PLOT',
-    price_basis: 'PLOT_AREA',
-  });
+  const [unitType, setUnitType] = useState<UnitType>(unitTypes[0]);
+  const [form, setForm] = useState<ProjectUnitInput>(() => freshForm(unitTypes[0]));
   const [preview, setPreview] = useState<PriceComputation | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -131,7 +126,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
     setForm((f) => ({ ...f, [key]: value }));
 
   useEffect(() => {
-    setForm((f) => ({ ...f, unit_type: unitType, price_basis: PRICE_BASIS_BY_TYPE[unitType] }));
+    setForm((f) => (f.unit_type === unitType ? f : freshForm(unitType, f)));
   }, [unitType]);
 
   // Debounced live preview — the server is always the source of truth.
@@ -198,20 +193,26 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
         </div>
 
         <div className="p-6 overflow-y-auto custom-scrollbar space-y-5 flex-1">
-          <div>
-            <FieldLabel required>Unit Type</FieldLabel>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {UNIT_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  onClick={() => setUnitType(t.value)}
-                  className={`p-2.5 rounded-xl border text-xs font-bold transition-colors ${unitType === t.value ? 'bg-navy-700 text-white border-navy-700' : 'bg-white border-slate-200 text-slate-600 hover:border-navy-300'}`}
-                >
-                  {t.label}
-                </button>
-              ))}
+          {unitTypes.length > 1 ? (
+            <div>
+              <FieldLabel required>Unit Type</FieldLabel>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {unitTypes.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setUnitType(t)}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-colors ${unitType === t ? 'bg-navy-700 text-white border-navy-700' : 'bg-white border-slate-200 text-slate-600 hover:border-navy-300'}`}
+                  >
+                    {UNIT_TYPE_LABEL[t]}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <p className="text-xs font-bold text-slate-500">
+              Unit type: <span className="text-slate-800">{UNIT_TYPE_LABEL[unitType]}</span>
+            </p>
+          )}
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
@@ -374,37 +375,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   />
                 </div>
                 <div>
-                  <FieldLabel>Carpet Area (sqft)</FieldLabel>
-                  <input
-                    className={inputCls}
-                    type="number"
-                    min={0}
-                    value={form.carpet_area_sqft ?? ''}
-                    onChange={(e) =>
-                      set(
-                        'carpet_area_sqft',
-                        e.target.value === '' ? null : parseFloat(e.target.value),
-                      )
-                    }
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Built-up Area (sqft)</FieldLabel>
-                  <input
-                    className={inputCls}
-                    type="number"
-                    min={0}
-                    value={form.built_up_area_sqft ?? ''}
-                    onChange={(e) =>
-                      set(
-                        'built_up_area_sqft',
-                        e.target.value === '' ? null : parseFloat(e.target.value),
-                      )
-                    }
-                  />
-                </div>
-                <div>
-                  <FieldLabel required>Super Built-up Area (sqft)</FieldLabel>
+                  <FieldLabel required>Super Built-up Area (Sq.Ft)</FieldLabel>
                   <input
                     className={inputCls}
                     type="number"
@@ -428,7 +399,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   />
                 </div>
                 <div>
-                  <FieldLabel>Parking (count)</FieldLabel>
+                  <FieldLabel>Car Parks</FieldLabel>
                   <input
                     className={inputCls}
                     type="number"
@@ -639,35 +610,42 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   />{' '}
                   Corner
                 </label>
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={!!form.is_road_facing}
-                    onChange={(e) => set('is_road_facing', e.target.checked)}
-                  />{' '}
-                  Road-facing
-                </label>
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={!!form.is_park_facing}
-                    onChange={(e) => set('is_park_facing', e.target.checked)}
-                  />{' '}
-                  Park-facing
-                </label>
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={!!form.is_main_road_facing}
-                    onChange={(e) => set('is_main_road_facing', e.target.checked)}
-                  />{' '}
-                  Main road-facing
-                </label>
+                {unitType !== 'FLAT' && unitType !== 'COMMERCIAL' && (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={!!form.is_road_facing}
+                        onChange={(e) => set('is_road_facing', e.target.checked)}
+                      />{' '}
+                      Road-facing
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={!!form.is_park_facing}
+                        onChange={(e) => set('is_park_facing', e.target.checked)}
+                      />{' '}
+                      Park-facing
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={!!form.is_main_road_facing}
+                        onChange={(e) => set('is_main_road_facing', e.target.checked)}
+                      />{' '}
+                      Main road-facing
+                    </label>
+                  </>
+                )}
               </div>
             )}
 
             <div>
-              <FieldLabel>Base Rate Override</FieldLabel>
+              <FieldLabel>
+                Base Rate Override (
+                {unitType === 'PLOT' ? '₹ / Sq.Yd' : unitType === 'OTHER' ? '₹' : '₹ / Sq.Ft'})
+              </FieldLabel>
               <input
                 className={inputCls}
                 type="number"

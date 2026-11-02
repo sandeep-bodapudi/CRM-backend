@@ -7,6 +7,15 @@ import {
   ProjectPricingRuleCreateInput,
   ProjectPricingRuleUpdateInput,
 } from '../../shared/projectUnit';
+import {
+  isApproved,
+  notifyPricingChange,
+  recordChanges,
+  requireReason,
+  ruleChanges,
+  ruleName,
+  ruleRate,
+} from '../projectChangeLog';
 
 const p = prisma;
 
@@ -39,9 +48,27 @@ export class PricingRulesService {
     if (!can(user, Permissions.PROJECTS_UPDATE, project)) {
       throw { status: 403, message: 'Forbidden: Missing projects.update permission' };
     }
-    return p.projectPricingRule.create({
-      data: { project_id: projectId, ...data },
+    // Owner, 2026-11-02: plot sales carry no GST.
+    if (data.applies_to_unit_type === 'PLOT' && (data.kind === 'TAX' || data.is_tax)) {
+      throw { status: 400, message: 'Plots carry no GST — a tax rule cannot apply to plots.' };
+    }
+    const { change_reason: reason, ...fields } = data;
+    requireReason(project, reason);
+    const rule = await p.projectPricingRule.create({
+      data: { project_id: projectId, ...fields },
     });
+    if (isApproved(project)) {
+      const changes = [{ field: `${ruleName(rule)} added`, before: '—', after: ruleRate(rule) }];
+      await recordChanges(p, {
+        projectId,
+        actorId: user.employeeId!,
+        area: 'PRICING',
+        changes,
+        reason,
+      });
+      await notifyPricingChange(project, user.employeeId!, changes, reason);
+    }
+    return rule;
   }
 
   static async updateRule(
@@ -58,10 +85,38 @@ export class PricingRulesService {
       where: { id: ruleId, project_id: projectId },
     });
     if (!rule) throw { status: 404, message: 'Pricing rule not found' };
-    return p.projectPricingRule.update({ where: { id: ruleId }, data });
+    // Same rule as createRule, now that rules can be edited in place.
+    const unitType =
+      data.applies_to_unit_type !== undefined
+        ? data.applies_to_unit_type
+        : rule.applies_to_unit_type;
+    const isTax = (data.kind ?? rule.kind) === 'TAX' || (data.is_tax ?? rule.is_tax);
+    if (unitType === 'PLOT' && isTax) {
+      throw { status: 400, message: 'Plots carry no GST — a tax rule cannot apply to plots.' };
+    }
+    const { change_reason: reason, ...fields } = data;
+    const changes = ruleChanges(rule, fields);
+    if (changes.length) requireReason(project, reason);
+    const updated = await p.projectPricingRule.update({ where: { id: ruleId }, data: fields });
+    if (isApproved(project) && changes.length) {
+      await recordChanges(p, {
+        projectId,
+        actorId: user.employeeId!,
+        area: 'PRICING',
+        changes,
+        reason,
+      });
+      await notifyPricingChange(project, user.employeeId!, changes, reason);
+    }
+    return updated;
   }
 
-  static async deleteRule(user: TokenPayload, projectId: number, ruleId: number) {
+  static async deleteRule(
+    user: TokenPayload,
+    projectId: number,
+    ruleId: number,
+    reason?: string | null,
+  ) {
     const project = await this.assertProjectInScope(user, projectId);
     if (!can(user, Permissions.PROJECTS_UPDATE, project)) {
       throw { status: 403, message: 'Forbidden: Missing projects.update permission' };
@@ -74,7 +129,19 @@ export class PricingRulesService {
     // id (rule_id, onDelete: SetNull) so a past cost sheet stays legible even
     // after the rule that produced it is retired — hard-deleting would either
     // orphan those lines silently (SetNull) or block the delete outright.
+    requireReason(project, reason);
     await p.projectPricingRule.update({ where: { id: ruleId }, data: { is_active: false } });
+    if (isApproved(project)) {
+      const changes = [{ field: `${ruleName(rule)} removed`, before: ruleRate(rule), after: '—' }];
+      await recordChanges(p, {
+        projectId,
+        actorId: user.employeeId!,
+        area: 'PRICING',
+        changes,
+        reason,
+      });
+      await notifyPricingChange(project, user.employeeId!, changes, reason);
+    }
     return { deactivated: true };
   }
 }

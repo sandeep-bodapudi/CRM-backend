@@ -949,6 +949,22 @@ export const BookingInitiationWizard: React.FC<BookingInitiationWizardProps> = (
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-navy-500"
                     placeholder="Final agreed price"
                   />
+                  {(() => {
+                    // Warning only (owner, 2026-11-02): no discount limit or
+                    // approval yet — just make a below-list price visible.
+                    const listPrice = inventory.find(
+                      (i) => `${i.kind}-${i.id}` === selectedInventoryKey,
+                    )?.price;
+                    const agreed = parseFloat(financials.agreed_price);
+                    if (!listPrice || !agreed || agreed >= listPrice) return null;
+                    return (
+                      <p className="text-[11px] font-semibold text-amber-700 mt-1">
+                        Below the list price of ₹{listPrice.toLocaleString('en-IN')} by ₹
+                        {(listPrice - agreed).toLocaleString('en-IN')} (
+                        {(((listPrice - agreed) / listPrice) * 100).toFixed(1)}%).
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
 

@@ -138,7 +138,9 @@ export const ProjectUnitCreateSchema = z.object({
 });
 export type ProjectUnitCreateInput = z.infer<typeof ProjectUnitCreateSchema>;
 
-export const ProjectUnitUpdateSchema = ProjectUnitCreateSchema.partial();
+export const ProjectUnitUpdateSchema = ProjectUnitCreateSchema.partial().extend({
+  change_reason: z.string().max(500).optional().nullable(),
+});
 export type ProjectUnitUpdateInput = z.infer<typeof ProjectUnitUpdateSchema>;
 
 // Bulk generation — the "Generate many" mode. `common` seeds shared defaults;
@@ -200,6 +202,8 @@ export const ProjectPricingRuleCreateSchema = z.object({
   match_bhk: z.string().optional().nullable(),
   match_type_code: z.string().optional().nullable(),
   match_view: z.string().optional().nullable(),
+  // Required by the server when the project is already approved (owner, 2026-11-02).
+  change_reason: z.string().max(500).optional().nullable(),
 });
 export type ProjectPricingRuleCreateInput = z.infer<typeof ProjectPricingRuleCreateSchema>;
 

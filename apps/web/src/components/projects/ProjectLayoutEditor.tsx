@@ -4,21 +4,31 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
-import { PropertyListItem } from '../../types';
+import { ProjectUnit } from '../../api/projectUnits';
 import { resolveImageUrl } from '../../utils/imageUtils';
 
 interface ExistingRegion {
   id: number;
-  property_id: number;
+  project_unit_id: number;
   x: number;
   y: number;
-  property: { id: number; title: string; property_code: string };
 }
+
+/** "Tower A A-503", "Plot 12" — what staff call the unit. */
+export const unitLabel = (u: {
+  unit_type?: string;
+  tower?: string | null;
+  block?: string | null;
+  unit_number: string;
+}) =>
+  [u.tower, u.block, u.unit_type === 'PLOT' ? `Plot ${u.unit_number}` : u.unit_number]
+    .filter(Boolean)
+    .join(' ');
 
 interface EditorPin {
   tempId: string;
   regionId?: number; // present if this pin already exists in the DB
-  property_id: number | null; // null while awaiting assignment
+  project_unit_id: number | null; // null while awaiting assignment
   x: number;
   y: number;
 }
@@ -27,7 +37,7 @@ interface ProjectLayoutEditorProps {
   projectId: number;
   imageId: number;
   imageUrl: string;
-  units: PropertyListItem[];
+  units: ProjectUnit[];
   existingRegions: ExistingRegion[];
   onClose: () => void;
   onSaved: () => void;
@@ -59,7 +69,7 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
     existingRegions.map((r) => ({
       tempId: `existing-${r.id}`,
       regionId: r.id,
-      property_id: r.property_id,
+      project_unit_id: r.project_unit_id,
       x: r.x,
       y: r.y,
     })),
@@ -70,8 +80,8 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
   const [draggingPinId, setDraggingPinId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const pinnedPropertyIds = new Set(
-    pins.filter((p) => p.property_id !== null).map((p) => p.property_id),
+  const pinnedUnitIds = new Set(
+    pins.filter((p) => p.project_unit_id !== null).map((p) => p.project_unit_id),
   );
   const unitById = (id: number | null) => units.find((u) => u.id === id);
 
@@ -86,7 +96,7 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
     if (draggingPinId) return; // a drag's mouseup already handled this click
     const { x, y } = fractionFromEvent(e.clientX, e.clientY);
     const tempId = `new-${Date.now()}`;
-    setPins((prev) => [...prev, { tempId, property_id: null, x, y }]);
+    setPins((prev) => [...prev, { tempId, project_unit_id: null, x, y }]);
     setActivePinId(tempId);
     setUnitSearch('');
   };
@@ -106,9 +116,9 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
     setDraggingPinId(null);
   };
 
-  const assignUnit = (tempId: string, propertyId: number) => {
+  const assignUnit = (tempId: string, unitId: number) => {
     setPins((prev) =>
-      prev.map((p) => (p.tempId === tempId ? { ...p, property_id: propertyId } : p)),
+      prev.map((p) => (p.tempId === tempId ? { ...p, project_unit_id: unitId } : p)),
     );
     setActivePinId(null);
   };
@@ -121,7 +131,7 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
   };
 
   const handleSave = async () => {
-    const assignedPins = pins.filter((p) => p.property_id !== null);
+    const assignedPins = pins.filter((p) => p.project_unit_id !== null);
     const unassignedCount = pins.length - assignedPins.length;
     if (unassignedCount > 0) {
       showError({
@@ -139,7 +149,11 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              regions: assignedPins.map((p) => ({ property_id: p.property_id, x: p.x, y: p.y })),
+              regions: assignedPins.map((p) => ({
+                project_unit_id: p.project_unit_id,
+                x: p.x,
+                y: p.y,
+              })),
             }),
           },
         );
@@ -184,10 +198,10 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
   const activePin = pins.find((p) => p.tempId === activePinId);
   const availableUnits = units.filter(
     (u) =>
-      (!pinnedPropertyIds.has(u.id) || u.id === activePin?.property_id) &&
+      (!pinnedUnitIds.has(u.id) || u.id === activePin?.project_unit_id) &&
       (unitSearch === '' ||
-        u.title.toLowerCase().includes(unitSearch.toLowerCase()) ||
-        u.property_code.toLowerCase().includes(unitSearch.toLowerCase())),
+        unitLabel(u).toLowerCase().includes(unitSearch.toLowerCase()) ||
+        u.unit_code.toLowerCase().includes(unitSearch.toLowerCase())),
   );
 
   return (
@@ -227,8 +241,8 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
             />
 
             {pins.map((pin) => {
-              const unit = unitById(pin.property_id);
-              const isUnassigned = pin.property_id === null;
+              const unit = unitById(pin.project_unit_id);
+              const isUnassigned = pin.project_unit_id === null;
               return (
                 <button
                   key={pin.tempId}
@@ -242,7 +256,7 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
                   className={`absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-white shadow-lg cursor-move flex items-center justify-center text-white text-[10px] font-black ${
                     isUnassigned ? 'bg-amber-500 animate-pulse' : 'bg-navy-600'
                   } ${activePinId === pin.tempId ? 'ring-2 ring-offset-2 ring-navy-500 scale-125' : ''}`}
-                  title={unit ? unit.title : 'Unassigned — click to assign a unit'}
+                  title={unit ? unitLabel(unit) : 'Unassigned — click to assign a unit'}
                 >
                   {isUnassigned ? '?' : ''}
                 </button>
@@ -254,7 +268,7 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
             <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-4 animate-fadeIn">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-bold text-slate-700 text-sm">
-                  {activePin.property_id ? 'Reassign this pin' : 'Assign a unit to this pin'}
+                  {activePin.project_unit_id ? 'Reassign this pin' : 'Assign a unit to this pin'}
                 </h4>
                 <div className="flex items-center gap-2">
                   <button
@@ -292,15 +306,15 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
                       key={u.id}
                       onClick={() => assignUnit(activePin.tempId, u.id)}
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                        activePin.property_id === u.id
+                        activePin.project_unit_id === u.id
                           ? 'bg-navy-100 text-navy-800'
                           : 'hover:bg-slate-100 text-slate-700'
                       }`}
                     >
-                      <span className="font-semibold">{u.title}</span>
+                      <span className="font-semibold">{unitLabel(u)}</span>
                       <span className="flex items-center gap-2 text-xs text-slate-400">
-                        {u.property_code}
-                        {activePin.property_id === u.id && (
+                        {u.unit_code}
+                        {activePin.project_unit_id === u.id && (
                           <Check className="w-3.5 h-3.5 text-navy-600" />
                         )}
                       </span>
@@ -315,7 +329,7 @@ export const ProjectLayoutEditor: React.FC<ProjectLayoutEditorProps> = ({
         <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between shrink-0">
           <span className="text-xs text-slate-500">
             {pins.length} pin{pins.length !== 1 ? 's' : ''} placed
-            {pins.some((p) => p.property_id === null) && (
+            {pins.some((p) => p.project_unit_id === null) && (
               <span className="text-amber-600 font-semibold"> — some unassigned</span>
             )}
           </span>

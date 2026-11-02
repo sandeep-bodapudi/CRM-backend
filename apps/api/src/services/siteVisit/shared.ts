@@ -123,7 +123,21 @@ export async function resolveVisitProject(
   if (projectUnitIds.length > 0) {
     const units = await p.projectUnit.findMany({
       where: { id: { in: projectUnitIds }, company_id: companyId },
+      include: { project: { select: { verification_status: true, status: true } } },
     });
+    // Same rule as the booking picker: only units of MD-approved, live projects.
+    if (
+      units.some(
+        (u) =>
+          u.project.verification_status !== 'VERIFIED' ||
+          ['CANCELLED', 'ON_HOLD'].includes(u.project.status),
+      )
+    ) {
+      throw {
+        status: 400,
+        message: 'A site visit can only include units of approved, active projects.',
+      };
+    }
     for (const u of units) projects.add(u.project_id);
   }
   if (projects.size > 1) {
@@ -141,9 +155,16 @@ export async function resolveVisitProject(
     return { projectId: 0, pmId };
   }
 
-  const project = await p.project.findFirst({ where: { id: projectId } });
+  const project = await p.project.findFirst({ where: { id: projectId, company_id: companyId } });
+  if (!project) throw { status: 404, message: 'Project not found' };
+  // No PM on the project: route by the project's own city/location first —
+  // the lead's preferred area is only a last resort.
   const pmId =
-    project?.assigned_pm_id ?? (await resolveFallbackPm(companyId, lead?.preferred_location));
+    project.assigned_pm_id ??
+    (await resolveFallbackPm(
+      companyId,
+      project.city || project.location || lead?.preferred_location,
+    ));
   return { projectId, pmId };
 }
 

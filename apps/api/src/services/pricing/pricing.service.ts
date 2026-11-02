@@ -19,7 +19,8 @@ import {
   ManualPriceLine,
 } from './engine';
 import { PricePreviewInput } from '../../shared/projectUnit';
-import { normalizeArea, AreaUnitType } from '../../shared/measurement';
+import { FieldChange, isApproved, priceChange, recordChanges } from '../projectChangeLog';
+import { normalizeArea, AreaUnitType, resolveUnitPriceBasis } from '../../shared/measurement';
 
 const p = prisma;
 
@@ -166,6 +167,7 @@ export async function getEffectiveRulesForProperty(propertyId: number): Promise<
 
 /** Shared field mapping for anything with the ProjectUnit/Property area+pricing shape. */
 function baseEngineInput(row: {
+  unit_type?: string;
   area_sqft?: number | null;
   carpet_area_sqft?: number | null;
   built_up_area_sqft?: number | null;
@@ -188,7 +190,10 @@ function baseEngineInput(row: {
   discount_reason?: string | null;
 }): Omit<PricingUnitInput, 'unit_type' | 'manual_lines' | 'selected_optional_rule_ids'> {
   return {
-    price_basis: row.price_basis,
+    // A project unit's plot/flat basis is fixed whatever the stored column says.
+    price_basis: row.unit_type
+      ? resolveUnitPriceBasis(row.unit_type, row.price_basis)
+      : row.price_basis,
     area_sqft: row.area_sqft,
     carpet_area_sqft: row.carpet_area_sqft,
     built_up_area_sqft: row.built_up_area_sqft,
@@ -384,7 +389,13 @@ export class PricingService {
 
     const engineInput: PricingUnitInput = {
       unit_type: input.unit_type,
-      price_basis: input.price_basis ?? project.default_price_basis ?? 'SUPER_BUILT_UP',
+      // A plot must be priced on plot area even in a project whose default
+      // basis is a flat basis (the old fallback priced 150 Sq.Yd plots at 0).
+      price_basis: resolveUnitPriceBasis(
+        input.unit_type,
+        input.price_basis,
+        project.default_price_basis,
+      ),
       area_sqft: areaSqft,
       carpet_area_sqft: input.carpet_area_sqft ?? null,
       built_up_area_sqft: input.built_up_area_sqft ?? null,
@@ -524,12 +535,29 @@ export class PricingService {
 
     const units = await p.projectUnit.findMany({
       where: { project_id: projectId },
-      select: { id: true },
+      select: { id: true, unit_number: true, unit_type: true, final_price: true },
     });
     let updated = 0;
+    const changes: FieldChange[] = [];
     for (const u of units) {
-      await PricingService.recalculateUnit(u.id);
+      const after = await PricingService.recalculateUnit(u.id);
+      changes.push(...priceChange(u, u.final_price, after.final_price));
       updated++;
+    }
+    // An approved project's history shows which unit prices moved (the rule
+    // change that caused it is recorded on its own, with its reason).
+    if (isApproved(project) && changes.length) {
+      const summary: FieldChange = {
+        field: 'Unit prices recalculated',
+        before: '—',
+        after: `${changes.length} of ${units.length} units changed`,
+      };
+      await recordChanges(p, {
+        projectId,
+        actorId: user.employeeId!,
+        area: 'PRICING',
+        changes: [summary, ...(changes.length <= 50 ? changes : [])],
+      });
     }
     return { updated_count: updated };
   }
