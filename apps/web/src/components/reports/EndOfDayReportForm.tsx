@@ -30,6 +30,8 @@ export interface ReportToday {
   } | null;
   checked_out: boolean;
   can_edit: boolean;
+  /** Every change they made in the CRM today, oldest first. */
+  crm_actions?: { at: string; label: string }[];
 }
 
 export const REPORT_TODAY_KEY = 'reportToday';
@@ -269,6 +271,28 @@ export const EndOfDayReportForm: React.FC<{ onDone?: () => void }> = ({ onDone }
             );
           })}
         </div>
+      )}
+
+      {(data.crm_actions || []).length > 0 && (
+        <details className="rounded-2xl border border-slate-200 px-3 py-2">
+          <summary className="cursor-pointer text-sm font-bold text-slate-700">
+            Everything you did in the CRM today ({data.crm_actions!.length})
+          </summary>
+          <ul className="mt-2 space-y-1 max-h-64 overflow-y-auto text-xs">
+            {data.crm_actions!.map((a, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-slate-400 shrink-0 w-14">
+                  {new Date(a.at).toLocaleTimeString('en-IN', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    timeZone: 'Asia/Kolkata',
+                  })}
+                </span>
+                <span className="text-slate-700">{a.label}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       {recordedFields.length > 0 && (

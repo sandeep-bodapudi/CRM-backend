@@ -7,6 +7,7 @@ import { validateRequestBody } from '../middleware/validate';
 import { DailyReportSchema, Roles } from '../shared';
 import { getISTComponents } from '../utils/time';
 import { WORK_LOG_ACTION, parseWorkLog } from './workLog';
+import { CRM_ACTION, crmActionLabel } from '../middleware/recordCrmAction';
 import {
   istDayRange,
   verifiedActivityToday,
@@ -57,12 +58,20 @@ router.get('/today', authenticateToken, async (req: AuthenticatedRequest, res: R
   try {
     const { employeeId, companyId, roles } = req.user!;
     const role = reportRole(roles, typeof req.query.role === 'string' ? req.query.role : null);
-    const [fields, judged, report, checkedOut, me] = await Promise.all([
+    const { start, end } = istDayRange();
+    const [fields, judged, report, checkedOut, me, actions] = await Promise.all([
       buildSheet(employeeId, companyId, role),
       judgeToday(employeeId, companyId, role),
       todaysReport(employeeId),
       checkedOutToday(employeeId),
       p.employee.findUnique({ where: { id: employeeId }, select: { report_required: true } }),
+      // What they did in the CRM today, so the report starts from the record.
+      p.auditEvent.findMany({
+        where: { actor_id: employeeId, action: CRM_ACTION, created_at: { gte: start, lt: end } },
+        select: { new_value: true, created_at: true },
+        orderBy: { created_at: 'asc' },
+        take: 1000,
+      }),
     ]);
     return res.status(200).json({
       role,
@@ -82,6 +91,7 @@ router.get('/today', authenticateToken, async (req: AuthenticatedRequest, res: R
         : null,
       checked_out: checkedOut,
       can_edit: !!report && !checkedOut,
+      crm_actions: actions.map((a) => ({ at: a.created_at, label: crmActionLabel(a.new_value) })),
     });
   } catch (error) {
     logger.error('Today report form error:', error);

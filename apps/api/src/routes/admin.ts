@@ -6,6 +6,7 @@ import { Roles, Permissions } from '../shared';
 import permissionsRouter from './admin/permissions';
 import attendanceRouter from './admin/attendance';
 import companiesRouter from './admin/companies';
+import techOverviewRouter from './admin/techOverview';
 
 const router = Router();
 const p = prisma;
@@ -18,6 +19,9 @@ router.use('/', attendanceRouter);
 
 // Mount company/branch management router
 router.use('/', companiesRouter);
+
+// Technical Manager dashboard
+router.use('/', techOverviewRouter);
 
 /**
  * Technical Admin restricted routes for deep telemetry, auditing, and emergency controls.

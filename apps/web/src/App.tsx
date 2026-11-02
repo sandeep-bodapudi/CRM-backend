@@ -18,6 +18,7 @@ import {
 } from './components/auth/TwoStepSetup';
 import { MDExecutiveDashboard } from './components/dashboards/MDExecutiveDashboard';
 import { AdminCommandCenter } from './components/dashboards/AdminCommandCenter';
+import { TechnicalManagerDashboard } from './components/dashboards/TechnicalManagerDashboard';
 import { TelecallerDashboard } from './components/dashboards/TelecallerDashboard';
 import { PMDashboard } from './components/dashboards/PMDashboard';
 import { StaffDashboard } from './components/dashboards/StaffDashboard';
@@ -481,8 +482,12 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     return <TwoStepRequiredScreen onDone={reloadTwoStep} />;
   }
 
-  const isMD = activeRole === Roles.MD || activeRole === Roles.ADMIN;
-  const isTechAdmin = activeRole === Roles.ADMIN;
+  // A Technical Manager works with Admin's access (their token carries both
+  // roles); switching to either shows the same screens.
+  const isTechManagerRole = activeRole === Roles.TECHNICAL_MANAGER;
+  const isMD = activeRole === Roles.MD || activeRole === Roles.ADMIN || isTechManagerRole;
+  const isTechAdmin = activeRole === Roles.ADMIN || isTechManagerRole;
+  const isTechManager = isTechAdmin && !!user?.roles?.includes(Roles.TECHNICAL_MANAGER);
   const isHRManager = activeRole === Roles.HR_MANAGER;
   const isProjectManager = activeRole === Roles.PROJECT_MANAGER;
   const isTelecaller = activeRole === Roles.TELECALLER;
@@ -550,7 +555,9 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
       <Route
         path="/dashboard"
         element={
-          isMD ? (
+          isTechManager ? (
+            <TechnicalManagerDashboard />
+          ) : isMD ? (
             <MDExecutiveDashboard />
           ) : isTechAdmin ? (
             <AdminCommandCenter />
