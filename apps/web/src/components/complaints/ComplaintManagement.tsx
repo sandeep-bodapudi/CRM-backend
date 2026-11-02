@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   MessageSquareWarning,
   Plus,
@@ -91,7 +92,9 @@ export const ComplaintManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
-  const [statusFilter, setStatusFilter] = useState('');
+  // Dashboards link straight to a filtered list: /complaints?status=OPEN.
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [priorityFilter, setPriorityFilter] = useState('');
 
   const [isCreating, setIsCreating] = useState(false);

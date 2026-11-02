@@ -5,7 +5,8 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../../midd
 import { Roles } from '../../shared';
 import { getAccessibleCompanyIds } from '../../authz/dataScope';
 import { getISTComponents, getISTMidnightInstant } from '../../utils/time';
-import { CRM_ACTION, crmActionLabel } from '../../middleware/recordCrmAction';
+import { Prisma } from '@prisma/client';
+import { CRM_ACTION, crmActionLabel, crmActionUrl } from '../../middleware/recordCrmAction';
 
 const router = Router();
 const p = prisma;
@@ -180,10 +181,80 @@ router.get(
         }),
       ]);
 
+      // Charts: the last 7 days (IST) and today's activity by hour.
+      const weekStart = new Date(start.getTime() - 6 * 24 * 3600 * 1000);
+      const ids = Prisma.join(companyIds.length ? companyIds : [0]);
+      const istDay = (col: string) => Prisma.raw(`DATE(DATE_ADD(${col}, INTERVAL 330 MINUTE))`);
+      type DayCount = { d: Date | string; n: bigint | number };
+      const [leadDays, callDays, visitDays, bookingDays, hours, topActors] = await Promise.all([
+        p.$queryRaw<DayCount[]>`SELECT ${istDay('created_at')} d, COUNT(*) n FROM Lead
+          WHERE company_id IN (${ids}) AND created_at >= ${weekStart} GROUP BY d`,
+        p.$queryRaw<DayCount[]>`SELECT ${istDay('la.created_at')} d, COUNT(*) n FROM LeadActivity la
+          JOIN Lead l ON l.id = la.lead_id
+          WHERE la.activity_type = 'CALL_LOGGED' AND l.company_id IN (${ids})
+            AND la.created_at >= ${weekStart} GROUP BY d`,
+        p.$queryRaw<
+          DayCount[]
+        >`SELECT ${istDay('s.completed_at')} d, COUNT(*) n FROM SiteVisitBooking s
+          JOIN Lead l ON l.id = s.lead_id
+          WHERE s.status = 'COMPLETED' AND l.company_id IN (${ids})
+            AND s.completed_at >= ${weekStart} GROUP BY d`,
+        p.$queryRaw<DayCount[]>`SELECT ${istDay('created_at')} d, COUNT(*) n FROM Booking
+          WHERE company_id IN (${ids}) AND created_at >= ${weekStart} GROUP BY d`,
+        p.$queryRaw<
+          { h: number; n: bigint | number }[]
+        >`SELECT HOUR(DATE_ADD(created_at, INTERVAL 330 MINUTE)) h,
+          COUNT(*) n FROM AuditEvent
+          WHERE action = ${CRM_ACTION} AND company_id IN (${ids})
+            AND created_at >= ${start} AND created_at < ${end} GROUP BY h`,
+        p.auditEvent.groupBy({
+          by: ['actor_id'],
+          where: { action: CRM_ACTION, created_at: today, ...company },
+          _count: { _all: true },
+          orderBy: { _count: { actor_id: 'desc' } },
+          take: 8,
+        }),
+      ]);
+      const dayKey = (d: Date | string) =>
+        typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10);
+      const byDay = (rows: DayCount[]) => new Map(rows.map((r) => [dayKey(r.d), Number(r.n)]));
+      const [leadMap, callMap, visitMap, bookingMap] = [
+        leadDays,
+        callDays,
+        visitDays,
+        bookingDays,
+      ].map(byDay);
+      const trend = Array.from({ length: 7 }, (_, i) => {
+        const key = getISTComponents(
+          new Date(weekStart.getTime() + (i * 24 + 12) * 3600 * 1000),
+        ).dateString;
+        return {
+          date: key,
+          leads: leadMap.get(key) || 0,
+          calls: callMap.get(key) || 0,
+          visits: visitMap.get(key) || 0,
+          bookings: bookingMap.get(key) || 0,
+        };
+      });
+      const hourMap = new Map(hours.map((h) => [Number(h.h), Number(h.n)]));
+      const byHour = Array.from({ length: 24 }, (_, h) => ({
+        hour: h,
+        actions: hourMap.get(h) || 0,
+      }));
+
       const names = new Map(
         (
           await p.employee.findMany({
-            where: { id: { in: [...new Set(recentActions.map((a) => a.actor_id))] } },
+            where: {
+              id: {
+                in: [
+                  ...new Set([
+                    ...recentActions.map((a) => a.actor_id),
+                    ...topActors.map((a) => a.actor_id),
+                  ]),
+                ],
+              },
+            },
             select: { id: true, full_name: true, employee_code: true },
           })
         ).map((e) => [e.id, e.full_name || e.employee_code]),
@@ -237,8 +308,16 @@ router.get(
             at: a.created_at,
             who: names.get(a.actor_id) || 'Someone',
             label: crmActionLabel(a.new_value),
+            url: crmActionUrl(a.new_value),
+          })),
+          by_hour: byHour,
+          top_people: topActors.map((a) => ({
+            id: a.actor_id,
+            name: names.get(a.actor_id) || 'Someone',
+            actions: a._count._all,
           })),
         },
+        trend,
         me: {
           checked_in_at: myAttendance?.check_in_at || null,
           checked_out_at: myAttendance?.check_out_at || null,

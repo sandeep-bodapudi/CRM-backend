@@ -255,6 +255,8 @@ export const recordCrmAction = (req: Request, res: Response, next: NextFunction)
             label,
             method: req.method,
             path: path.replace(/\/\d+(?=\/|$)/g, '/:id'),
+            // With the ids, so a feed can link to the record.
+            url: path.slice(0, 190),
           }),
           company_id: user.companyId ?? null,
         },
@@ -262,6 +264,15 @@ export const recordCrmAction = (req: Request, res: Response, next: NextFunction)
       .catch((err) => logger.error({ err }, '[crm-action] could not record'));
   });
   next();
+};
+
+/** A CRM_ACTION row's API path with ids ("/projects/5/units/9"), when recorded. */
+export const crmActionUrl = (newValue: string | null): string | null => {
+  try {
+    return JSON.parse(newValue || '{}').url || null;
+  } catch {
+    return null;
+  }
 };
 
 /** A CRM_ACTION row's label, for display. */

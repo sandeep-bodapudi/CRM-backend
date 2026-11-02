@@ -99,6 +99,11 @@ describe('Daily work recording and the Technical Manager dashboard', () => {
     expect(ok.body).toHaveProperty('people.active_staff');
     expect(ok.body).toHaveProperty('business.overdue_tasks');
     expect(ok.body.activity.actions_today).toBeGreaterThan(0);
+    // Chart data: 7 days of trend, 24 hours of activity, and who did the most.
+    expect(ok.body.trend).toHaveLength(7);
+    expect(ok.body.activity.by_hour).toHaveLength(24);
+    expect(ok.body.activity.top_people.length).toBeGreaterThan(0);
+    expect(ok.body.activity.recent[0]).toHaveProperty('url');
 
     const no = await request(app)
       .get('/api/v1/admin/tech-overview')
