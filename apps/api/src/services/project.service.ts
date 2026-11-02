@@ -5,13 +5,103 @@ import { buildProjectScope } from '../authz/dataScope';
 import { ProjectCreateInput, ProjectUpdateInput, Roles, Permissions } from '../shared';
 import { can } from '../authz/authorization';
 import { slugify, generateUniqueSlug } from '../utils/slugify';
-import { fetchWithCache } from '../utils/cache';
-import { getStorageService, processImageBuffer } from './storage.service';
+import { fetchWithCache, clearCacheByPrefix } from '../utils/cache';
+import { getStorageService, processImageBuffer, PROJECT_MEDIA_LIMITS } from './storage.service';
 import { logger } from '../utils/logger';
 import { notifyEmployee } from '../utils/notifyEmployee';
 import { WorkflowEngine } from '../workflows/workflowEngine';
 import { WorkflowDomain } from '../workflows/types';
+import { FieldChange, isApproved, projectChanges, recordChanges } from './projectChangeLog';
 const p = prisma;
+
+/** Key prefix of ProjectService.listProjects's per-user cache entries. */
+const PROJECT_LIST_CACHE_PREFIX = 'projects_';
+
+/** Forgets every cached project list (all users) — called after any project write. */
+export function invalidateProjectListCache() {
+  clearCacheByPrefix(PROJECT_LIST_CACHE_PREFIX);
+}
+
+/**
+ * Who hears about a step in the project review chain (owner, 2026-11-02):
+ * - SUBMITTED: the Marketing reviewers (DM Head); the MD if there is none.
+ * - TO_MD: the MD(s), once Marketing passes it on.
+ * - APPROVED / REJECTED: whoever added the project and its assigned PM
+ *   (a rejection carries the reason).
+ * The person acting is never notified of their own step. Returns how many
+ * people were told, so the caller's message can say so truthfully.
+ */
+export async function notifyProjectReview(
+  event: 'SUBMITTED' | 'TO_MD' | 'APPROVED' | 'REJECTED',
+  project: {
+    id: number;
+    name: string;
+    project_code: string;
+    company_id: number;
+    created_by_id: number | null;
+    assigned_pm_id: number | null;
+  },
+  actorId: number,
+  reason?: string | null,
+): Promise<number> {
+  const holdersOf = async (roles: string[]) =>
+    (
+      await p.employee.findMany({
+        where: {
+          company_id: project.company_id,
+          status: 'ACTIVE',
+          roles: { some: { role: { name: { in: roles } } } },
+        },
+        select: { id: true },
+      })
+    ).map((e) => e.id);
+
+  let recipients: number[] = [];
+  let payload: { type: string; title: string; message: string };
+  const label = `"${project.name}" (${project.project_code})`;
+
+  if (event === 'SUBMITTED') {
+    recipients = await holdersOf([Roles.DIGITAL_MARKETING_HEAD]);
+    if (!recipients.length) recipients = await holdersOf([Roles.MD]);
+    payload = {
+      type: 'PROJECT_REVIEW_SUBMITTED',
+      title: `Project to review: ${project.project_code}`,
+      message: `Project ${label} was submitted and is waiting for Marketing review.`,
+    };
+  } else if (event === 'TO_MD') {
+    recipients = await holdersOf([Roles.MD]);
+    payload = {
+      type: 'PROJECT_REVIEW_MD',
+      title: `Project waiting for your approval: ${project.project_code}`,
+      message: `Project ${label} passed Marketing review and is waiting for MD approval.`,
+    };
+  } else {
+    recipients = [project.created_by_id, project.assigned_pm_id].filter(
+      (id): id is number => id != null,
+    );
+    payload =
+      event === 'APPROVED'
+        ? {
+            type: 'PROJECT_APPROVED',
+            title: `Project approved: ${project.project_code}`,
+            message: `Project ${label} was approved by the MD and is now visible to all staff and on the website.`,
+          }
+        : {
+            type: 'PROJECT_REJECTED',
+            title: `Project rejected: ${project.project_code}`,
+            message: `Project ${label} was rejected by the MD.${reason ? ` Reason: ${reason}` : ''} Fix it and submit it again.`,
+          };
+  }
+
+  const ids = [...new Set(recipients)].filter((id) => id !== actorId);
+  if (!ids.length) return 0;
+  try {
+    await notifyEmployee(ids, { ...payload, link: `/projects/${project.id}` });
+  } catch (err) {
+    logger.error(`[ProjectReview] ${event} notification failed for project ${project.id}:`, err);
+  }
+  return ids.length;
+}
 
 // Fields common to ProjectCreateInput/ProjectUpdateInput beyond the original
 // (Phase <2.5) set — see ProjectCommonFields in shared/project.ts. Shared by
@@ -77,11 +167,43 @@ const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
 ]);
 
 export class ProjectService {
-  private static async generateNextProjectCode(): Promise<string> {
-    const currentYear = new Date().getFullYear();
-    const count = await p.project.count();
-    const seq = (count + 1).toString().padStart(4, '0');
-    return `RRH-PJ-${currentYear}-${seq}`;
+  /**
+   * One past the highest `RRH-PJ-<year>-NNNN` already used this year. It was
+   * "count of all projects + 1", which reissues an existing code once any
+   * row is gone; `offset` skips ahead on a retry after a clash.
+   */
+  private static async generateNextProjectCode(offset = 0): Promise<string> {
+    const prefix = `RRH-PJ-${new Date().getFullYear()}-`;
+    const rows = await p.project.findMany({
+      where: { project_code: { startsWith: prefix } },
+      select: { project_code: true },
+    });
+    let max = 0;
+    for (const r of rows) {
+      const n = parseInt(r.project_code.slice(prefix.length), 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return `${prefix}${String(max + 1 + offset).padStart(4, '0')}`;
+  }
+
+  /**
+   * A project's PM must be an active Project Manager of the project's company
+   * — the field used to take any employee id in the company (an Inventory
+   * Executive was accepted as "PM").
+   */
+  private static async assertValidPm(pmId: number, companyId: number) {
+    const pm = await p.employee.findFirst({
+      where: {
+        id: pmId,
+        company_id: companyId,
+        status: 'ACTIVE',
+        roles: { some: { role: { name: Roles.PROJECT_MANAGER } } },
+      },
+      select: { id: true },
+    });
+    if (!pm) {
+      throw { status: 400, message: 'Choose an active Project Manager of this company as the PM.' };
+    }
   }
 
   static async listProjects(
@@ -172,11 +294,7 @@ export class ProjectService {
     let finalPmId = data.assigned_pm_id || null;
 
     if (finalPmId) {
-      const pm = await p.employee.findFirst({
-        where: { id: finalPmId, company_id: companyId },
-      });
-      if (!pm)
-        throw { status: 400, message: 'Invalid assigned_pm_id or does not belong to your company' };
+      await this.assertValidPm(finalPmId, companyId);
     } else {
       // Auto-assign to the creator if they are a Project Manager
       if (user.roles.includes(Roles.PROJECT_MANAGER)) {
@@ -206,7 +324,7 @@ export class ProjectService {
 
     while (retries < MAX_RETRIES) {
       try {
-        const projectCode = await this.generateNextProjectCode();
+        const projectCode = await this.generateNextProjectCode(retries);
 
         const project = await p.project.create({
           data: {
@@ -286,8 +404,10 @@ export class ProjectService {
 
     if (!project) throw { status: 404, message: 'Project not found or unauthorized' };
 
-    // Core fields are locked while a project is PENDING_VERIFICATION (awaiting MD review).
+    // Core fields are locked while the project is in review (Marketing or MD).
     // PM can still update media, documents, and images via separate endpoints.
+    // This used to test `status` (the operational field), which never holds a
+    // review state, so the lock never applied. Admin/MD may still correct it.
     const CORE_LOCKED_FIELDS = [
       'name',
       'description',
@@ -302,23 +422,34 @@ export class ProjectService {
       'developer_name',
       'status',
     ];
-    if (project.status === 'PENDING_VERIFICATION') {
-      const attemptedCoreChange = CORE_LOCKED_FIELDS.some((f) => (data as any)[f] !== undefined);
+    const inReview = ['PENDING_DM_POLISH', 'PENDING_MD_APPROVAL', 'PENDING_VERIFICATION'].includes(
+      project.verification_status,
+    );
+    const canOverrideLock = user.roles.includes(Roles.ADMIN) || user.roles.includes(Roles.MD);
+    if (inReview && !canOverrideLock) {
+      // The wizard re-sends a whole step on every save, so only a value that
+      // actually differs counts as an edit.
+      const differs = (incoming: any, current: any) => {
+        if (incoming === undefined) return false;
+        if ((incoming ?? '') === (current ?? '')) return false;
+        if (current instanceof Date && incoming != null)
+          return new Date(incoming).getTime() !== current.getTime();
+        return true;
+      };
+      const attemptedCoreChange = CORE_LOCKED_FIELDS.some((f) =>
+        differs((data as any)[f], (project as any)[f]),
+      );
       if (attemptedCoreChange) {
         throw {
           status: 409,
           message:
-            'Core project details are locked while pending MD verification. Only media and documents may be updated.',
+            'Core project details are locked while the project is in review. Only media and documents may be updated.',
         };
       }
     }
 
     if (data.assigned_pm_id && data.assigned_pm_id !== project.assigned_pm_id) {
-      const pm = await p.employee.findFirst({
-        where: { id: data.assigned_pm_id, company_id: user.companyId },
-      });
-      if (!pm)
-        throw { status: 400, message: 'Invalid assigned_pm_id or does not belong to your company' };
+      await this.assertValidPm(data.assigned_pm_id, project.company_id);
     }
 
     // Explicit safe-fields whitelist — status is handled separately below via
@@ -344,6 +475,7 @@ export class ProjectService {
     // so the workflow engine's "action" here is literally that target status.
     // A resubmission with the project's current, unchanged status is a no-op,
     // not a transition, and skips the check entirely.
+    let statusChange: { from: string; to: string } | null = null;
     if (data.status !== undefined && data.status !== project.status) {
       const transition = WorkflowEngine.canTransition({
         domain: WorkflowDomain.PROJECT,
@@ -356,93 +488,82 @@ export class ProjectService {
         throw { status: 409, message: transition.reason || 'Invalid state transition' };
       }
       updateData.status = transition.nextState;
+      statusChange = { from: project.status, to: transition.nextState! };
+    }
 
-      return await p.$transaction(async (tx: import('@prisma/client').Prisma.TransactionClient) => {
-        const updated = await tx.project.update({ where: { id: projectId }, data: updateData });
+    const pmChanged =
+      data.assigned_pm_id !== undefined && data.assigned_pm_id !== project.assigned_pm_id;
+    const oldPmId = project.assigned_pm_id;
+    const newPmId = pmChanged ? (data.assigned_pm_id ?? null) : null;
+
+    // An approved project can still be edited (owner, 2026-11-02); each field
+    // that really changed is kept in its history, before -> after.
+    let changes: FieldChange[] = [];
+    if (isApproved(project)) {
+      const { status: _status, assigned_pm_id: _pm, ...fields } = updateData;
+      changes = projectChanges(project, fields);
+      if (pmChanged) {
+        const pms = await p.employee.findMany({
+          where: { id: { in: [oldPmId, newPmId].filter((id): id is number => id != null) } },
+          select: { id: true, full_name: true },
+        });
+        const nameOf = (id: number | null) => pms.find((e) => e.id === id)?.full_name || '—';
+        changes.push({ field: 'Project manager', before: nameOf(oldPmId), after: nameOf(newPmId) });
+      }
+    }
+
+    // Every changed field, the status and the PM go in ONE write. The status
+    // and PM paths used to write only their own column and return, silently
+    // dropping a name/RERA/etc. change saved in the same request.
+    const updated = await p.$transaction(async (tx: Prisma.TransactionClient) => {
+      const row = await tx.project.update({ where: { id: projectId }, data: updateData });
+      if (statusChange) {
         await tx.auditEvent.create({
           data: {
             actor_id: user.employeeId!,
             action: 'STATUS_CHANGE',
             entity_type: 'PROJECT',
             entity_id: projectId,
-            old_value: project.status,
-            new_value: transition.nextState,
+            old_value: statusChange.from,
+            new_value: statusChange.to,
+            reason: data.change_reason || null,
           },
         });
-        return updated;
+      }
+      await recordChanges(tx, {
+        projectId,
+        actorId: user.employeeId!,
+        area: 'DETAILS',
+        changes,
+        reason: data.change_reason,
       });
-    }
-
-    // Handle PM reassignment via the general edit form (PUT /projects/:id)
-    let finalProject = null;
-    if (data.assigned_pm_id !== undefined && data.assigned_pm_id !== project.assigned_pm_id) {
-      const newPmId = data.assigned_pm_id;
-      const oldPmId = project.assigned_pm_id;
-
-      finalProject = await p.$transaction(
-        async (tx: import('@prisma/client').Prisma.TransactionClient) => {
-          const updated = await tx.project.update({
-            where: { id: projectId },
-            data: { assigned_pm_id: newPmId },
-          });
-
-          // Notify the new PM
-          if (newPmId) {
-            await tx.notification.create({
-              data: {
-                employee_id: newPmId,
-                type: 'PROJECT_ASSIGNED',
-                title: `Project Assigned to You: ${updated.project_code}`,
-                message: `Project "${updated.name}" (${updated.project_code}) has been assigned to you.`,
-              },
-            });
-            // Web push to new PM (outside transaction)
-            notifyEmployee(
-              newPmId,
-              {
-                type: 'PROJECT_ASSIGNED',
-                title: `Project Assigned to You: ${updated.project_code}`,
-                message: `Project "${updated.name}" (${updated.project_code}) has been assigned to you.`,
-              },
-              { skipDbNotification: true },
-            ).catch((err) => logger.error('[WebPush] Project PM changed new PM:', err));
-          }
-
-          // Notify the old PM (if exists)
-          if (oldPmId) {
-            await tx.notification.create({
-              data: {
-                employee_id: oldPmId,
-                type: 'PROJECT_REASSIGNED',
-                title: `Project Reassigned: ${updated.project_code}`,
-                message: `Project "${updated.name}" (${updated.project_code}) has been reassigned from you.`,
-              },
-            });
-            // Web push to old PM (outside transaction)
-            notifyEmployee(
-              oldPmId,
-              {
-                type: 'PROJECT_REASSIGNED',
-                title: `Project Reassigned: ${updated.project_code}`,
-                message: `Project "${updated.name}" (${updated.project_code}) has been reassigned from you.`,
-              },
-              { skipDbNotification: true },
-            ).catch((err) => logger.error('[WebPush] Project PM changed old PM:', err));
-          }
-
-          return updated;
-        },
-      );
-    }
-
-    if (finalProject) {
-      return finalProject;
-    }
-
-    return await p.project.update({
-      where: { id: projectId },
-      data: updateData,
+      return row;
     });
+
+    if (pmChanged) {
+      const tell = (id: number, type: string, title: string, message: string) =>
+        notifyEmployee(id, { type, title, message, link: `/projects/${projectId}` }).catch((err) =>
+          logger.error(`[Project] PM change notification (${type}) failed:`, err),
+        );
+      if (newPmId) {
+        await tell(
+          newPmId,
+          'PROJECT_ASSIGNED',
+          `Project Assigned to You: ${updated.project_code}`,
+          `Project "${updated.name}" (${updated.project_code}) has been assigned to you.`,
+        );
+      }
+      if (oldPmId) {
+        await tell(
+          oldPmId,
+          'PROJECT_REASSIGNED',
+          `Project Reassigned: ${updated.project_code}`,
+          `Project "${updated.name}" (${updated.project_code}) has been reassigned from you.`,
+        );
+      }
+    }
+
+    return updated;
   }
 
   static async deleteProject(user: TokenPayload, projectId: number) {
@@ -553,10 +674,11 @@ export class ProjectService {
 
     // The new PM must belong to the PROJECT's own company, not necessarily the
     // acting user's — same reasoning as the 2.20 company-inheritance fix.
-    const newPm = await p.employee.findFirst({
-      where: { id: newPmId, company_id: project.company_id, status: 'ACTIVE' },
+    await this.assertValidPm(newPmId, project.company_id);
+    const newPm = await p.employee.findUniqueOrThrow({
+      where: { id: newPmId },
+      select: { full_name: true, employee_code: true },
     });
-    if (!newPm) throw { status: 400, message: 'New assignee not found or unauthorized' };
 
     const oldPmId = project.assigned_pm_id;
 
@@ -689,16 +811,21 @@ export class ProjectService {
       where: { project_id: projectId },
       orderBy: [{ is_primary: 'desc' }, { created_at: 'asc' }],
       include: {
+        // Pins on ProjectUnit rows; legacy Property pins (pre-rebuild) are left out.
         regions: {
+          where: { project_unit_id: { not: null } },
           include: {
-            property: {
+            project_unit: {
               select: {
                 id: true,
-                property_code: true,
-                title: true,
-                status: true,
+                unit_code: true,
+                unit_number: true,
+                unit_type: true,
+                tower: true,
+                block: true,
+                facing: true,
+                sales_status: true,
                 final_price: true,
-                category: true,
               },
             },
           },
@@ -735,7 +862,7 @@ export class ProjectService {
     user: TokenPayload,
     projectId: number,
     imageId: number,
-    regions: { property_id: number; x: number; y: number }[],
+    regions: { project_unit_id: number; x: number; y: number }[],
   ) {
     const project = await this.assertProjectInScope(user, projectId);
     if (!can(user, Permissions.PROJECTS_UPDATE, project)) {
@@ -757,23 +884,24 @@ export class ProjectService {
           if (!(region.x >= 0 && region.x <= 1) || !(region.y >= 0 && region.y <= 1)) {
             throw new Error('x and y must be fractional coordinates between 0 and 1');
           }
-          const unit = await tx.property.findFirst({
-            where: { id: region.property_id, project_id: projectId },
+          // Was tx.property â€” the old unit model â€” so no current unit could be pinned.
+          const unit = await tx.projectUnit.findFirst({
+            where: { id: region.project_unit_id, project_id: projectId },
           });
           if (!unit)
-            throw new Error(`Property ${region.property_id} is not a unit of this project`);
+            throw new Error(`Unit ${region.project_unit_id} is not a unit of this project`);
 
           await tx.propertyLayoutRegion.upsert({
             where: {
-              layout_image_id_property_id: {
+              layout_image_id_project_unit_id: {
                 layout_image_id: imageId,
-                property_id: region.property_id,
+                project_unit_id: region.project_unit_id,
               },
             },
             update: { x: region.x, y: region.y },
             create: {
               layout_image_id: imageId,
-              property_id: region.property_id,
+              project_unit_id: region.project_unit_id,
               x: region.x,
               y: region.y,
               created_by_id: user.employeeId,
@@ -804,6 +932,70 @@ export class ProjectService {
     return { deleted: true };
   }
 
+  /**
+   * Stores one Project Media file by kind. Images are re-encoded to WebP as
+   * before; a brochure or plan may also be a PDF and a video an MP4/WebM/MOV
+   * (these used to be refused — the route accepted images only). PDF and
+   * video bytes are checked for their real signature, not just the name.
+   */
+  private static async storeMediaFile(
+    file: { buffer: Buffer; originalname: string; mimetype: string },
+    kind: string,
+  ): Promise<string> {
+    const bad = (message: string) => ({ status: 400, message });
+    const head = file.buffer.subarray(0, 12);
+    const isPdf = file.mimetype === 'application/pdf';
+    const isVideo = file.mimetype.startsWith('video/');
+    const isImage = file.mimetype.startsWith('image/');
+
+    const allowed: Record<string, Array<'image' | 'pdf' | 'video'>> = {
+      COVER: ['image'],
+      GALLERY: ['image'],
+      VIDEO: ['video'],
+      BROCHURE: ['pdf', 'image'],
+      MASTER_PLAN: ['image', 'pdf'],
+      LAYOUT_PLAN: ['image', 'pdf'],
+      FLOOR_PLAN: ['image', 'pdf'],
+    };
+    const ok = allowed[kind] || ['image'];
+    const type = isPdf ? 'pdf' : isVideo ? 'video' : isImage ? 'image' : null;
+    if (!type || !ok.includes(type)) {
+      throw bad(
+        kind === 'VIDEO'
+          ? 'Upload a video (MP4, WebM or MOV).'
+          : ok.includes('pdf')
+            ? 'Upload a PDF or an image.'
+            : 'Upload an image (JPG, PNG, WebP or GIF).',
+      );
+    }
+
+    if (type === 'image') {
+      if (file.buffer.length > PROJECT_MEDIA_LIMITS.IMAGE) throw bad('Images can be up to 10 MB.');
+      const { processedBuffer, filename } = await processImageBuffer(file.buffer);
+      return getStorageService('projects-media').upload(processedBuffer, filename, 'image/webp');
+    }
+    if (type === 'pdf') {
+      if (file.buffer.length > PROJECT_MEDIA_LIMITS.PDF) throw bad('PDFs can be up to 20 MB.');
+      if (head.subarray(0, 4).toString('latin1') !== '%PDF')
+        throw bad('That file is not a valid PDF.');
+    } else {
+      if (file.buffer.length > PROJECT_MEDIA_LIMITS.VIDEO) throw bad('Videos can be up to 50 MB.');
+      const isMp4OrMov = head.subarray(4, 8).toString('latin1') === 'ftyp';
+      const isWebm = head.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+      if (!isMp4OrMov && !isWebm) throw bad('That file is not a valid MP4, WebM or MOV video.');
+    }
+    const ext =
+      type === 'pdf'
+        ? 'pdf'
+        : file.mimetype === 'video/webm'
+          ? 'webm'
+          : file.mimetype === 'video/quicktime'
+            ? 'mov'
+            : 'mp4';
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    return getStorageService('projects-media').upload(file.buffer, filename, file.mimetype);
+  }
+
   static async uploadMedia(
     user: TokenPayload,
     projectId: number,
@@ -815,12 +1007,7 @@ export class ProjectService {
     if (!can(user, Permissions.PROJECTS_UPDATE, project)) {
       throw { status: 403, message: 'Forbidden: Missing projects.update permission' };
     }
-    const { processedBuffer, filename } = await processImageBuffer(file.buffer);
-    const url = await getStorageService('projects-media').upload(
-      processedBuffer,
-      filename,
-      'image/webp',
-    );
+    const url = await this.storeMediaFile(file, kind);
     const media = await p.projectMedia.create({
       data: {
         project_id: projectId,
@@ -928,19 +1115,68 @@ export class ProjectService {
     return { deleted: true };
   }
 
-  /** Mirrors ProjectUnitService.listActivity — surfaces AuditEvent rows already written by updateProject/deleteProject/reassignProject. */
+  /**
+   * The project's history as plain lines: field changes made after approval
+   * (see projectChangeLog.ts), status changes and PM reassignments. The raw
+   * request log (auditWrites, action "PUT /api/v1/...") is left out — its
+   * entity_id is whatever id ended the URL, so it does not belong to one
+   * project.
+   */
   static async listActivity(user: TokenPayload, projectId: number) {
     await this.assertProjectInScope(user, projectId);
     const events = await p.auditEvent.findMany({
-      where: { entity_type: 'PROJECT', entity_id: projectId },
-      orderBy: { created_at: 'desc' },
+      where: {
+        entity_type: 'PROJECT',
+        entity_id: projectId,
+        OR: [
+          { action: { in: ['STATUS_CHANGE', 'REASSIGNMENT'] } },
+          { action: { startsWith: 'DETAILS_CHANGE:' } },
+          { action: { startsWith: 'PRICING_CHANGE:' } },
+          { action: { startsWith: 'UNITS_CHANGE:' } },
+        ],
+      },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: 500,
     });
-    const actorIds = [...new Set(events.map((e) => e.actor_id))];
-    const actors = await p.employee.findMany({
+    const pmIds = events
+      .filter((e) => e.action === 'REASSIGNMENT')
+      .flatMap((e) => [Number(e.old_value), Number(e.new_value)])
+      .filter((n) => Number.isInteger(n) && n > 0);
+    const actorIds = [...new Set([...events.map((e) => e.actor_id), ...pmIds])];
+    const people = await p.employee.findMany({
       where: { id: { in: actorIds } },
       select: { id: true, full_name: true },
     });
-    const nameById = new Map(actors.map((a) => [a.id, a.full_name]));
-    return events.map((e) => ({ ...e, actor_name: nameById.get(e.actor_id) || null }));
+    const nameById = new Map(people.map((a) => [a.id, a.full_name]));
+    const nameOf = (v: string | null) => (v && nameById.get(Number(v))) || v || '—';
+    return events.map((e) => {
+      const [kind, ...rest] = e.action.split(':');
+      const field = rest.join(':');
+      const area = kind.replace('_CHANGE', '');
+      const base = {
+        id: e.id,
+        created_at: e.created_at,
+        actor_id: e.actor_id,
+        actor_name: nameById.get(e.actor_id) || null,
+        reason: e.reason,
+      };
+      if (e.action === 'STATUS_CHANGE')
+        return {
+          ...base,
+          area: 'DETAILS',
+          field: 'Construction status',
+          before: e.old_value,
+          after: e.new_value,
+        };
+      if (e.action === 'REASSIGNMENT')
+        return {
+          ...base,
+          area: 'DETAILS',
+          field: 'Project manager',
+          before: nameOf(e.old_value),
+          after: nameOf(e.new_value),
+        };
+      return { ...base, area, field, before: e.old_value, after: e.new_value };
+    });
   }
 }

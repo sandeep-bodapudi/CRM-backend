@@ -9,6 +9,7 @@ import {
   ProjectUnitInput,
   UnitType,
 } from '../../api/projectUnits';
+import { unitTypesForProject } from './unitTypeProfile';
 
 // "Generate many" (implementation plan section 7.2) — replaces BulkUnitWizard's
 // client-computed grid. Each row prices independently through the server's
@@ -19,6 +20,7 @@ import {
 interface GenerateUnitsWizardProps {
   projectId: number;
   projectName: string;
+  projectType?: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -58,13 +60,19 @@ interface Row {
 export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
   projectId,
   projectName,
+  projectType,
   onClose,
   onSuccess,
 }) => {
   const { fetchWithAuth } = useAuth();
   const { showToast, showError } = useToast();
 
-  const [mode, setMode] = useState<GenMode>('PLOT');
+  // Only the unit types this project sells (a plotted venture generates plots only).
+  const allowed = unitTypesForProject(projectType);
+  const allModes: GenMode[] = ['PLOT', 'FLAT', 'VILLA'];
+  const fitting = allModes.filter((m) => allowed.includes(m));
+  const genModes = fitting.length ? fitting : allModes;
+  const [mode, setMode] = useState<GenMode>(genModes[0]);
   const [rows, setRows] = useState<Row[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{
@@ -91,6 +99,9 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
   const [villaCount, setVillaCount] = useState(10);
   const [villaTypeCode, setVillaTypeCode] = useState('Type A');
   const [villaDefaultArea, setVillaDefaultArea] = useState<number | ''>('');
+  // Villas are priced on built-up area (PRICE_BASIS_BY_UNIT_TYPE), so it is
+  // asked for too — with only the plot area every villa priced at 0.
+  const [villaDefaultBuiltUp, setVillaDefaultBuiltUp] = useState<number | ''>('');
 
   const rowToInput = (
     r: Row,
@@ -132,6 +143,14 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
     };
   };
 
+  /** The area this mode is priced on is filled in. */
+  const priceableArea = (r: Row) =>
+    mode === 'FLAT'
+      ? !!r.super_built_up_area_sqft
+      : mode === 'VILLA'
+        ? !!r.built_up_area_sqft
+        : !!r.plot_area_sqyd;
+
   const generateRows = () => {
     let generated: Row[] = [];
     if (mode === 'PLOT') {
@@ -168,6 +187,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
           villa_number: `${villaPrefix}${num}`,
           type_code: villaTypeCode,
           plot_area_sqyd: villaDefaultArea || null,
+          built_up_area_sqft: villaDefaultBuiltUp || null,
         };
       });
     }
@@ -177,7 +197,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
     // Price every row that already has a default area filled in — no need to
     // wait for the admin to touch each row individually.
     generated.forEach((r) => {
-      const hasArea = mode === 'FLAT' ? !!r.super_built_up_area_sqft : !!r.plot_area_sqyd;
+      const hasArea = priceableArea(r);
       if (!hasArea) return;
       setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, previewing: true } : x)));
       previewUnitPrice(fetchWithAuth, projectId, rowToInput(r) as any)
@@ -208,7 +228,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
     setRows((prev) => prev.map((r) => (r.id === id ? merged : r)));
 
     if (previewTimers.current[id]) clearTimeout(previewTimers.current[id]);
-    const hasArea = mode === 'FLAT' ? !!merged.super_built_up_area_sqft : !!merged.plot_area_sqyd;
+    const hasArea = priceableArea(merged);
     if (!hasArea) {
       setRows((rs) => rs.map((r) => (r.id === id ? { ...r, price: null, previewing: false } : r)));
       return;
@@ -282,7 +302,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
           <div>
             <FieldLabel required>Unit Type</FieldLabel>
             <div className="grid grid-cols-3 gap-2 max-w-md">
-              {(['PLOT', 'FLAT', 'VILLA'] as GenMode[]).map((m) => (
+              {genModes.map((m) => (
                 <button
                   key={m}
                   onClick={() => {
@@ -439,6 +459,18 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                   }
                 />
               </div>
+              <div>
+                <FieldLabel required>Default Built-up Area (Sq.Ft)</FieldLabel>
+                <input
+                  className={inputCls}
+                  type="number"
+                  min={0}
+                  value={villaDefaultBuiltUp}
+                  onChange={(e) =>
+                    setVillaDefaultBuiltUp(e.target.value === '' ? '' : parseFloat(e.target.value))
+                  }
+                />
+              </div>
             </div>
           )}
 
@@ -463,7 +495,11 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                     <tr>
                       {[
                         'Unit',
-                        mode === 'FLAT' ? 'Floor' : 'Area (Sq.Yd)',
+                        ...(mode === 'FLAT'
+                          ? ['Floor', 'Super Built-up (Sq.Ft)']
+                          : mode === 'VILLA'
+                            ? ['Plot (Sq.Yd)', 'Built-up (Sq.Ft)']
+                            : ['Area (Sq.Yd)']),
                         'Facing',
                         'Corner',
                         'Price',
@@ -499,11 +535,7 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                               className={inputCls + ' !py-1 !text-xs w-24'}
                               type="number"
                               min={0}
-                              value={
-                                mode === 'VILLA'
-                                  ? (r.plot_area_sqyd ?? '')
-                                  : (r.plot_area_sqyd ?? '')
-                              }
+                              value={r.plot_area_sqyd ?? ''}
                               onChange={(e) =>
                                 updateRow(r.id, {
                                   plot_area_sqyd:
@@ -513,6 +545,39 @@ export const GenerateUnitsWizard: React.FC<GenerateUnitsWizardProps> = ({
                             />
                           )}
                         </td>
+                        {mode === 'VILLA' && (
+                          <td className="px-3 py-1.5">
+                            <input
+                              className={inputCls + ' !py-1 !text-xs w-24'}
+                              type="number"
+                              min={0}
+                              aria-label={`Built-up area of ${r.unit_number}`}
+                              value={r.built_up_area_sqft ?? ''}
+                              onChange={(e) =>
+                                updateRow(r.id, {
+                                  built_up_area_sqft:
+                                    e.target.value === '' ? null : parseFloat(e.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                        )}
+                        {mode === 'FLAT' && (
+                          <td className="px-3 py-1.5">
+                            <input
+                              className={inputCls + ' !py-1 !text-xs w-24'}
+                              type="number"
+                              min={0}
+                              value={r.super_built_up_area_sqft ?? ''}
+                              onChange={(e) =>
+                                updateRow(r.id, {
+                                  super_built_up_area_sqft:
+                                    e.target.value === '' ? null : parseFloat(e.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                        )}
                         <td className="px-3 py-1.5">
                           <select
                             className={selectCls + ' !py-1 !text-xs'}

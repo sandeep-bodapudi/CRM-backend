@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { verifyAccessToken, TokenPayload } from '../utils/jwt';
 import { prisma } from '../lib/prisma';
 import { lastWorkingDayPassed } from '../utils/time';
-import { PERMISSIONS_VERSION } from '../shared/auth';
+import { PERMISSIONS_VERSION, Roles } from '../shared/auth';
 
 export interface AuthenticatedRequest extends Request {
   user?: TokenPayload;
@@ -74,7 +74,16 @@ export const authenticateServiceToken = (
 // What a person may still call before changing their temporary password:
 // their own profile, the password change, signing out and app-lock setup.
 const FIRST_LOGIN_ALLOWED =
-  /^\/api\/v1\/auth\/(me|change-password|logout|sessions|app-lock)(\/|\?|$)/;
+  /^\/api\/v1\/auth\/(me|change-password|logout|sessions|app-lock|two-step)(\/|\?|$)/;
+
+// Roles that can approve money or change permissions must turn on 2-step
+// login (architecture review 2026-11-01, #7). Until they do, only the same
+// few routes as a first login work.
+export const TWO_STEP_ROLES: string[] = [Roles.MD, Roles.ADMIN, Roles.FINANCE];
+// TWO_STEP_DISABLED=true (Render env) switches the requirement off -- for the
+// test suite, and as an emergency switch if nobody who can reset it can sign in.
+export const needsTwoStep = (roles: string[] = []) =>
+  process.env.TWO_STEP_DISABLED !== 'true' && roles.some((r) => TWO_STEP_ROLES.includes(r));
 
 export const authenticateToken = async (
   req: AuthenticatedRequest,
@@ -104,7 +113,13 @@ export const authenticateToken = async (
 
     const employee = await prisma.employee.findUnique({
       where: { id: payload.employeeId },
-      select: { status: true, token_version: true, first_login_done: true, last_working_day: true },
+      select: {
+        status: true,
+        token_version: true,
+        first_login_done: true,
+        last_working_day: true,
+        totp_enabled_at: true,
+      },
     });
 
     if (!employee) {
@@ -138,6 +153,16 @@ export const authenticateToken = async (
       return res.status(403).json({
         error: 'Change your temporary password first.',
         code: 'PASSWORD_CHANGE_REQUIRED',
+      });
+    }
+    if (
+      !employee.totp_enabled_at &&
+      needsTwoStep(payload.roles) &&
+      !FIRST_LOGIN_ALLOWED.test(req.originalUrl)
+    ) {
+      return res.status(403).json({
+        error: 'Turn on 2-step login first.',
+        code: 'TWO_STEP_SETUP_REQUIRED',
       });
     }
 

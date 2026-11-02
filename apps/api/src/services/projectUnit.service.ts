@@ -16,9 +16,21 @@ import {
   dimensionsDisagree,
   validateFlatAreas,
   AreaUnitType,
+  PriceBasisType,
+  resolveUnitPriceBasis,
 } from '../shared/measurement';
 import { PricingService, getEffectiveRules } from './pricing/pricing.service';
 import { computePrice, resolveFinalPrice, PricingUnitInput } from './pricing/engine';
+import {
+  isApproved,
+  money,
+  notifyPricingChange,
+  priceChange,
+  recordChanges,
+  requireReason,
+  unitChanges,
+  unitName,
+} from './projectChangeLog';
 
 const p = prisma;
 
@@ -32,6 +44,9 @@ const p = prisma;
  * PricingService so the persisted PriceLine rows are never stale relative to
  * the fields that produced them.
  */
+/** How long a manual HOLD keeps a unit off sale before the expiry sweep frees it. */
+export const UNIT_HOLD_HOURS = 48;
+
 export class ProjectUnitService {
   private static async assertProjectInScope(user: TokenPayload, projectId: number) {
     const scope = await buildProjectScope(user);
@@ -40,13 +55,95 @@ export class ProjectUnitService {
     return project;
   }
 
-  private static async generateUnitCode(
+  /**
+   * Next `<project code>-U<nnnnn>` for this project: one past the highest
+   * number already used in it. This was "count of ALL units + 1", which
+   * reissued an existing code as soon as any unit was deleted, so every
+   * later create in that project failed on the unique key (500).
+   * `offset` skips ahead on a retry (see createWithUniqueCode).
+   */
+  private static async nextUnitCode(
     projectCode: string,
-    client: { projectUnit: { count: (args?: any) => Promise<number> } } = p,
+    projectId: number,
+    client: Prisma.TransactionClient | typeof p,
+    offset = 0,
   ): Promise<string> {
-    const count = await client.projectUnit.count();
-    const seq = (count + 1).toString().padStart(5, '0');
-    return `${projectCode}-U${seq}`;
+    const prefix = `${projectCode}-U`;
+    const rows = await client.projectUnit.findMany({
+      where: { project_id: projectId, unit_code: { startsWith: prefix } },
+      select: { unit_code: true },
+    });
+    let max = 0;
+    for (const r of rows) {
+      const n = parseInt(r.unit_code.slice(prefix.length), 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return `${prefix}${String(max + 1 + offset).padStart(5, '0')}`;
+  }
+
+  /**
+   * A unit number is the name sales and buyers use ("Plot 12", "A-503"), so
+   * it must be unique within its project — two "A-1"s were accepted before.
+   * (MySQL's default collation also treats "a-1" and "A-1" as the same.)
+   */
+  private static async assertUnitNumberFree(
+    client: Prisma.TransactionClient | typeof p,
+    projectId: number,
+    unitNumber: string,
+    exceptUnitId?: number,
+  ) {
+    const clash = await client.projectUnit.findFirst({
+      where: {
+        project_id: projectId,
+        unit_number: unitNumber.trim(),
+        ...(exceptUnitId ? { id: { not: exceptUnitId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (clash) throw this.unitNumberTaken(unitNumber);
+  }
+
+  private static unitNumberTaken(unitNumber: string) {
+    return {
+      status: 409,
+      message: `Unit number "${unitNumber.trim()}" is already used in this project. Choose another number.`,
+    };
+  }
+
+  /**
+   * The check above reads first and writes after, so two people saving the
+   * same number at the same instant can both pass it. The database's unique
+   * key on (project_id, unit_number) then refuses the second write; this
+   * turns that refusal into the same message.
+   */
+  private static isUnitNumberClash(err: any) {
+    return err?.code === 'P2002' && String(err?.meta?.target ?? '').includes('unit_number');
+  }
+
+  /**
+   * Runs `create` with a fresh unit code, retrying on a unit_code clash —
+   * two units added at the same moment can both read the same highest
+   * number; the loser takes the next one.
+   */
+  private static async createWithUniqueCode<T>(
+    projectCode: string,
+    projectId: number,
+    client: Prisma.TransactionClient | typeof p,
+    unitNumber: string,
+    create: (unitCode: string) => Promise<T>,
+  ): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      const code = await this.nextUnitCode(projectCode, projectId, client, attempt);
+      try {
+        return await create(code);
+      } catch (err: any) {
+        const clash =
+          err?.code === 'P2002' && String(err?.meta?.target ?? '').includes('unit_code');
+        if (clash && attempt < 4) continue;
+        if (this.isUnitNumberClash(err)) throw this.unitNumberTaken(unitNumber);
+        throw err;
+      }
+    }
   }
 
   /** Normalises area fields shared by create/update/bulk into DB-ready columns. */
@@ -103,7 +200,10 @@ export class ProjectUnitService {
     };
   }
 
-  private static toCreateData(data: Partial<ProjectUnitCreateInput>) {
+  private static toCreateData(
+    data: Partial<ProjectUnitCreateInput>,
+    projectDefaultBasis?: PriceBasisType | null,
+  ) {
     const { fields: areaFields } = this.resolveAreaFields(data);
     return {
       unit_number: data.unit_number,
@@ -132,7 +232,13 @@ export class ProjectUnitService {
       ground_floor_area_sqft: data.ground_floor_area_sqft ?? null,
       first_floor_area_sqft: data.first_floor_area_sqft ?? null,
       total_floors: data.total_floors ?? null,
-      price_basis: data.price_basis ?? undefined,
+      // Left unset, the column default (SUPER_BUILT_UP) would price a plot on
+      // an area it doesn't have — every Sq.Yd rule then came out at 0.
+      // Plots/flats always get their fixed basis (also corrects an old row on
+      // its next edit); other types keep what was sent.
+      price_basis: data.unit_type
+        ? resolveUnitPriceBasis(data.unit_type, data.price_basis, projectDefaultBasis)
+        : (data.price_basis ?? undefined),
 
       facing: data.facing ?? null,
       is_corner: data.is_corner ?? false,
@@ -247,19 +353,29 @@ export class ProjectUnitService {
       throw { status: 403, message: 'Forbidden: Missing projects.update permission' };
     }
 
-    const unitCode = await this.generateUnitCode(project.project_code);
-    const createData = this.toCreateData(data);
+    await this.assertUnitNumberFree(p, projectId, data.unit_number);
+    const createData = this.toCreateData(data, project.default_price_basis);
 
-    const unit = await p.projectUnit.create({
-      data: {
-        unit_code: unitCode,
-        project_id: projectId,
-        company_id: project.company_id,
-        branch_id: project.branch_id,
-        created_by_id: user.employeeId,
-        ...createData,
-      } as any,
-    });
+    const unit = await this.createWithUniqueCode(
+      project.project_code,
+      projectId,
+      p,
+      data.unit_number,
+      (unitCode) =>
+        p.projectUnit.create({
+          data: {
+            unit_code: unitCode,
+            project_id: projectId,
+            company_id: project.company_id,
+            branch_id: project.branch_id,
+            created_by_id: user.employeeId,
+            // A unit added to an already approved, public project goes on the
+            // websites with it (see publishAvailableUnits).
+            is_published: project.is_published && project.verification_status === 'VERIFIED',
+            ...createData,
+          } as any,
+        }),
+    );
 
     if (data.manual_lines?.length) {
       await p.priceLine.createMany({
@@ -279,6 +395,16 @@ export class ProjectUnitService {
     }
 
     const { _computation, ...priced } = await PricingService.recalculateUnit(unit.id);
+    if (isApproved(project)) {
+      await recordChanges(p, {
+        projectId,
+        actorId: user.employeeId!,
+        area: 'UNITS',
+        changes: [
+          { field: `${unitName(priced)} added`, before: '—', after: money(priced.final_price) },
+        ],
+      });
+    }
     return priced;
   }
 
@@ -293,7 +419,10 @@ export class ProjectUnitService {
     // sales_status is not editable through the general update path — it is
     // owned by changeStatus() (manual states) and the booking workflow
     // (RESERVED/BOOKED/SOLD), never by a free-form field edit.
-    const { sales_status: _ignored, manual_lines, ...rest } = data;
+    const { sales_status: _ignored, manual_lines, change_reason: reason, ...rest } = data;
+    if (rest.unit_number !== undefined && rest.unit_number !== unit.unit_number) {
+      await this.assertUnitNumberFree(p, unit.project_id, rest.unit_number, unit.id);
+    }
 
     // toCreateData defaults every omitted field to null/false — correct for a
     // CREATE, wrong for a partial UPDATE (a PUT with just `{ is_corner: true }`
@@ -304,7 +433,9 @@ export class ProjectUnitService {
     const merged = { ...(unit as any), ...rest };
     const updateData = this.toCreateData(merged);
 
-    await p.projectUnit.update({ where: { id: unitId }, data: updateData as any });
+    await p.projectUnit.update({ where: { id: unitId }, data: updateData as any }).catch((err) => {
+      throw this.isUnitNumberClash(err) ? this.unitNumberTaken(rest.unit_number ?? '') : err;
+    });
 
     if (manual_lines !== undefined) {
       await p.priceLine.deleteMany({ where: { project_unit_id: unitId, is_manual: true } });
@@ -327,6 +458,29 @@ export class ProjectUnitService {
     }
 
     const { _computation, ...priced } = await PricingService.recalculateUnit(unitId);
+    if (isApproved(project)) {
+      // The fields that changed, then the price they moved it to.
+      const changes = [
+        ...unitChanges(unit, rest),
+        ...(manual_lines !== undefined
+          ? [
+              {
+                field: `${unitName(unit)} · extra charges`,
+                before: 'edited',
+                after: `${manual_lines.length} line(s)`,
+              },
+            ]
+          : []),
+        ...priceChange(unit, unit.final_price, priced.final_price),
+      ];
+      await recordChanges(p, {
+        projectId: unit.project_id,
+        actorId: user.employeeId!,
+        area: 'UNITS',
+        changes,
+        reason,
+      });
+    }
     return priced;
   }
 
@@ -366,7 +520,13 @@ export class ProjectUnitService {
     const updated = await p.$transaction(async (tx) => {
       const updatedUnit = await tx.projectUnit.update({
         where: { id: unitId },
-        data: { sales_status: status as any },
+        // A manual HOLD now expires: nothing ever set hold_until, so the
+        // nightly sweep (jobs/tasks.ts) never released a held unit.
+        data: {
+          sales_status: status as any,
+          hold_until:
+            status === 'HOLD' ? new Date(Date.now() + UNIT_HOLD_HOURS * 3600 * 1000) : null,
+        },
       });
       await tx.auditEvent.create({
         data: {
@@ -410,6 +570,7 @@ export class ProjectUnitService {
       throw { status: 403, message: 'Forbidden: Missing projects.update permission' };
     }
 
+    requireReason(project, reason);
     const oldFinal = unit.final_price;
     await p.projectUnit.update({
       where: { id: unitId },
@@ -434,6 +595,23 @@ export class ProjectUnitService {
         reason: reason || null,
       },
     });
+    if (isApproved(project)) {
+      const changes = [
+        {
+          field: `${unitName(unit)} · price ${overridePrice != null ? 'set by hand' : 'back to calculated'}`,
+          before: money(oldFinal),
+          after: money(priced.final_price),
+        },
+      ];
+      await recordChanges(p, {
+        projectId: unit.project_id,
+        actorId: user.employeeId!,
+        area: 'PRICING',
+        changes,
+        reason,
+      });
+      await notifyPricingChange(project, user.employeeId!, changes, reason);
+    }
 
     return priced;
   }
@@ -474,6 +652,16 @@ export class ProjectUnitService {
     }
 
     await p.projectUnit.delete({ where: { id: unitId } });
+    if (isApproved(project)) {
+      await recordChanges(p, {
+        projectId: unit.project_id,
+        actorId: user.employeeId!,
+        area: 'UNITS',
+        changes: [
+          { field: `${unitName(unit)} removed`, before: money(unit.final_price), after: '—' },
+        ],
+      });
+    }
     return { deleted: true };
   }
 
@@ -614,19 +802,28 @@ export class ProjectUnitService {
           if (!row.unit_number) throw new Error('unit_number is required');
           if (!row.unit_type) throw new Error('unit_type is required (per-unit or common)');
 
-          const createData = this.toCreateData(row);
-          const unitCode = await this.generateUnitCode(project.project_code, tx as any);
-
-          const unit = await tx.projectUnit.create({
-            data: {
-              unit_code: unitCode,
-              project_id: projectId,
-              company_id: project.company_id,
-              branch_id: project.branch_id,
-              created_by_id: user.employeeId,
-              ...createData,
-            } as any,
-          });
+          // The transaction sees rows created earlier in this same batch, so
+          // a number repeated inside one upload is caught too.
+          await this.assertUnitNumberFree(tx, projectId, row.unit_number);
+          const createData = this.toCreateData(row, project.default_price_basis);
+          const unit = await this.createWithUniqueCode(
+            project.project_code,
+            projectId,
+            tx,
+            row.unit_number,
+            (unitCode) =>
+              tx.projectUnit.create({
+                data: {
+                  unit_code: unitCode,
+                  project_id: projectId,
+                  company_id: project.company_id,
+                  branch_id: project.branch_id,
+                  created_by_id: user.employeeId,
+                  is_published: project.is_published && project.verification_status === 'VERIFIED',
+                  ...createData,
+                } as any,
+              }),
+          );
 
           const engineInput: PricingUnitInput = {
             unit_type: unit.unit_type,
@@ -697,6 +894,27 @@ export class ProjectUnitService {
         }
       }
     });
+
+    if (isApproved(project) && createdIds.length) {
+      const added = await p.projectUnit.findMany({
+        where: { id: { in: createdIds } },
+        select: { unit_number: true },
+        orderBy: { id: 'asc' },
+      });
+      const names = added.map((u) => u.unit_number);
+      await recordChanges(p, {
+        projectId,
+        actorId: user.employeeId!,
+        area: 'UNITS',
+        changes: [
+          {
+            field: `${names.length} unit(s) added`,
+            before: '—',
+            after: names.length > 12 ? `${names.slice(0, 12).join(', ')} …` : names.join(', '),
+          },
+        ],
+      });
+    }
 
     return { created, total: payload.units.length, failed, created_ids: createdIds };
   }

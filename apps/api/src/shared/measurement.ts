@@ -61,6 +61,54 @@ export const PriceBasis = {
 
 export type PriceBasisType = (typeof PriceBasis)[keyof typeof PriceBasis];
 
+const PRICE_BASIS_BY_UNIT_TYPE: Record<string, PriceBasisType> = {
+  PLOT: 'PLOT_AREA',
+  FLAT: 'SUPER_BUILT_UP',
+  VILLA: 'BUILT_UP',
+  HOUSE: 'BUILT_UP',
+  COMMERCIAL: 'SUPER_BUILT_UP',
+  OTHER: 'LUMPSUM',
+};
+
+/**
+ * The price basis a unit gets when none was given. Plots and flats always get
+ * their fixed basis (see FIXED_PRICE_BASIS). Other types follow the project's
+ * default when it fits them, else the usual basis for their type.
+ * Mirrors the web AddUnitModal's PRICE_BASIS_BY_TYPE.
+ */
+export function defaultPriceBasisForUnitType(
+  unitType: string,
+  projectDefault?: PriceBasisType | null,
+): PriceBasisType {
+  const fixed = FIXED_PRICE_BASIS[unitType];
+  if (fixed) return fixed;
+  if (projectDefault && projectDefault !== 'PLOT_AREA') return projectDefault;
+  return PRICE_BASIS_BY_UNIT_TYPE[unitType] ?? 'SUPER_BUILT_UP';
+}
+
+/**
+ * Owner's decision (2026-11-02): residential plots are always priced per
+ * Sq.Yd of plot area and flats always on super built-up area — no other
+ * basis may be chosen for them. Other types keep a free choice.
+ */
+export const FIXED_PRICE_BASIS: Record<string, PriceBasisType> = {
+  PLOT: 'PLOT_AREA',
+  FLAT: 'SUPER_BUILT_UP',
+};
+
+/** The basis a unit is actually priced on: fixed for plots/flats, else what was asked for, else the default. */
+export function resolveUnitPriceBasis(
+  unitType: string,
+  requested?: PriceBasisType | null,
+  projectDefault?: PriceBasisType | null,
+): PriceBasisType {
+  return (
+    FIXED_PRICE_BASIS[unitType] ??
+    requested ??
+    defaultPriceBasisForUnitType(unitType, projectDefault)
+  );
+}
+
 export const PRICE_BASIS_LABELS: Record<PriceBasisType, string> = {
   CARPET: 'Carpet Area',
   BUILT_UP: 'Built-up Area',

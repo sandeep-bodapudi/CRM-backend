@@ -30,6 +30,15 @@ import {
   selectCls,
 } from '../properties/propertyWizardShared';
 import { listPricingRules, PricingRule } from '../../api/projectUnits';
+import { ProjectAmenityEditor } from './ProjectAmenityEditor';
+import { listProjectAmenities } from '../../api/amenities';
+import {
+  UNIT_TYPE_LABEL,
+  PRICE_BASIS_BY_UNIT_TYPE,
+  AREA_UNIT_BY_UNIT_TYPE,
+  unitTypesForProject,
+  hasBuildings,
+} from './unitTypeProfile';
 import { PricingRulesPanel } from './PricingRulesPanel';
 
 interface ProjectWizardProps {
@@ -89,33 +98,6 @@ const AREA_UNITS = [
   { value: 'ACRE', label: 'Acres' },
   { value: 'GUNTA', label: 'Guntas' },
   { value: 'CENT', label: 'Cents' },
-];
-
-const PRICE_BASIS_OPTIONS = [
-  { value: 'SUPER_BUILT_UP', label: 'Super Built-up Area (flats)' },
-  { value: 'BUILT_UP', label: 'Built-up Area' },
-  { value: 'CARPET', label: 'Carpet Area' },
-  { value: 'PLOT_AREA', label: 'Plot Area (Sq.Yd)' },
-  { value: 'LUMPSUM', label: 'Lump Sum (no area math)' },
-];
-
-const AMENITY_CHECKLIST = [
-  'Swimming Pool',
-  'Club House',
-  "Children's Play Area",
-  'Gymnasium',
-  'Security & CCTV',
-  'Landscaped Gardens',
-  'Internal Roads',
-  'Street Lighting',
-  'Power Backup',
-  'Rainwater Harvesting',
-  'Visitor Parking',
-  'Jogging Track',
-  'Indoor Games',
-  'Entrance Arch',
-  'Water Supply',
-  'Solar Lighting',
 ];
 
 export const ProjectWizard: React.FC<ProjectWizardProps> = ({
@@ -200,20 +182,22 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
   const [approvalNumber, setApprovalNumber] = useState(initialData?.approval_number || '');
   const [lpNumber, setLpNumber] = useState(initialData?.lp_number || '');
 
+  // Which unit types this project sells (from its type) — decides which
+  // fields steps 3 and 5 show and the price basis, which is fixed per type.
+  const unitTypes = unitTypesForProject(projectType);
+  const primaryUnitType = unitTypes[0];
+
   // Step 5 — Pricing Rules
-  const [defaultPriceBasis, setDefaultPriceBasis] = useState(
-    initialData?.default_price_basis || 'SUPER_BUILT_UP',
-  );
-  const [defaultAreaUnit, setDefaultAreaUnit] = useState(initialData?.default_area_unit || 'SQFT');
+  const [defaultPriceBasis] = useState(initialData?.default_price_basis || 'SUPER_BUILT_UP');
+  const [defaultAreaUnit] = useState(initialData?.default_area_unit || 'SQFT');
   // ruleCount is only for the Step 7 summary — PricingRulesPanel owns its own state.
   const [ruleCount, setRuleCount] = useState(0);
 
-  // Step 6 — Amenities (simple checklist stored in the legacy Project.amenities
-  // JSON field for now — the rich Included/Optional/Chargeable model is a
-  // Phase 3 deliverable per the implementation plan).
-  const [amenities, setAmenities] = useState<string[]>(
-    Array.isArray((initialData as any)?.amenities) ? (initialData as any).amenities : [],
-  );
+  // Step 6 — Amenities: edited in place with the same ProjectAmenityEditor as
+  // the dashboard's Amenities tab (ProjectAmenity rows, which pricing and the
+  // websites read). The old checklist wrote the deprecated Project.amenities
+  // JSON, which nothing used.
+  const [amenityCount, setAmenityCount] = useState(0);
 
   // Step 7 — Team & Review
   const [pms, setPms] = useState<any[]>([]);
@@ -256,6 +240,13 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
     if ((step === 5 || step === 7) && projectId) {
       listPricingRules(fetchWithAuth, projectId)
         .then(({ rules }) => setRuleCount(rules.length))
+        .catch(() => {});
+    }
+  }, [step, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (step === 7 && projectId) {
+      listProjectAmenities(fetchWithAuth, projectId)
+        .then(({ amenities }) => setAmenityCount(amenities.length))
         .catch(() => {});
     }
   }, [step, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -318,12 +309,20 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
           lp_number: lpNumber || null,
         };
       case 5:
-        return {
-          default_price_basis: defaultPriceBasis || null,
-          default_area_unit: defaultAreaUnit || null,
-        };
+        // Fixed by unit type (owner, 2026-11-02): plots per Sq.Yd of plot
+        // area, flats on super built-up Sq.Ft. A project with no type yet
+        // keeps whatever it already had.
+        return projectType
+          ? {
+              default_price_basis: PRICE_BASIS_BY_UNIT_TYPE[primaryUnitType],
+              default_area_unit: AREA_UNIT_BY_UNIT_TYPE[primaryUnitType],
+            }
+          : {
+              default_price_basis: defaultPriceBasis || null,
+              default_area_unit: defaultAreaUnit || null,
+            };
       case 6:
-        return { amenities };
+        return {}; // saved by ProjectAmenityEditor as it is edited
       case 7:
         return { assigned_pm_id: assignedPmId ? parseInt(assignedPmId, 10) : null };
       default:
@@ -407,12 +406,6 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
       showError,
       showToast,
     ).finally(() => setIsLookingUp(false));
-  };
-
-  const toggleAmenity = (label: string) => {
-    setAmenities((prev) =>
-      prev.includes(label) ? prev.filter((a) => a !== label) : [...prev, label],
-    );
   };
 
   const renderStep = () => {
@@ -661,18 +654,24 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
                   </select>
                 </div>
               </div>
+              {hasBuildings(unitTypes) && (
+                <div>
+                  <FieldLabel>Towers</FieldLabel>
+                  <input
+                    className={inputCls}
+                    type="number"
+                    min={0}
+                    value={towersCount}
+                    onChange={(e) => setTowersCount(e.target.value)}
+                  />
+                </div>
+              )}
               <div>
-                <FieldLabel>Towers</FieldLabel>
-                <input
-                  className={inputCls}
-                  type="number"
-                  min={0}
-                  value={towersCount}
-                  onChange={(e) => setTowersCount(e.target.value)}
-                />
-              </div>
-              <div>
-                <FieldLabel>Blocks</FieldLabel>
+                <FieldLabel>
+                  {unitTypes.length === 1 && primaryUnitType === 'PLOT'
+                    ? 'Blocks / Phases'
+                    : 'Blocks'}
+                </FieldLabel>
                 <input
                   className={inputCls}
                   type="number"
@@ -681,18 +680,23 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
                   onChange={(e) => setBlocksCount(e.target.value)}
                 />
               </div>
+              {hasBuildings(unitTypes) && (
+                <div>
+                  <FieldLabel>Floors</FieldLabel>
+                  <input
+                    className={inputCls}
+                    type="number"
+                    min={0}
+                    value={floorsCount}
+                    onChange={(e) => setFloorsCount(e.target.value)}
+                  />
+                </div>
+              )}
               <div>
-                <FieldLabel>Floors</FieldLabel>
-                <input
-                  className={inputCls}
-                  type="number"
-                  min={0}
-                  value={floorsCount}
-                  onChange={(e) => setFloorsCount(e.target.value)}
-                />
-              </div>
-              <div>
-                <FieldLabel>Planned Units</FieldLabel>
+                <FieldLabel>
+                  Planned{' '}
+                  {unitTypes.length === 1 ? `${UNIT_TYPE_LABEL[primaryUnitType]}s` : 'Units'}
+                </FieldLabel>
                 <input
                   className={inputCls}
                   type="number"
@@ -867,43 +871,19 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
         return (
           <div className="space-y-5 animate-fadeIn">
             <h3 className="text-lg font-bold text-slate-800">Pricing Rules</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <FieldLabel>Default Price Basis</FieldLabel>
-                <select
-                  className={selectCls}
-                  value={defaultPriceBasis}
-                  onChange={(e) => setDefaultPriceBasis(e.target.value as any)}
-                >
-                  {PRICE_BASIS_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+            {/* The basis per unit type is stated once, in the rules panel below. */}
+            {!projectType && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                Pick the Project Type in step 1 so the right fields and price basis apply.
               </div>
-              <div>
-                <FieldLabel>Default Area Unit</FieldLabel>
-                <select
-                  className={selectCls}
-                  value={defaultAreaUnit}
-                  onChange={(e) => setDefaultAreaUnit(e.target.value as any)}
-                >
-                  {AREA_UNITS.map((u) => (
-                    <option key={u.value} value={u.value}>
-                      {u.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            )}
 
             {!projectId ? (
               <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
                 Save the project's identity (Step 1) first to start adding pricing rules.
               </div>
             ) : (
-              <PricingRulesPanel projectId={projectId} />
+              <PricingRulesPanel projectId={projectId} projectType={projectType} />
             )}
           </div>
         );
@@ -914,26 +894,16 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
           <div className="space-y-5 animate-fadeIn">
             <h3 className="text-lg font-bold text-slate-800">Project Amenities</h3>
             <p className="text-xs text-slate-500">
-              Shared by every unit in this project. Per-amenity charges and
-              Included/Optional/Chargeable rules are managed from the project dashboard's Amenities
-              tab.
+              Shared by every unit in this project. Mark each as included, optional or chargeable —
+              a chargeable amenity is added to every unit's price.
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {AMENITY_CHECKLIST.map((label) => (
-                <label
-                  key={label}
-                  className={`flex items-center gap-2 p-3 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${amenities.includes(label) ? 'bg-navy-50 border-navy-300 text-navy-800' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={amenities.includes(label)}
-                    onChange={() => toggleAmenity(label)}
-                    className="accent-navy-600"
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
+            {projectId ? (
+              <ProjectAmenityEditor projectId={projectId} />
+            ) : (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                Save the project's identity (Step 1) first to add amenities.
+              </div>
+            )}
           </div>
         );
 
@@ -985,7 +955,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
                 <span className="text-slate-400">Pricing Rules</span>
                 <span className="font-bold text-slate-800">{ruleCount} configured</span>
                 <span className="text-slate-400">Amenities</span>
-                <span className="font-bold text-slate-800">{amenities.length} selected</span>
+                <span className="font-bold text-slate-800">{amenityCount} added</span>
               </div>
             </SectionCard>
           </div>

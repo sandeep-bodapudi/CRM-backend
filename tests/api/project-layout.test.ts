@@ -13,8 +13,9 @@ const TINY_PNG = Buffer.from(
 );
 
 // Phase 2.21/2.23 (2026-09-06): layout image + unit-pin endpoints. Regions
-// deliberately carry no status — the viewer derives that live from
-// Property.status, verified here by joining property.status through listLayoutImages.
+// deliberately carry no status — the viewer derives that live from the
+// ProjectUnit's sales_status, joined through listLayoutImages (2026-11-02:
+// pins moved from the old Property units to ProjectUnit).
 describe('Phase 2.21/2.23 - Project layout images and unit regions', () => {
   const companyId = 1;
   const mockAdmin: TokenPayload = {
@@ -50,27 +51,25 @@ describe('Phase 2.21/2.23 - Project layout images and unit regions', () => {
         slug: `test-2-23-${Date.now()}`,
       },
     });
-    await prisma.property.create({
+    await prisma.projectUnit.create({
       data: {
         id: unitId,
-        property_code: `UNIT-2-23-${Date.now()}`,
+        unit_code: `UNIT-2-23-${Date.now()}`,
+        unit_number: 'L-1',
+        unit_type: 'PLOT',
         company_id: companyId,
         project_id: projectId,
-        title: 'Layout Test Unit',
-        brand_type: 'SONTHILLU',
-        category: 'PLOT',
+        plot_area_sqyd: 150,
         final_price: 1000000,
-        area_sqft: 1200,
-        location: 'Test Location',
-        status: 'LIVE',
+        sales_status: 'AVAILABLE',
       },
     });
   });
 
   afterAll(async () => {
-    await prisma.propertyLayoutRegion.deleteMany({ where: { property_id: unitId } });
+    await prisma.propertyLayoutRegion.deleteMany({ where: { project_unit_id: unitId } });
     await prisma.projectLayoutImage.deleteMany({ where: { project_id: projectId } });
-    await prisma.property.delete({ where: { id: unitId } });
+    await prisma.projectUnit.delete({ where: { id: unitId } });
     await prisma.project.delete({ where: { id: projectId } });
     await prisma.employee.delete({ where: { id: mockAdmin.employeeId } });
     for (const url of uploadedImageUrls) {
@@ -97,18 +96,18 @@ describe('Phase 2.21/2.23 - Project layout images and unit regions', () => {
     const imageId = images[0].id;
 
     const result = await ProjectService.upsertLayoutRegions(mockAdmin, projectId, imageId, [
-      { property_id: unitId, x: 0.42, y: 0.17 },
+      { project_unit_id: unitId, x: 0.42, y: 0.17 },
     ]);
     expect(result.saved).toBe(1);
     expect(result.failed).toHaveLength(0);
   });
 
-  it('3. Listing images joins the region to live Property.status (no separate status stored on the region)', async () => {
+  it('3. Listing images joins the region to the live unit sales status (no separate status stored on the region)', async () => {
     const images = await ProjectService.listLayoutImages(mockAdmin, projectId);
     const region = images[0].regions[0];
     expect(region.x).toBe(0.42);
     expect(region.y).toBe(0.17);
-    expect((region as any).property.status).toBe('LIVE');
+    expect((region as any).project_unit.sales_status).toBe('AVAILABLE');
 
     // Confirm the region schema itself has no status/color field to drift out of sync.
     expect(region).not.toHaveProperty('status');
@@ -119,7 +118,7 @@ describe('Phase 2.21/2.23 - Project layout images and unit regions', () => {
     const images = await ProjectService.listLayoutImages(mockAdmin, projectId);
     const imageId = images[0].id;
     const result = await ProjectService.upsertLayoutRegions(mockAdmin, projectId, imageId, [
-      { property_id: 999999999, x: 0.5, y: 0.5 },
+      { project_unit_id: 999999999, x: 0.5, y: 0.5 },
     ]);
     expect(result.saved).toBe(0);
     expect(result.failed).toHaveLength(1);
@@ -129,7 +128,7 @@ describe('Phase 2.21/2.23 - Project layout images and unit regions', () => {
     const images = await ProjectService.listLayoutImages(mockAdmin, projectId);
     const imageId = images[0].id;
     await ProjectService.upsertLayoutRegions(mockAdmin, projectId, imageId, [
-      { property_id: unitId, x: 0.9, y: 0.1 },
+      { project_unit_id: unitId, x: 0.9, y: 0.1 },
     ]);
 
     const updated = await ProjectService.listLayoutImages(mockAdmin, projectId);

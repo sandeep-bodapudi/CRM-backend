@@ -303,6 +303,8 @@ const OLD_PRESET_IDS = new Set([
 
 /** The role the report is for: the one asked for if they hold it, else their first. */
 export function reportRole(roles: string[], requested?: string | null) {
+  // A Technical Manager's token also carries Admin; they report as themselves.
+  if (roles.includes(Roles.TECHNICAL_MANAGER)) roles = roles.filter((r) => r !== Roles.ADMIN);
   if (requested && roles.includes(requested)) return requested;
   return roles.find((r) => REPORT_FIELDS[r]) || roles[0] || '';
 }

@@ -1,6 +1,37 @@
 import cron from 'node-cron';
 import { logger } from '../utils/logger';
 
+const JOB_FAILED_TYPE = 'JOB_FAILED';
+
+// A failing job used to only write a log line nobody reads. Tell each active
+// MD/Admin in the app instead, at most once a day per job.
+async function alertJobFailure(jobName: string, error: unknown) {
+  const { prisma } = await import('../lib/prisma');
+  const { notifyEmployee } = await import('../utils/notifyEmployee');
+  const { Roles } = await import('../shared');
+  const people = await prisma.employee.findMany({
+    where: {
+      status: 'ACTIVE',
+      roles: { some: { role: { name: { in: [Roles.MD, Roles.ADMIN] } } } },
+    },
+    select: { id: true },
+  });
+  const since = new Date(Date.now() - 20 * 3600 * 1000);
+  const title = `Background job failed: ${jobName}`;
+  const reason = String((error as any)?.message || error).slice(0, 300);
+  for (const person of people) {
+    const recent = await prisma.notification.count({
+      where: { employee_id: person.id, type: JOB_FAILED_TYPE, title, created_at: { gt: since } },
+    });
+    if (recent > 0) continue;
+    await notifyEmployee(person.id, {
+      type: JOB_FAILED_TYPE,
+      title,
+      message: `The scheduled job "${jobName}" stopped with an error: ${reason}. It will try again at its next run; tell the technical team if this repeats.`,
+    });
+  }
+}
+
 // Job functions will be registered here.
 export type JobFn = () => Promise<void>;
 
@@ -43,6 +74,9 @@ export class JobManager {
             logger.info(`[Jobs] Completed ${job.name} successfully in ${duration}ms.`);
           } catch (error) {
             logger.error({ err: error }, `[Jobs] FAILURE in ${job.name}: Alerting system!`);
+            alertJobFailure(job.name, error).catch((err) =>
+              logger.error({ err }, `[Jobs] Could not send the failure alert for ${job.name}`),
+            );
           }
         },
         { timezone: 'Asia/Kolkata' },

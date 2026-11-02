@@ -47,6 +47,8 @@ describe('ProjectUnit CRUD, pricing, and booking lifecycle', () => {
         project_code: `TEST-PU-${Date.now()}`,
         company_id: companyId,
         name: 'Project Unit Pricing Test Project',
+        // Units can only be booked once the project is MD-approved (2026-11-02).
+        verification_status: 'VERIFIED',
         location: 'Test Location',
         slug: `test-pu-${Date.now()}`,
       },
@@ -59,6 +61,8 @@ describe('ProjectUnit CRUD, pricing, and booking lifecycle', () => {
       calc_method: 'PER_SQYD',
       rate: 20000,
       area_basis: 'PLOT_AREA',
+      // The project is approved (bookings need that), so price changes carry a reason.
+      change_reason: 'Initial price list',
     });
     const east = await PricingRulesService.createRule(admin, projectId, {
       label: 'East Facing Premium',
@@ -68,6 +72,7 @@ describe('ProjectUnit CRUD, pricing, and booking lifecycle', () => {
       rate: 1500,
       area_basis: 'PLOT_AREA',
       match_facing: 'EAST',
+      change_reason: 'Initial price list',
     });
     const corner = await PricingRulesService.createRule(admin, projectId, {
       label: 'Corner Premium',
@@ -77,6 +82,7 @@ describe('ProjectUnit CRUD, pricing, and booking lifecycle', () => {
       rate: 2000,
       area_basis: 'PLOT_AREA',
       match_corner: true,
+      change_reason: 'Initial price list',
     });
     ruleBaseId = base.id;
     ruleEastId = east.id;
@@ -202,7 +208,12 @@ describe('ProjectUnit CRUD, pricing, and booking lifecycle', () => {
     expect(overridden.final_price).toBe(calculated + 50000);
     expect(overridden.override_reason).toBe('Premium corner location');
 
-    const cleared = await ProjectUnitService.overridePrice(admin, unit.id, null, null);
+    const cleared = await ProjectUnitService.overridePrice(
+      admin,
+      unit.id,
+      null,
+      'Back to list price',
+    );
     expect(cleared.final_price).toBe(calculated);
     expect(cleared.override_price).toBeNull();
 
@@ -258,7 +269,7 @@ describe('ProjectUnit CRUD, pricing, and booking lifecycle', () => {
   });
 
   it('11. Deactivating a rule stops it applying to future creates without touching past PriceLine rows', async () => {
-    await PricingRulesService.deleteRule(admin, projectId, ruleEastId);
+    await PricingRulesService.deleteRule(admin, projectId, ruleEastId, 'East premium withdrawn');
     const created = await ProjectUnitService.createUnit(admin, projectId, {
       unit_number: 'P-201',
       unit_type: 'PLOT',
@@ -280,7 +291,10 @@ describe('ProjectUnit CRUD, pricing, and booking lifecycle', () => {
   });
 
   it('12. Recalculate-preview reports the diff after a rule changes, without writing anything', async () => {
-    await PricingRulesService.updateRule(admin, projectId, ruleCornerId, { rate: 5000 });
+    await PricingRulesService.updateRule(admin, projectId, ruleCornerId, {
+      rate: 5000,
+      change_reason: 'Corner premium raised',
+    });
     const preview = await PricingService.previewRecalculateProject(admin, projectId);
     expect(preview.changed_count).toBeGreaterThan(0);
     const p002 = preview.changes.find((c) => c.unit_number === 'P-002');

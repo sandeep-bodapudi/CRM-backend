@@ -18,6 +18,26 @@ const STATUS_BADGE: Record<string, string> = {
   CANCELLED: 'bg-rose-100 text-rose-800 border-rose-300',
 };
 
+// Review state on every card, so the person who added a project, its
+// reviewers, Admin and MD can tell a draft from a verified one at a glance.
+const VERIFICATION_CHIP: Record<string, { label: string; cls: string }> = {
+  DRAFT: { label: 'Draft', cls: 'bg-slate-100 text-slate-700 border-slate-300' },
+  PENDING_DM_POLISH: {
+    label: 'Pending Marketing Review',
+    cls: 'bg-amber-100 text-amber-800 border-amber-300',
+  },
+  PENDING_MD_APPROVAL: {
+    label: 'Pending MD Approval',
+    cls: 'bg-amber-100 text-amber-800 border-amber-300',
+  },
+  PENDING_VERIFICATION: {
+    label: 'Pending MD Approval',
+    cls: 'bg-amber-100 text-amber-800 border-amber-300',
+  },
+  VERIFIED: { label: 'Verified', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+  REJECTED: { label: 'Rejected', cls: 'bg-rose-100 text-rose-800 border-rose-300' },
+};
+
 const PROJECT_TYPE_LABELS: Record<string, string> = {
   PLOTTED: 'Plotted Development',
   APARTMENT: 'Apartments',
@@ -243,6 +263,16 @@ export const ProjectManagement: React.FC = () => {
                     {proj.status.replace(/_/g, ' ')}
                   </span>
                 </div>
+                {(() => {
+                  const chip = VERIFICATION_CHIP[proj.verification_status || 'DRAFT'];
+                  return chip ? (
+                    <span
+                      className={`self-start px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${chip.cls}`}
+                    >
+                      {chip.label}
+                    </span>
+                  ) : null;
+                })()}
 
                 <div>
                   <h3

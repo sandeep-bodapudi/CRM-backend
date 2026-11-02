@@ -117,6 +117,26 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
   const { showToast, showError } = useToast();
 
   const [isLoading, setIsLoading] = useState(false);
+  const canResetTwoStep =
+    (currentUserRoles.includes(Roles.MD) || currentUserRoles.includes(Roles.ADMIN)) &&
+    employee.id !== user?.id;
+
+  // Lost or new phone: clears their 2-step login; they set it up again.
+  const resetTwoStep = async () => {
+    if (!window.confirm(`Reset 2-step login for ${employee.fullName}?`)) return;
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/auth/two-step/reset/${employee.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) showToast(data.message || '2-step login reset.', 'success');
+      else showError({ message: data.error || 'Could not reset 2-step login' });
+    } catch {
+      showError({ message: 'Could not reset 2-step login' });
+    }
+  };
   const [activeTab, setActiveTab] = useState<'basic' | 'personal' | 'professional' | 'banking'>(
     'basic',
   );
@@ -828,6 +848,16 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+          {canResetTwoStep && (
+            <button
+              type="button"
+              onClick={resetTwoStep}
+              disabled={isLoading}
+              className="mr-auto px-4 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              Reset 2-step login
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}

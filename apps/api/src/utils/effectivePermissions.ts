@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { withRoleAliases } from '../shared';
 
 /**
  * An employee's effective permission names (role grants, then per-employee
@@ -40,5 +41,5 @@ export async function getRoleNames(employeeId: number): Promise<string[]> {
       FROM EmployeeRole er
       JOIN Role r ON r.id = er.role_id
      WHERE er.employee_id = ${employeeId}`;
-  return rows.map((r) => r.name);
+  return withRoleAliases(rows.map((r) => r.name));
 }

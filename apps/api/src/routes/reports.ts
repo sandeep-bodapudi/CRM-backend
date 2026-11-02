@@ -23,7 +23,10 @@ const router = Router();
 
 const p = prisma;
 
-const isExempt = (roles: string[]) => roles.includes(Roles.MD) || roles.includes(Roles.ADMIN);
+// A Technical Manager carries Admin in their token but still reports daily.
+const isExempt = (roles: string[]) =>
+  !roles.includes(Roles.TECHNICAL_MANAGER) &&
+  (roles.includes(Roles.MD) || roles.includes(Roles.ADMIN));
 
 async function todaysReport(employeeId: number) {
   const { start, end } = istDayRange();

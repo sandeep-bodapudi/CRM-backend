@@ -30,14 +30,16 @@ export interface ProjectDocument {
   created_at: string;
 }
 
+/** One line of a project's History: a field that changed, who, when and why. */
 export interface ProjectActivityEvent {
   id: number;
-  entity_type: string;
-  entity_id: number;
-  action: string;
+  area: 'DETAILS' | 'PRICING' | 'UNITS';
+  field: string;
+  before: string | null;
+  after: string | null;
+  reason: string | null;
   actor_id: number;
   actor_name: string | null;
-  metadata: any;
   created_at: string;
 }
 

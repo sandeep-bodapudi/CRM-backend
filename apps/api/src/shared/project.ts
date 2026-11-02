@@ -107,6 +107,8 @@ export const ProjectUpdateSchema = z.object({
   status: z
     .enum(['PLANNING', 'UNDER_CONSTRUCTION', 'COMPLETED', 'CANCELLED', 'ON_HOLD'])
     .optional(),
+  // Why a change was made to an approved project; kept with its history entry.
+  change_reason: z.string().max(500).optional().nullable(),
   ...ProjectCommonFields,
 });
 
@@ -126,7 +128,8 @@ export const ProjectLayoutRegionsSchema = z.object({
   regions: z
     .array(
       z.object({
-        property_id: z.number().int().positive(),
+        // Pins point at a ProjectUnit (the old Property-based units are gone).
+        project_unit_id: z.number().int().positive(),
         x: z.number().min(0).max(1),
         y: z.number().min(0).max(1),
       }),

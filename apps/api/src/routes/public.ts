@@ -9,6 +9,7 @@ import { correlationId } from '../middleware/correlationId';
 import { authenticatePublicKey } from '../middleware/publicApiKey';
 import { getOrCreateSystemEmployee } from '../utils/systemActor';
 import { createLead } from '../services/lead/create';
+import { cache } from '../utils/cache';
 
 const router = Router();
 
@@ -155,6 +156,10 @@ const PUBLIC_PROJECT_UNIT_SELECT = {
   bathrooms: true,
   facing: true,
   area_sqft: true,
+  plot_area_sqyd: true,
+  super_built_up_area_sqft: true,
+  built_up_area_sqft: true,
+  carpet_area_sqft: true,
   final_price: true,
   sales_status: true,
   created_at: true,
@@ -172,7 +177,10 @@ const PUBLIC_PROJECT_UNIT_SELECT = {
 const PUBLIC_PROJECT_DETAIL_SELECT: Prisma.ProjectSelect = {
   ...PUBLIC_PROJECT_SELECT,
   units: {
-    where: { is_published: true },
+    // Published with the project on MD approval (routes/projects/core.ts
+    // md-approve); shown only while still for sale — the website's unit
+    // shape carries no sales status, so a sold unit would look buyable.
+    where: { is_published: true, sales_status: 'AVAILABLE' },
     select: PUBLIC_PROJECT_UNIT_SELECT,
     orderBy: { created_at: 'desc' as const },
   },
@@ -182,6 +190,17 @@ const PUBLIC_PROJECT_DETAIL_SELECT: Prisma.ProjectSelect = {
  * site's DTO layer (toPublicProjectDetail in dto.ts, both frontends) already
  * knows how to render — avoids touching four downstream codebases for a
  * field-name difference. */
+function publicAreaSqft(unit: any): number | null {
+  if (unit.area_sqft) return unit.area_sqft;
+  if (unit.unit_type === 'PLOT' && unit.plot_area_sqyd) return Math.round(unit.plot_area_sqyd * 9);
+  return (
+    unit.super_built_up_area_sqft ??
+    unit.built_up_area_sqft ??
+    unit.carpet_area_sqft ??
+    (unit.plot_area_sqyd ? Math.round(unit.plot_area_sqyd * 9) : null)
+  );
+}
+
 function unitToPublicPropertyShape(unit: any) {
   const categoryMap: Record<string, string> = {
     FLAT: 'APARTMENT',
@@ -201,7 +220,11 @@ function unitToPublicPropertyShape(unit: any) {
     category: categoryMap[unit.unit_type] || unit.unit_type,
     listing_type: 'NEW',
     price: unit.final_price,
-    area_sqft: unit.area_sqft,
+    // Units keep their area in the field their type is priced on (plots in
+    // Sq.Yd, flats as super built-up) and often leave area_sqft empty; the
+    // websites need one Sq.Ft figure and crashed on null.
+    area_sqft: publicAreaSqft(unit),
+    plot_area_sqyd: unit.plot_area_sqyd ?? null,
     location: undefined, // inherited from the project itself, not repeated per unit
     bedrooms: unit.bedrooms,
     bathrooms: unit.bathrooms,
@@ -230,6 +253,32 @@ const PUBLIC_PROPERTY_DETAIL_SELECT: Prisma.PropertySelect = {
 router.use(correlationId);
 router.use(publicReadLimiter);
 router.use(authenticatePublicKey);
+
+// Every website visitor made this server query the database in Mumbai from
+// Singapore for the same lists. Keep the answer for a minute per company and
+// address (filters included). Details are not cached: they re-check
+// availability on every request.
+const LIST_CACHE_SECONDS = 60;
+const cachedList = (req: any, res: Response, next: () => void) => {
+  const key = `public:${req.apiKeyContext?.company_id}:${req.originalUrl}`;
+  const hit = cache.get<{ body: unknown; total?: string }>(key);
+  if (hit) {
+    if (hit.total) res.setHeader('X-Total-Count', hit.total);
+    return res.status(200).json(hit.body);
+  }
+  const json = res.json.bind(res);
+  res.json = (body: any) => {
+    if (res.statusCode === 200) {
+      const total = res.getHeader('X-Total-Count');
+      cache.set(key, { body, total: total ? String(total) : undefined }, LIST_CACHE_SECONDS);
+    }
+    return json(body);
+  };
+  next();
+};
+router.get('/:brand/properties', cachedList);
+router.get('/:brand/projects', cachedList);
+router.get('/:brand/legal', cachedList);
 
 // GET /api/v1/public/:brand/properties
 router.get('/:brand/properties', async (req: any, res: Response) => {
@@ -712,6 +761,8 @@ router.get('/:brand/projects/:id', async (req: any, res: Response) => {
         company_id: companyId,
         is_published: true,
         verification_status: 'VERIFIED',
+        // Same as the list: a cancelled project is not on the websites.
+        status: { not: 'CANCELLED' },
       },
       select: PUBLIC_PROJECT_DETAIL_SELECT,
     });

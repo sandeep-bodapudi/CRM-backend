@@ -30,7 +30,22 @@ export const Roles = {
   STAFF: 'Staff',
   INVENTORY_EXECUTIVE: 'Inventory Executive',
   DATA_ENTRY_OPERATOR: 'Data Entry Operator',
+  // Admin's access, but marks attendance and sends daily reports like any
+  // employee (2026-11-02). See withRoleAliases.
+  TECHNICAL_MANAGER: 'Technical Manager',
 } as const;
+
+/**
+ * A Technical Manager signs in with Admin's access: Admin is added to the
+ * roles in their token, so every Admin check lets them through. Their own
+ * role stays Technical Manager in the database, which keeps them a normal
+ * employee for attendance and daily reports (check Roles.TECHNICAL_MANAGER
+ * wherever Admin is exempted from those).
+ */
+export const withRoleAliases = (roles: string[]): string[] =>
+  roles.includes(Roles.TECHNICAL_MANAGER) && !roles.includes(Roles.ADMIN)
+    ? [Roles.ADMIN, ...roles]
+    : roles;
 
 export type RoleName = (typeof Roles)[keyof typeof Roles];
 
@@ -53,6 +68,7 @@ export const DepartmentCodes: Record<string, string> = {
   [Roles.STAFF]: 'ST',
   [Roles.INVENTORY_EXECUTIVE]: 'OP',
   [Roles.DATA_ENTRY_OPERATOR]: 'OP',
+  [Roles.TECHNICAL_MANAGER]: 'IT',
 };
 
 // Canonical Permissions Model (Phase 1 - Stage 2 Blueprint Section 7)
@@ -186,6 +202,8 @@ export const RolePermissionsMatrix: Record<RoleName, string[]> = {
   [Roles.MD]: ALL_PERMISSIONS, // MD gets all permissions
 
   [Roles.ADMIN]: ALL_PERMISSIONS, // Admin is a second fully-privileged account alongside MD (2026-09-07 -- previously a curated list that excluded EMPLOYEES_VIEW_SENSITIVE and all LEADS_* permissions, which blocked real Admin usage; product decision was to match MD instead of narrowing the gaps one by one).
+
+  [Roles.TECHNICAL_MANAGER]: ALL_PERMISSIONS, // same access as Admin
 
   [Roles.HR_MANAGER]: [
     Permissions.LEADS_TELECALLER_REPORT,
@@ -643,6 +661,8 @@ export const LoginSchema = z.object({
     .min(1, 'Employee ID is required')
     .regex(EMPLOYEE_CODE_REGEX, 'Invalid Employee ID format. Expected format: RRH-XX-000'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
+  // 6-digit authenticator-app code, for accounts with 2-step login on.
+  otp: z.string().trim().max(10).optional(),
 });
 
 export type LoginInput = z.infer<typeof LoginSchema>;

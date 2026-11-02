@@ -317,7 +317,12 @@ model Employee {
   token_version       Int     @default(1)
   attendance_required Boolean @default(true)
   first_login_done    Boolean @default(false)
-  report_required     Boolean @default(true) // derived from employment_type at create; overridable per employee
+  // 2-step login with an authenticator app (required for MD, Admin, Finance).
+  // Secret is encrypted (encryptData); last_step stops one code being used twice.
+  totp_secret         String?   @db.Text
+  totp_enabled_at     DateTime?
+  totp_last_step      Int?
+  report_required    Boolean @default(true) // derived from employment_type at create; overridable per employee
 
   // Printed badge + PIN at the kiosk (F-12, decision D2): for staff with no phone or
   // data. Off for everyone; HR turns it on one person at a time. Kiosk-only.
@@ -1341,6 +1346,11 @@ model ProjectUnit {
 
   // Inventory tables get filtered hard — every one of these backs a real filter
   // on the Units tab.
+  /// One "Plot 12" per project, enforced by the database so two people saving
+  /// the same number at the same instant cannot both succeed (2026-11-02;
+  /// older duplicates are renamed first, see
+  /// docs/changes/sql/2026-11-02_unit_number_unique.sql).
+  @@unique([project_id, unit_number])
   @@index([project_id, sales_status])
   @@index([project_id, unit_type])
   @@index([project_id, tower, floor])

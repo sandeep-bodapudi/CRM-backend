@@ -17,6 +17,8 @@ describe('Item #15 — a held project blocks new bookings at the claim step', ()
     locked_until: null,
     label: 'Unit',
     project_status: null,
+    // A unit is only claimable in an MD-approved project (2026-11-02).
+    project_verification: 'VERIFIED',
   };
 
   const baseProperty: LockedInventory = {

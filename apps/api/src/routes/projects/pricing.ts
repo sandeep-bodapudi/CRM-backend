@@ -89,7 +89,8 @@ router.delete(
     try {
       const projectId = parseInt(req.params.id, 10);
       const ruleId = parseInt(req.params.ruleId, 10);
-      const result = await PricingRulesService.deleteRule(req.user!, projectId, ruleId);
+      const reason = (req.body?.change_reason ?? req.query.reason) as string | undefined;
+      const result = await PricingRulesService.deleteRule(req.user!, projectId, ruleId, reason);
       return res.status(200).json(result);
     } catch (error: any) {
       logger.error('Delete pricing rule error:', error);

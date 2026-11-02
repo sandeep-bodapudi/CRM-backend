@@ -29,7 +29,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../config';
-import { Permissions } from '../../shared';
+import { Permissions, Roles } from '../../shared';
 import { ProjectListItem } from '../../types';
 import { formatEmployeeLabel } from '../../utils/employeeLabel';
 import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
@@ -39,6 +39,9 @@ import { PricingRulesPanel } from './PricingRulesPanel';
 import { ProjectAmenityEditor } from './ProjectAmenityEditor';
 import { AddUnitModal } from './AddUnitModal';
 import { GenerateUnitsWizard } from './GenerateUnitsWizard';
+import { ProjectLayoutTab } from './ProjectLayoutTab';
+import { canUpdateProject, canDeleteProject } from './projectAccess';
+import { hasBuildings, unitTypesForProject } from './unitTypeProfile';
 import { formatAreaDual } from '../../utils/measurement';
 import { resolveImageUrl } from '../../utils/imageUtils';
 import { ProjectMediaTab } from './ProjectMediaTab';
@@ -76,7 +79,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'media', label: 'Media', icon: ImageIcon },
   { id: 'documents', label: 'Documents', icon: FileText },
   { id: 'customer-updates', label: 'Buyer updates', icon: Megaphone },
-  { id: 'activity', label: 'Activity', icon: Activity },
+  { id: 'activity', label: 'History', icon: Activity },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -160,8 +163,6 @@ export const ProjectDashboard: React.FC = () => {
   > | null>(null);
   const [recalculating, setRecalculating] = useState(false);
 
-  const canEdit = user?.permissions?.includes(Permissions.PROJECTS_UPDATE);
-
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () =>
@@ -170,6 +171,11 @@ export const ProjectDashboard: React.FC = () => {
         .then((d) => d.project as ProjectListItem),
     enabled: !!projectId,
   });
+
+  // Same rules as the server (ProjectPolicy): permission AND ownership, so a
+  // PM who isn't assigned no longer sees edit/hold/cancel buttons that fail.
+  const canEdit = canUpdateProject(user as any, project);
+  const canCancel = canDeleteProject(user as any, project);
 
   const { data: summary } = useQuery({
     queryKey: ['project', projectId, 'summary'],
@@ -267,6 +273,10 @@ export const ProjectDashboard: React.FC = () => {
   // separate from the operational status toggle.
   const canSubmitForVerification = user?.permissions?.includes(Permissions.PROJECTS_SUBMIT_VERIFY);
   const canDMPolish = user?.permissions?.includes(Permissions.PROJECTS_DM_POLISH);
+  // "As-is" skips the polish step: DM Head (or MD/Admin) only, as the API enforces.
+  const canVerifyAsIs = (user?.roles || []).some((r) =>
+    [Roles.DIGITAL_MARKETING_HEAD, Roles.MD, Roles.ADMIN].includes(r as any),
+  );
   const canVerifyProject = user?.permissions?.includes(Permissions.PROJECTS_VERIFY);
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [showRejectPrompt, setShowRejectPrompt] = useState(false);
@@ -481,13 +491,13 @@ export const ProjectDashboard: React.FC = () => {
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${STATUS_BADGE[project.status] || 'bg-slate-800 text-slate-300 border-slate-600'}`}
               >
-                {project.status.replace(/_/g, ' ')}
+                Construction: {project.status.replace(/_/g, ' ')}
               </span>
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${VERIFICATION_BADGE[project.verification_status || 'DRAFT']}`}
                 title="Only MD/Admin and the assigned PM can see this project until it's verified"
               >
-                {VERIFICATION_LABEL[project.verification_status || 'DRAFT']}
+                Review: {VERIFICATION_LABEL[project.verification_status || 'DRAFT']}
               </span>
               <span className="font-mono text-navy-200 text-xs px-2 py-0.5 bg-black/20 rounded">
                 {project.project_code}
@@ -550,13 +560,15 @@ export const ProjectDashboard: React.FC = () => {
               )}
             {canDMPolish && project.verification_status === 'PENDING_DM_POLISH' && (
               <>
-                <button
-                  onClick={handleDMVerifyAsIs}
-                  disabled={verifyBusy}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  Verify As-Is
-                </button>
+                {canVerifyAsIs && (
+                  <button
+                    onClick={handleDMVerifyAsIs}
+                    disabled={verifyBusy}
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    Verify As-Is
+                  </button>
+                )}
                 <button
                   onClick={() => setShowDMPolishForm(true)}
                   disabled={verifyBusy}
@@ -709,12 +721,14 @@ export const ProjectDashboard: React.FC = () => {
                     ? `${project.total_area_value} ${project.total_area_unit}`
                     : project.total_area || '—',
                 ],
-                [
-                  'Towers / Blocks / Floors',
-                  [project.towers_count, project.blocks_count, project.floors_count]
-                    .map((v) => v ?? '—')
-                    .join(' / '),
-                ],
+                hasBuildings(unitTypesForProject(project.project_type))
+                  ? [
+                      'Towers / Blocks / Floors',
+                      [project.towers_count, project.blocks_count, project.floors_count]
+                        .map((v) => v ?? '—')
+                        .join(' / '),
+                    ]
+                  : ['Blocks / Phases', project.blocks_count ?? '—'],
                 ['Phase', project.project_phase || '—'],
                 [
                   'Launch Date',
@@ -964,7 +978,12 @@ export const ProjectDashboard: React.FC = () => {
 
         {activeTab === 'pricing' && (
           <div className="animate-fadeIn space-y-4">
-            <PricingRulesPanel projectId={projectId} readOnly={!canEdit} />
+            <PricingRulesPanel
+              projectId={projectId}
+              projectType={project.project_type}
+              readOnly={!canEdit}
+              approved={project.verification_status === 'VERIFIED'}
+            />
             {canEdit && (
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-card">
                 <h3 className="font-bold text-slate-800 text-sm mb-1">Recalculate All Units</h3>
@@ -1065,10 +1084,11 @@ export const ProjectDashboard: React.FC = () => {
                 View on Google Maps →
               </a>
             )}
-            <p className="mt-4 text-[11px] text-slate-400">
-              The site-plan/layout image pin-map is being reconnected to the new unit model and will
-              reappear here shortly.
-            </p>
+          </div>
+        )}
+        {activeTab === 'location' && (
+          <div className="mt-4 animate-fadeIn">
+            <ProjectLayoutTab projectId={projectId} canEdit={!!canEdit} />
           </div>
         )}
 
@@ -1098,7 +1118,12 @@ export const ProjectDashboard: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && !canCancel && (
+          <p className="text-xs text-slate-500 bg-white p-5 rounded-2xl border border-slate-200 max-w-xl">
+            Only the project's PM, Admin or MD can cancel this project.
+          </p>
+        )}
+        {activeTab === 'settings' && canCancel && (
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-card animate-fadeIn max-w-xl space-y-4">
             <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider border-b border-slate-100 pb-2">
               Danger Zone
@@ -1184,6 +1209,7 @@ export const ProjectDashboard: React.FC = () => {
         <AddUnitModal
           projectId={projectId}
           projectName={project.name}
+          projectType={project.project_type}
           onClose={() => setShowAddUnit(false)}
           onSuccess={() => {
             setShowAddUnit(false);
@@ -1197,6 +1223,7 @@ export const ProjectDashboard: React.FC = () => {
         <GenerateUnitsWizard
           projectId={projectId}
           projectName={project.name}
+          projectType={project.project_type}
           onClose={() => setShowGenerateUnits(false)}
           onSuccess={() => {
             setShowGenerateUnits(false);

@@ -39,6 +39,9 @@ export interface LockedInventory {
    *  against a held project (#15) without touching bookings already in
    *  flight, which this check never sees since it only runs on claim. */
   project_status: string | null;
+  /** ProjectUnit only: its project's verification_status (units of an
+   *  unapproved project can't be booked). */
+  project_verification?: string | null;
 }
 
 /**
@@ -125,7 +128,8 @@ export async function lockInventoryRow(
   }
 
   const rows = (await client.$queryRaw`
-    SELECT u.id, u.sales_status, u.locked_until, u.company_id, proj.status AS project_status
+    SELECT u.id, u.sales_status, u.locked_until, u.company_id, proj.status AS project_status,
+           proj.verification_status AS project_verification
     FROM ProjectUnit u
     LEFT JOIN Project proj ON proj.id = u.project_id
     WHERE u.id = ${ref.id} FOR UPDATE
@@ -140,6 +144,7 @@ export async function lockInventoryRow(
     locked_until: row.locked_until ? new Date(row.locked_until) : null,
     label: 'Unit',
     project_status: row.project_status ?? null,
+    project_verification: row.project_verification ?? null,
   };
 }
 
@@ -156,6 +161,13 @@ export function assertClaimable(locked: LockedInventory, now: Date): void {
   // locks/bookings are untouched since this only runs on claim (#15).
   if (project_status === 'ON_HOLD') {
     throw new AppError(409, `${label}'s project is currently on hold — new bookings are paused`);
+  }
+  // A unit can only be booked once its project is MD-approved.
+  if (locked.ref.kind === 'UNIT' && locked.project_verification !== 'VERIFIED') {
+    throw new AppError(409, `${label}'s project is not approved yet — it cannot be booked`);
+  }
+  if (project_status === 'CANCELLED') {
+    throw new AppError(409, `${label}'s project is cancelled`);
   }
 
   // Property: LIVE is the sellable state. ProjectUnit: AVAILABLE.

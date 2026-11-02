@@ -201,14 +201,22 @@ export async function buildProjectScope(user: TokenPayload): Promise<Prisma.Proj
   const baseScope = await getBaseScope(user);
 
   // 2. MD — sees all projects in their company (any verification_status).
-  // Inventory Executive likewise: they enter/maintain every PM's projects,
-  // including drafts they didn't create themselves.
+  if (user.roles.includes(Roles.MD)) {
+    return baseScope;
+  }
+
+  // 2b. Inventory Executive / Data Entry: a project that isn't VERIFIED yet
+  // is visible only to the person who added it, the people verifying it,
+  // Admin and MD (owner's decision 2026-11-02) — so they see their own
+  // drafts plus the verified ones, no longer every PM's drafts.
   if (
-    user.roles.includes(Roles.MD) ||
     user.roles.includes(Roles.INVENTORY_EXECUTIVE) ||
     user.roles.includes(Roles.DATA_ENTRY_OPERATOR)
   ) {
-    return baseScope;
+    return {
+      ...baseScope,
+      OR: [{ verification_status: 'VERIFIED' }, { created_by_id: user.employeeId }],
+    };
   }
 
   // 3. DIGITAL MARKETING HEAD — also needs the PENDING_DM_POLISH queue (to
