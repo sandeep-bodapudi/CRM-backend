@@ -89,8 +89,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         return;
       }
 
-      console.log('[Auth Success]', responseJson);
-
       // Authenticate inside AuthContext!
       if (responseJson.accessToken && responseJson.user) {
         const u = responseJson.user;

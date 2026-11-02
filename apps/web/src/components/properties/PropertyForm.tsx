@@ -617,6 +617,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
       <input
         className={inputCls}
         type="number"
+        min={0}
         value={detail[k] ?? ''}
         onChange={(e) => setDetail(k, e.target.value === '' ? null : parseFloat(e.target.value))}
       />
@@ -744,6 +745,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_area_sqyd ?? ''}
                     onChange={(e) =>
                       set(
@@ -758,6 +760,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_length_ft ?? ''}
                     onChange={(e) =>
                       set(
@@ -772,6 +775,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_width_ft ?? ''}
                     onChange={(e) =>
                       set(
@@ -788,6 +792,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.road_width_ft ?? ''}
                     onChange={(e) =>
                       set(
@@ -860,6 +865,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bedrooms ?? ''}
                     onChange={(e) =>
                       set('bedrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -871,6 +877,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bathrooms ?? ''}
                     onChange={(e) =>
                       set('bathrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -892,6 +899,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.carpet_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -906,6 +914,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -920,6 +929,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.super_built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1002,6 +1012,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bedrooms ?? ''}
                     onChange={(e) =>
                       set('bedrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -1013,6 +1024,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bathrooms ?? ''}
                     onChange={(e) =>
                       set('bathrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -1024,6 +1036,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.total_floors ?? ''}
                     onChange={(e) =>
                       set(
@@ -1049,6 +1062,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_area_sqyd ?? ''}
                     onChange={(e) =>
                       set(
@@ -1063,6 +1077,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1077,6 +1092,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.ground_floor_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1091,6 +1107,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.first_floor_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1187,6 +1204,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bedrooms ?? ''}
                     onChange={(e) =>
                       set('bedrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -1198,6 +1216,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bathrooms ?? ''}
                     onChange={(e) =>
                       set('bathrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -1209,6 +1228,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.total_floors ?? ''}
                     onChange={(e) =>
                       set(
@@ -1234,6 +1254,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_area_sqyd ?? ''}
                     onChange={(e) =>
                       set(
@@ -1248,6 +1269,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1262,6 +1284,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.ground_floor_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1276,6 +1299,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.first_floor_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1368,6 +1392,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.carpet_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1382,6 +1407,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1396,6 +1422,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.super_built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1487,6 +1514,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.carpet_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1501,6 +1529,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1515,6 +1544,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.super_built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1613,6 +1643,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.area_value ?? ''}
                     onChange={(e) =>
                       set('area_value', e.target.value === '' ? null : parseFloat(e.target.value))
@@ -1637,6 +1668,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_length_ft ?? ''}
                     onChange={(e) =>
                       set(
@@ -1651,6 +1683,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_width_ft ?? ''}
                     onChange={(e) =>
                       set(
@@ -2001,6 +2034,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.discount_amount ?? ''}
                     onChange={(e) =>
                       set(
@@ -2046,6 +2080,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                       <input
                         className={inputCls + ' flex-1 sm:flex-none sm:w-32'}
                         type="number"
+                        min={0}
                         placeholder="Amount"
                         value={line.amount || ''}
                         onChange={(e) =>

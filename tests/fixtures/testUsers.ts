@@ -2,8 +2,6 @@ import { prisma } from '../../apps/api/src/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { Roles, Permissions, RolePermissionsMatrix } from '@rrh-ems/shared';
 
-
-
 // The 13 authoritative roles defined by the Phase 0 audit (using their canonical names)
 export const TEST_ROLES = [
   Roles.MD,
@@ -17,7 +15,7 @@ export const TEST_ROLES = [
   Roles.FINANCE,
   Roles.AGENT,
   Roles.DIGITAL_MARKETING_EXECUTIVE,
-  Roles.SALES_MANAGER
+  Roles.SALES_MANAGER,
 ];
 
 // We define raw deterministic data so tests can predict exactly what exists
@@ -31,7 +29,7 @@ export const deterministicUsers = TEST_ROLES.map((role, idx) => ({
   pan_number: 'ABCDE1234F', // Sensitive field for testing SF-005
   salary_ctc: 1000000, // Sensitive field
   department: role === Roles.FINANCE ? 'FINANCE' : 'OPERATIONS',
-  company_id: 1
+  company_id: 1,
 }));
 
 export const crossOrgUsers = [
@@ -45,14 +43,16 @@ export const crossOrgUsers = [
     department: 'OPERATIONS',
     pan_number: 'XYZDE1234F',
     salary_ctc: 500000,
-    company_id: 2
-  }
+    company_id: 2,
+  },
 ];
 
 export async function setupDeterministicTestUsers() {
   // Safety Guard: Do not run against production database!
   if (process.env.NODE_ENV !== 'test' || !process.env.DATABASE_URL_TEST) {
-    throw new Error("ABORT: Test safety guard triggered. Requires NODE_ENV=test AND DATABASE_URL_TEST. Do not run against production!");
+    throw new Error(
+      'ABORT: Test safety guard triggered. Requires NODE_ENV=test AND DATABASE_URL_TEST. Do not run against production!',
+    );
   }
 
   const hashedPassword = await bcrypt.hash('Password@123', 12);
@@ -63,8 +63,8 @@ export async function setupDeterministicTestUsers() {
     update: {},
     create: {
       name: 'Test Company',
-      code: 'TEST_COMP_01'
-    }
+      code: 'TEST_COMP_01',
+    },
   });
 
   const crossOrgCompany = await prisma.company.upsert({
@@ -72,20 +72,27 @@ export async function setupDeterministicTestUsers() {
     update: {},
     create: {
       name: 'Cross Org Company',
-      code: 'TEST_COMP_02'
-    }
+      code: 'TEST_COMP_02',
+    },
   });
 
-  let testBranch = await prisma.branch.findFirst({ where: { company_id: testCompany.id, name: 'Test Branch' } });
+  let testBranch = await prisma.branch.findFirst({
+    where: { company_id: testCompany.id, name: 'Test Branch' },
+  });
   if (!testBranch) {
-    testBranch = await prisma.branch.create({ data: { company_id: testCompany.id, name: 'Test Branch' } });
+    testBranch = await prisma.branch.create({
+      data: { company_id: testCompany.id, name: 'Test Branch' },
+    });
   }
 
-  let crossOrgBranch = await prisma.branch.findFirst({ where: { company_id: crossOrgCompany.id, name: 'Cross Org Branch' } });
+  let crossOrgBranch = await prisma.branch.findFirst({
+    where: { company_id: crossOrgCompany.id, name: 'Cross Org Branch' },
+  });
   if (!crossOrgBranch) {
-    crossOrgBranch = await prisma.branch.create({ data: { company_id: crossOrgCompany.id, name: 'Cross Org Branch' } });
+    crossOrgBranch = await prisma.branch.create({
+      data: { company_id: crossOrgCompany.id, name: 'Cross Org Branch' },
+    });
   }
-
 
   const allUsers = [...deterministicUsers, ...crossOrgUsers];
 
@@ -94,10 +101,15 @@ export async function setupDeterministicTestUsers() {
     const upsertedEmp = await prisma.employee.upsert({
       where: { employee_code: user.employee_code },
       update: {
-        company_id: crossOrgUsers.some(u => u.employee_code === user.employee_code) ? crossOrgCompany.id : testCompany.id,
+        company_id: crossOrgUsers.some((u) => u.employee_code === user.employee_code)
+          ? crossOrgCompany.id
+          : testCompany.id,
         password_hash: hashedPassword,
         status: 'ACTIVE',
-        token_version: 1
+        token_version: 1,
+        // Test users have already set their own password; a temporary one is
+        // refused by the API for everything but the password change.
+        first_login_done: true,
       },
       create: {
         employee_code: user.employee_code,
@@ -106,12 +118,17 @@ export async function setupDeterministicTestUsers() {
         phone: user.phone,
         password_hash: hashedPassword,
         company: {
-          connect: { id: crossOrgUsers.some(u => u.employee_code === user.employee_code) ? crossOrgCompany.id : testCompany.id },
+          connect: {
+            id: crossOrgUsers.some((u) => u.employee_code === user.employee_code)
+              ? crossOrgCompany.id
+              : testCompany.id,
+          },
         },
         pan_number: user.pan_number,
         salary_ctc: user.salary_ctc,
         department: user.department,
         job_title: `Test ${user.roles[0]}`,
+        first_login_done: true,
       },
     });
 
@@ -121,35 +138,37 @@ export async function setupDeterministicTestUsers() {
       const role = await prisma.role.upsert({
         where: { name: roleName },
         update: {},
-        create: { name: roleName }
+        create: { name: roleName },
       });
       await prisma.employeeRole.createMany({
-        data: [{
-          employee_id: upsertedEmp.id,
-          role_id: role.id
-        }],
-        skipDuplicates: true
+        data: [
+          {
+            employee_id: upsertedEmp.id,
+            role_id: role.id,
+          },
+        ],
+        skipDuplicates: true,
       });
     }
   }
 
   // --- Phase 1 Stage 2: Sync RolePermissionsMatrix into Test DB ---
   const allPerms = Object.values(Permissions).filter((p) => typeof p === 'string') as string[];
-  
+
   // Create permissions efficiently if they don't exist
   await prisma.permission.createMany({
     data: allPerms.map((permName) => ({ name: permName })),
-    skipDuplicates: true
+    skipDuplicates: true,
   });
 
   // Fetch all roles and permissions once
   const [allRoles, allDbPerms] = await Promise.all([
     prisma.role.findMany(),
-    prisma.permission.findMany()
+    prisma.permission.findMany(),
   ]);
-  
-  const roleMap = new Map(allRoles.map(r => [r.name, r.id]));
-  const permMap = new Map(allDbPerms.map(p => [p.name, p.id]));
+
+  const roleMap = new Map(allRoles.map((r) => [r.name, r.id]));
+  const permMap = new Map(allDbPerms.map((p) => [p.name, p.id]));
 
   // Build the list of required RolePermission pairs
   const rolePermsData: { role_id: number; permission_id: number }[] = [];
@@ -174,25 +193,27 @@ export async function setupDeterministicTestUsers() {
   if (rolePermsData.length > 0) {
     try {
       // Clear existing role permissions for roles in the matrix to ensure a pristine state
-      const targetRoleIds = Array.from(new Set(rolePermsData.map(rp => rp.role_id)));
+      const targetRoleIds = Array.from(new Set(rolePermsData.map((rp) => rp.role_id)));
       await prisma.rolePermission.deleteMany({
-        where: { role_id: { in: targetRoleIds } }
+        where: { role_id: { in: targetRoleIds } },
       });
 
       const result = await prisma.rolePermission.createMany({
         data: rolePermsData,
-        skipDuplicates: true
+        skipDuplicates: true,
       });
       console.log(`[DIAGNOSTIC] Inserted ${result.count} RolePermission records.`);
     } catch (err: any) {
       console.error(`[DIAGNOSTIC ERROR] Failed to createMany RolePermissions: ${err.message}`);
     }
   }
-  
+
   // Verify what was actually inserted for PM
   const pmRoleId = roleMap.get(Roles.PROJECT_MANAGER);
   if (pmRoleId) {
-    const pmPerms = await prisma.rolePermission.count({ where: { role_id: pmRoleId }});
-    console.log(`[DIAGNOSTIC] Project Manager Role (ID: ${pmRoleId}) has ${pmPerms} permissions in DB after sync.`);
+    const pmPerms = await prisma.rolePermission.count({ where: { role_id: pmRoleId } });
+    console.log(
+      `[DIAGNOSTIC] Project Manager Role (ID: ${pmRoleId}) has ${pmPerms} permissions in DB after sync.`,
+    );
   }
 }

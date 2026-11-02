@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { blankAsAbsent } from './zodHelpers';
+import { blankAsAbsent, phoneNumber } from './zodHelpers';
 
 export const EmptyBodySchema = z.object({}).strict();
 
 export const EmployeeSelfUpdateSchema = z.object({
   full_name: blankAsAbsent(z.string().min(1).optional()),
-  phone: blankAsAbsent(z.string().min(10).optional()),
+  phone: blankAsAbsent(phoneNumber().optional()),
   secondary_phone: z.string().optional().nullable(),
   whatsapp_number: z.string().optional().nullable(),
   current_address: z.string().optional().nullable(),
@@ -43,7 +43,7 @@ export const EmployeeSelfUpdateSchema = z.object({
 
 export const EmployeeCreateSchema = z.object({
   full_name: z.string().min(1, 'Please enter a valid full name'),
-  phone: z.string().min(10, 'Phone number must be at least 10 digits'),
+  phone: phoneNumber(),
   role_name: z.string().min(1, 'Please specify a role'),
   branch_id: z.union([z.string(), z.number()]),
   secondary_phone: z.string().optional().nullable(),
@@ -132,6 +132,19 @@ export const EmployeeResignSchema = z.object({
   resignation_date: z.string().optional(),
   last_working_day: z.string().optional(),
   reason: z.string().optional(),
+  // Who takes over their open work on the last working day (optional).
+  handover_to_id: z.number().int().positive().optional().nullable(),
+});
+
+// Serving notice: change the last day or the hand-over colleague.
+export const EmployeeResignationUpdateSchema = z.object({
+  last_working_day: z.string().optional(),
+  handover_to_id: z.number().int().positive().optional().nullable(),
+});
+
+export const EmployeeHandoverSchema = z.object({
+  to_employee_id: z.number().int().positive(),
+  reason: z.string().trim().max(300).optional(),
 });
 
 export const EmployeePromoteSchema = z

@@ -76,10 +76,23 @@ export const leadFollowUpJob = async () => {
   logger.info('Executing Lead Follow-Up Reminders...');
   const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
   const staleLeads = await leadsInactiveSince(cutoff);
+  // Someone who has left reads nothing: their leads are flagged to the
+  // manager by the stale-lead job instead.
+  const activeOwners = new Set(
+    (
+      await prisma.employee.findMany({
+        where: {
+          id: { in: [...new Set(staleLeads.map((l) => l.assigned_to_id!).filter(Boolean))] },
+          status: 'ACTIVE',
+        },
+        select: { id: true },
+      })
+    ).map((e) => e.id),
+  );
 
   let notifiedCount = 0;
   for (const lead of staleLeads) {
-    if (!lead.assigned_to_id) continue;
+    if (!lead.assigned_to_id || !activeOwners.has(lead.assigned_to_id)) continue;
     await notifyEmployee(lead.assigned_to_id, {
       type: 'LEAD_FOLLOW_UP_REMINDER',
       title: 'Follow-up needed',
@@ -126,9 +139,11 @@ export const staleLeadFlaggingJob = async () => {
         employee_code: true,
         reporting_manager_id: true,
         company_id: true,
+        status: true,
       },
     });
     if (!assignee) continue;
+    const ownerName = assignee.full_name || assignee.employee_code;
 
     let recipientId = assignee.reporting_manager_id;
     if (!recipientId) {
@@ -152,7 +167,10 @@ export const staleLeadFlaggingJob = async () => {
     await notifyEmployee(recipientId, {
       type: 'LEAD_STALE_FLAGGED',
       title: 'Lead going stale',
-      message: `${lead.customer_name} (${lead.lead_code}), assigned to ${assignee.full_name || assignee.employee_code}, has had no activity in 5+ days.`,
+      message:
+        assignee.status === 'ACTIVE'
+          ? `${lead.customer_name} (${lead.lead_code}), assigned to ${ownerName}, has had no activity in 5+ days.`
+          : `${lead.customer_name} (${lead.lead_code}) is still with ${ownerName}, who has left. Hand over their leads from Employees.`,
       link: `/leads/${lead.id}`,
     });
     await prisma.auditEvent.create({
@@ -621,10 +639,20 @@ export const expiredSessionCleanupJob = async () => {
   // anything (the /auth/refresh route already rejects an expired token), so
   // this is pure housekeeping. Naturally idempotent: DELETE WHERE expires_at
   // < now() matches nothing on a re-run once already cleaned.
+  // Also drop used-up rows: every refresh leaves the old row behind as
+  // consumed, and sign-outs leave revoked ones, so the table only ever grew
+  // (6,767 rows for 15 staff on 2026-11-01). Two weeks of history is kept so
+  // a reused old refresh key is still recognised (and its sign-in revoked).
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const result = await prisma.authSession.deleteMany({
-    where: { expires_at: { lt: new Date() } },
+    where: {
+      OR: [
+        { expires_at: { lt: new Date() } },
+        { OR: [{ consumed: true }, { revoked: true }], updated_at: { lt: twoWeeksAgo } },
+      ],
+    },
   });
-  logger.info(`Cleaned up ${result.count} expired session(s).`);
+  logger.info(`Cleaned up ${result.count} expired or used session(s).`);
 };
 
 // 5. Commission calculation batch

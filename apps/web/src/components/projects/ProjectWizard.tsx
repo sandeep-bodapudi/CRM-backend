@@ -643,6 +643,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={totalAreaValue}
                     onChange={(e) => setTotalAreaValue(e.target.value)}
                     placeholder="10"
@@ -665,6 +666,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={towersCount}
                   onChange={(e) => setTowersCount(e.target.value)}
                 />
@@ -674,6 +676,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={blocksCount}
                   onChange={(e) => setBlocksCount(e.target.value)}
                 />
@@ -683,6 +686,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={floorsCount}
                   onChange={(e) => setFloorsCount(e.target.value)}
                 />
@@ -692,6 +696,7 @@ export const ProjectWizard: React.FC<ProjectWizardProps> = ({
                 <input
                   className={inputCls}
                   type="number"
+                  min={0}
                   value={totalUnits}
                   onChange={(e) =>
                     setTotalUnits(e.target.value === '' ? '' : parseInt(e.target.value, 10))

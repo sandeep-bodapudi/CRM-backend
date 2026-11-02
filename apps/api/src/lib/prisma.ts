@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { auditContext } from '../utils/requestContext';
 
 /**
  * Singleton Prisma Client instance for the API.
@@ -33,6 +34,30 @@ export const TRANSACTION_OPTIONS = { maxWait: 10000, timeout: 30000 };
 export const prisma = new PrismaClient({
   ...(mainDbUrl ? { datasources: { db: { url: mainDbUrl } } } : {}),
   transactionOptions: TRANSACTION_OPTIONS,
+});
+
+// Every audit record written during a request gets the company, IP address
+// and device of that request (utils/requestContext.ts), so the ~60 places
+// that write AuditEvent don't each have to pass them. Values a caller sets
+// itself are kept.
+prisma.$use(async (params, next) => {
+  if (
+    params.model === 'AuditEvent' &&
+    (params.action === 'create' || params.action === 'createMany')
+  ) {
+    const ctx = auditContext();
+    if (ctx) {
+      const fill = (row: any) => ({
+        ...row,
+        company_id: row.company_id ?? ctx.company_id,
+        ip: row.ip ?? ctx.ip,
+        user_agent: row.user_agent ?? ctx.user_agent,
+      });
+      const data = params.args?.data;
+      if (data) params.args.data = Array.isArray(data) ? data.map(fill) : fill(data);
+    }
+  }
+  return next(params);
 });
 
 const publicDbUrl = dbUrl.includes('connection_limit=')

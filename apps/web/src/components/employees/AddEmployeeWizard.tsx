@@ -665,6 +665,7 @@ export const AddEmployeeWizard: React.FC<AddEmployeeWizardProps> = ({
                   <DollarSign className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
                   <input
                     type="number"
+                    min={0}
                     value={annualSalary}
                     onChange={(e) => setAnnualSalary(e.target.value)}
                     className="w-full p-3 pl-10 border border-slate-300 rounded-xl focus:ring-2 focus:ring-navy-500"

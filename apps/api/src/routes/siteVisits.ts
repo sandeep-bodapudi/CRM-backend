@@ -283,7 +283,9 @@ router.post(
         where: { id: visitId },
         data: { proof_photo_url: url },
       });
-      if (visit.proof_photo_url && visit.proof_photo_url.startsWith(PROOF_PREFIX)) {
+      // FTP storage saves the full site URL (https://.../uploads/visit-proofs/...),
+      // so look for the folder anywhere in it, not only at the start.
+      if (visit.proof_photo_url && visit.proof_photo_url.includes(PROOF_PREFIX)) {
         await storage
           .delete(visit.proof_photo_url)
           .catch((e: unknown) => logger.warn('Could not delete the replaced visit photo:', e));
@@ -308,7 +310,7 @@ router.get(
         where: { id: visitId, ...SiteVisitPolicy.canList(req.user!) },
         select: { proof_photo_url: true },
       });
-      if (!visit || !visit.proof_photo_url || !visit.proof_photo_url.startsWith(PROOF_PREFIX)) {
+      if (!visit || !visit.proof_photo_url || !visit.proof_photo_url.includes(PROOF_PREFIX)) {
         return res.status(404).json({ error: 'No photo for this visit.' });
       }
       const bytes = await getStorageService('visit-proofs').download(visit.proof_photo_url);

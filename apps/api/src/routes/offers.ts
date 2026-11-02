@@ -2,6 +2,8 @@ import { logger } from '../utils/logger';
 import { Router, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { validateRequestBody } from '../middleware/validate';
+import { z } from 'zod';
 import { Roles } from '../shared';
 import {
   imageOnlyUpload,
@@ -14,6 +16,24 @@ const router = Router();
 router.use(authenticateToken);
 
 const isManager = (roles: string[]) => roles.includes(Roles.MD) || roles.includes(Roles.ADMIN);
+
+// An offer image is shown to every employee: only a web link or one of our
+// own uploads, never other schemes or free text.
+const offerImage = z
+  .string()
+  .trim()
+  .max(1000)
+  .refine(
+    (v) => /^https?:\/\/\S+$/i.test(v) || /^\/uploads\/[\w./-]+$/.test(v),
+    'Image must be a web link (https://...) or an uploaded image',
+  );
+const OfferCreateSchema = z.object({
+  image_url: offerImage,
+  audience: z.enum(['ALL', 'EMPLOYEES', 'CHANNEL_PARTNERS']).optional(),
+  active: z.boolean().optional(),
+  sort_order: z.number().int().min(0).max(1000).optional(),
+});
+const OfferUpdateSchema = OfferCreateSchema.partial();
 
 // POST /api/v1/offers/upload-image — MD/Admin only. Uploads an image file to
 // storage and returns its public URL, for the "Add New Offer" form to then
@@ -98,71 +118,79 @@ router.get('/admin', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/v1/offers
-router.post('/', async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    if (!isManager(req.user!.roles)) {
-      return res.status(403).json({ error: 'Only MD and Admin can manage offers' });
-    }
-    const { image_url, audience, active, sort_order } = req.body;
-    if (!image_url) {
-      return res.status(400).json({ error: 'image_url is required' });
-    }
-    const validAudiences = ['ALL', 'EMPLOYEES', 'CHANNEL_PARTNERS'];
-    if (audience && !validAudiences.includes(audience)) {
-      return res.status(400).json({ error: 'Invalid audience' });
-    }
+router.post(
+  '/',
+  validateRequestBody(OfferCreateSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!isManager(req.user!.roles)) {
+        return res.status(403).json({ error: 'Only MD and Admin can manage offers' });
+      }
+      const { image_url, audience, active, sort_order } = req.body;
+      if (!image_url) {
+        return res.status(400).json({ error: 'image_url is required' });
+      }
+      const validAudiences = ['ALL', 'EMPLOYEES', 'CHANNEL_PARTNERS'];
+      if (audience && !validAudiences.includes(audience)) {
+        return res.status(400).json({ error: 'Invalid audience' });
+      }
 
-    const offer = await prisma.offer.create({
-      data: {
-        company_id: req.user!.companyId,
-        image_url,
-        audience: audience || 'ALL',
-        active: active !== undefined ? Boolean(active) : true,
-        sort_order: sort_order !== undefined ? parseInt(sort_order, 10) : 0,
-      },
-    });
-    return res.status(201).json({ offer });
-  } catch (error) {
-    logger.error('Error creating offer:', error);
-    return res.status(500).json({ error: 'Failed to create offer' });
-  }
-});
+      const offer = await prisma.offer.create({
+        data: {
+          company_id: req.user!.companyId,
+          image_url,
+          audience: audience || 'ALL',
+          active: active !== undefined ? Boolean(active) : true,
+          sort_order: sort_order !== undefined ? parseInt(sort_order, 10) : 0,
+        },
+      });
+      return res.status(201).json({ offer });
+    } catch (error) {
+      logger.error('Error creating offer:', error);
+      return res.status(500).json({ error: 'Failed to create offer' });
+    }
+  },
+);
 
 // PATCH /api/v1/offers/:id
-router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    if (!isManager(req.user!.roles)) {
-      return res.status(403).json({ error: 'Only MD and Admin can manage offers' });
-    }
-    const id = parseInt(req.params.id, 10);
-    const existing = await prisma.offer.findFirst({
-      where: { id, company_id: req.user!.companyId },
-    });
-    if (!existing) {
-      return res.status(404).json({ error: 'Offer not found' });
-    }
+router.patch(
+  '/:id',
+  validateRequestBody(OfferUpdateSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!isManager(req.user!.roles)) {
+        return res.status(403).json({ error: 'Only MD and Admin can manage offers' });
+      }
+      const id = parseInt(req.params.id, 10);
+      const existing = await prisma.offer.findFirst({
+        where: { id, company_id: req.user!.companyId },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: 'Offer not found' });
+      }
 
-    const { image_url, audience, active, sort_order } = req.body;
-    const validAudiences = ['ALL', 'EMPLOYEES', 'CHANNEL_PARTNERS'];
-    if (audience && !validAudiences.includes(audience)) {
-      return res.status(400).json({ error: 'Invalid audience' });
-    }
+      const { image_url, audience, active, sort_order } = req.body;
+      const validAudiences = ['ALL', 'EMPLOYEES', 'CHANNEL_PARTNERS'];
+      if (audience && !validAudiences.includes(audience)) {
+        return res.status(400).json({ error: 'Invalid audience' });
+      }
 
-    const offer = await prisma.offer.update({
-      where: { id },
-      data: {
-        ...(image_url !== undefined ? { image_url } : {}),
-        ...(audience !== undefined ? { audience } : {}),
-        ...(active !== undefined ? { active: Boolean(active) } : {}),
-        ...(sort_order !== undefined ? { sort_order: parseInt(sort_order, 10) } : {}),
-      },
-    });
-    return res.json({ offer });
-  } catch (error) {
-    logger.error('Error updating offer:', error);
-    return res.status(500).json({ error: 'Failed to update offer' });
-  }
-});
+      const offer = await prisma.offer.update({
+        where: { id },
+        data: {
+          ...(image_url !== undefined ? { image_url } : {}),
+          ...(audience !== undefined ? { audience } : {}),
+          ...(active !== undefined ? { active: Boolean(active) } : {}),
+          ...(sort_order !== undefined ? { sort_order: parseInt(sort_order, 10) } : {}),
+        },
+      });
+      return res.json({ offer });
+    } catch (error) {
+      logger.error('Error updating offer:', error);
+      return res.status(500).json({ error: 'Failed to update offer' });
+    }
+  },
+);
 
 // DELETE /api/v1/offers/:id
 router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {

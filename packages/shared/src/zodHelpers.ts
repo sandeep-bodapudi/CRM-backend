@@ -23,3 +23,27 @@ export function blankAsAbsent<T extends z.ZodTypeAny>(schema: T) {
     schema,
   );
 }
+
+/**
+ * One phone rule everywhere (audit 2026-11-01): the number is cleaned first --
+ * spaces, dashes, dots and brackets dropped; "+91", "91" or a leading 0 in
+ * front of an Indian number reduced to its 10 digits; other international
+ * numbers keep their "+" -- and then checked. Before, any 10+ characters were
+ * accepted and stored exactly as typed ("+91 98765 43210", "098765-43210").
+ */
+export function cleanPhone(raw: string): string {
+  const trimmed = raw.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+  if (digits.length === 10) return digits;
+  return trimmed.startsWith('+') ? `+${digits}` : digits;
+}
+
+const PHONE_PATTERN = /^([2-9]\d{9}|\+\d{11,15})$/;
+
+export const phoneNumber = (message = 'Enter a valid 10-digit phone number') =>
+  z.preprocess(
+    (value) => (typeof value === 'string' ? cleanPhone(value) : value),
+    z.string().regex(PHONE_PATTERN, message),
+  );

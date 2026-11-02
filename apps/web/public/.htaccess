@@ -25,6 +25,11 @@
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set Strict-Transport-Security "max-age=31536000"
   Header always set Permissions-Policy "camera=(self), microphone=(self), geolocation=(self)"
+  # Only this site's own scripts may run. The login refresh key is kept in
+  # the browser where page scripts can read it, so an injected script must
+  # not be able to load or run at all. The app has no inline scripts.
+  # connect-src lists the production, staging and old API servers.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://api-rscrm.onrender.com https://rs-crms.onrender.com https://crm-backend-1gyt.onrender.com https://api.postalpincode.in; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
 
   # Order matters: mod_headers applies "Header set" directives in the order
   # Apache encounters them, and the last match for a given header wins.

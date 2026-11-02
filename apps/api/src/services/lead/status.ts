@@ -761,6 +761,12 @@ export async function bulkUploadLeads(
     if (e.email) existingEmailsMap.set(e.email, e);
   }
 
+  // The same number (or email) twice in one file used to be imported twice:
+  // only leads already in the CRM were checked (8 such pairs in production on
+  // 2026-11-01). The first row wins; later ones are reported as duplicates.
+  const seenPhoneRow = new Map<string, number>();
+  const seenEmailRow = new Map<string, number>();
+
   // Chunking to prevent holding transaction too long
   const CHUNK_SIZE = 50;
   let currentRow = 0;
@@ -776,6 +782,19 @@ export async function bulkUploadLeads(
           results.errors.push({ row: currentRow, reason: rowError });
           continue;
         }
+
+        const firstRow =
+          seenPhoneRow.get(item.phone) ?? (item.email ? seenEmailRow.get(item.email) : undefined);
+        if (firstRow !== undefined) {
+          results.duplicates++;
+          results.errors.push({
+            row: currentRow,
+            reason: `Repeated in this file: ${item.phone} is already on row ${firstRow}`,
+          });
+          continue;
+        }
+        seenPhoneRow.set(item.phone, currentRow);
+        if (item.email) seenEmailRow.set(item.email, currentRow);
 
         const existingLead =
           existingPhonesMap.get(item.phone) ||

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { blankAsAbsent } from './zodHelpers';
+import { blankAsAbsent, phoneNumber } from './zodHelpers';
 
 // Lead Constants & Schemas
 export const LeadStatus = {
@@ -244,7 +244,7 @@ export const LeadCreateSchema = z.object({
   introduced_by_id: z.number().int().optional().nullable(),
   // Hand the lead straight to this colleague (instead of keeping it or sending it to the pool).
   assign_to_employee_id: z.number().int().positive().optional().nullable(),
-  phone: z.string().min(10, 'Valid phone number is required'),
+  phone: phoneNumber(),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
   source: z.string().default('MANUAL_ENTRY'),
   // The source's name when source is OTHER (e.g. "99acres"); required then.
@@ -306,7 +306,7 @@ export type LeadCreateInput = z.infer<typeof LeadCreateSchema>;
 // source is forced to WEBSITE server-side).
 export const PublicLeadCreateSchema = z.object({
   customer_name: z.string().min(2, 'Customer name is required'),
-  phone: z.string().min(10, 'Valid phone number is required'),
+  phone: phoneNumber(),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
   property_type_preference: z.string().optional(),
   preferred_location: z.string().optional(),

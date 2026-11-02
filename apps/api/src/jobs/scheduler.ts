@@ -146,6 +146,21 @@ jobManager.register({
   envDisableKey: 'DISABLE_JOB_ABSENCE_RECHECK',
 });
 
+import { offboardDueLeavers } from '../services/employeeOffboard.service';
+
+// 16. Leavers (hourly at :05): anyone whose last working day is over is locked
+// out and their open work goes to the colleague HR picked. Hourly, not
+// nightly, because the host sleeps; login is refused after the last day
+// regardless (middleware/auth.ts), so this only does the status + hand-over.
+jobManager.register({
+  name: 'Offboard Leavers',
+  schedule: '5 * * * *',
+  handler: async () => {
+    await offboardDueLeavers();
+  },
+  envDisableKey: 'DISABLE_JOB_OFFBOARD',
+});
+
 export const initJobs = () => {
   jobManager.startAll();
 
@@ -153,6 +168,19 @@ export const initJobs = () => {
   if (process.env.DISABLE_JOB_ABSENCE_RECHECK !== 'true') {
     recheckAbsences({ days: 45 }).catch((err) =>
       logger.error({ err }, '[Jobs] Absence re-check on start failed'),
+    );
+  }
+
+  // Same for the 3:00 session clean-up, which a sleeping host never runs.
+  if (process.env.DISABLE_JOB_SESSION_CLEANUP !== 'true') {
+    tasks
+      .expiredSessionCleanupJob()
+      .catch((err) => logger.error({ err }, '[Jobs] Session clean-up on start failed'));
+  }
+
+  if (process.env.DISABLE_JOB_OFFBOARD !== 'true') {
+    offboardDueLeavers().catch((err) =>
+      logger.error({ err }, '[Jobs] Offboard leavers on start failed'),
     );
   }
 

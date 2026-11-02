@@ -18,7 +18,8 @@
     "prisma:seed": "ts-node apps/api/prisma/seed.ts",
     "test:api": "jest --config jest.config.js --runInBand",
     "test:e2e": "playwright test",
-    "db:push:test": "ts-node scripts/push-test-db.ts"
+    "db:push:test": "ts-node scripts/push-test-db.ts",
+    "db:push:test-local": "node scripts/push-test-db-local.js"
   },
   "prisma": {
     "seed": "ts-node apps/api/prisma/seed.ts"

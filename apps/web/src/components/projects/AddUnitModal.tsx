@@ -249,6 +249,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_area_sqyd ?? ''}
                     onChange={(e) =>
                       set(
@@ -263,6 +264,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_length_ft ?? ''}
                     onChange={(e) =>
                       set(
@@ -277,6 +279,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_width_ft ?? ''}
                     onChange={(e) =>
                       set(
@@ -291,6 +294,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.road_width_ft ?? ''}
                     onChange={(e) =>
                       set(
@@ -338,6 +342,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bedrooms ?? ''}
                     onChange={(e) =>
                       set('bedrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -349,6 +354,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bathrooms ?? ''}
                     onChange={(e) =>
                       set('bathrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -360,6 +366,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.balconies ?? ''}
                     onChange={(e) =>
                       set('balconies', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -371,6 +378,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.carpet_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -385,6 +393,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -399,6 +408,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.super_built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -422,6 +432,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.parking_count ?? ''}
                     onChange={(e) =>
                       set(
@@ -459,6 +470,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.plot_area_sqyd ?? ''}
                     onChange={(e) =>
                       set(
@@ -473,6 +485,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.built_up_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -487,6 +500,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.ground_floor_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -501,6 +515,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.first_floor_area_sqft ?? ''}
                     onChange={(e) =>
                       set(
@@ -515,6 +530,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bedrooms ?? ''}
                     onChange={(e) =>
                       set('bedrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -526,6 +542,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.bathrooms ?? ''}
                     onChange={(e) =>
                       set('bathrooms', e.target.value === '' ? null : parseInt(e.target.value, 10))
@@ -537,6 +554,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.parking_count ?? ''}
                     onChange={(e) =>
                       set(
@@ -556,6 +574,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
                   <input
                     className={inputCls}
                     type="number"
+                    min={0}
                     value={form.area_value ?? ''}
                     onChange={(e) =>
                       set('area_value', e.target.value === '' ? null : parseFloat(e.target.value))
@@ -664,6 +683,7 @@ export const AddUnitModal: React.FC<AddUnitModalProps> = ({
               <input
                 className={inputCls}
                 type="number"
+                min={0}
                 value={form.discount_amount ?? ''}
                 onChange={(e) =>
                   set('discount_amount', e.target.value === '' ? null : parseFloat(e.target.value))

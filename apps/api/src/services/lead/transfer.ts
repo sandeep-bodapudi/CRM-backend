@@ -1,3 +1,4 @@
+import { Lead, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { TokenPayload } from '../../utils/jwt';
 import { Roles, Permissions } from '../../shared';
@@ -92,83 +93,13 @@ export async function transferLead(
     : null;
   const previousName = previousOwner?.full_name || previousOwner?.employee_code || 'the pool';
 
-  const updated = await p.$transaction(async (tx) => {
-    let movedCallBacks = 0;
-    let movedOpportunities = 0;
-    let movedVisits = 0;
-
-    if (previousOwnerId) {
-      // Move (not cancel) the previous owner's open call-backs: the customer
-      // still expects that call, from the new owner.
-      movedCallBacks = (
-        await tx.task.updateMany({
-          where: {
-            lead_id: leadId,
-            assignee_id: previousOwnerId,
-            title: { startsWith: CALL_BACK_TITLE_PREFIX },
-            status: { in: ['PENDING', 'IN_PROGRESS', 'OVERDUE'] },
-          },
-          data: { assignee_id: target.id },
-        })
-      ).count;
-      movedOpportunities = (
-        await tx.opportunity.updateMany({
-          where: { lead_id: leadId, owner_id: previousOwnerId },
-          data: { owner_id: target.id },
-        })
-      ).count;
-      movedVisits = (
-        await tx.siteVisitBooking.updateMany({
-          where: {
-            lead_id: leadId,
-            telecaller_id: previousOwnerId,
-            status: { notIn: ['COMPLETED', 'CANCELLED'] },
-          },
-          data: { telecaller_id: target.id },
-        })
-      ).count;
-    }
-
-    const row = await WorkflowEngine.transitionLead(
-      tx,
-      leadId,
-      lead.status === 'NEW' ? 'ASSIGNED' : lead.status,
-      { actor: user, entity: lead },
-      {
-        assigned_to_id: target.id,
-        assigned_at: new Date(),
-        assignment_type: 'MANUAL_OVERRIDE',
-      },
-    );
-
-    await tx.leadActivity.create({
-      data: {
-        lead_id: leadId,
-        actor_id: user.employeeId,
-        activity_type: 'ASSIGNED_TO_AGENT',
-        notes: `Transferred from ${previousName} to ${targetName}. Reason: ${trimmedReason}`,
-      },
-    });
-    await tx.auditEvent.create({
-      data: {
-        actor_id: user.employeeId,
-        action: 'LEAD_TRANSFERRED',
-        entity_type: 'LEAD',
-        entity_id: leadId,
-        old_value: JSON.stringify({ assigned_to_id: previousOwnerId }),
-        new_value: JSON.stringify({
-          assigned_to_id: target.id,
-          reason: trimmedReason,
-          moved: {
-            call_backs: movedCallBacks,
-            opportunities: movedOpportunities,
-            visits: movedVisits,
-          },
-        }),
-      },
-    });
-    return row;
-  });
+  const updated = await p.$transaction((tx) =>
+    moveLeadOwnership(tx, lead, target.id, user, {
+      action: 'LEAD_TRANSFERRED',
+      note: `Transferred from ${previousName} to ${targetName}. Reason: ${trimmedReason}`,
+      reason: trimmedReason,
+    }),
+  );
 
   // Tell both people (outside the transaction; a failed notification must not undo the transfer).
   const note = (employeeId: number, title: string, message: string) =>
@@ -218,5 +149,97 @@ export async function transferLead(
     logger.error('[transfer] tripwire failed:', e);
   }
 
-  return updated;
+  return updated.lead;
+}
+
+/**
+ * The write half of a transfer, shared by transferLead (one lead) and the
+ * resignation handover (all of a leaver's leads): the lead record moves, and so
+ * do the previous owner's open call-backs on it, the opportunity's owner and
+ * the telecaller on visits that have not happened yet. Writes the activity note
+ * and an audit row; no permission checks, no notifications -- callers do those.
+ */
+export async function moveLeadOwnership(
+  tx: Prisma.TransactionClient,
+  lead: Lead,
+  toEmployeeId: number,
+  actor: TokenPayload,
+  log: { action: string; note: string; reason: string },
+) {
+  const previousOwnerId = lead.assigned_to_id;
+  let movedCallBacks = 0;
+  let movedOpportunities = 0;
+  let movedVisits = 0;
+
+  if (previousOwnerId) {
+    // Move (not cancel) the previous owner's open call-backs: the customer
+    // still expects that call, from the new owner.
+    movedCallBacks = (
+      await tx.task.updateMany({
+        where: {
+          lead_id: lead.id,
+          assignee_id: previousOwnerId,
+          title: { startsWith: CALL_BACK_TITLE_PREFIX },
+          status: { in: ['PENDING', 'IN_PROGRESS', 'OVERDUE'] },
+        },
+        data: { assignee_id: toEmployeeId },
+      })
+    ).count;
+    movedOpportunities = (
+      await tx.opportunity.updateMany({
+        where: { lead_id: lead.id, owner_id: previousOwnerId },
+        data: { owner_id: toEmployeeId },
+      })
+    ).count;
+    movedVisits = (
+      await tx.siteVisitBooking.updateMany({
+        where: {
+          lead_id: lead.id,
+          telecaller_id: previousOwnerId,
+          status: { notIn: ['COMPLETED', 'CANCELLED'] },
+        },
+        data: { telecaller_id: toEmployeeId },
+      })
+    ).count;
+  }
+
+  const row = await WorkflowEngine.transitionLead(
+    tx,
+    lead.id,
+    lead.status === 'NEW' ? 'ASSIGNED' : lead.status,
+    { actor, entity: lead },
+    {
+      assigned_to_id: toEmployeeId,
+      assigned_at: new Date(),
+      assignment_type: 'MANUAL_OVERRIDE',
+    },
+  );
+
+  await tx.leadActivity.create({
+    data: {
+      lead_id: lead.id,
+      actor_id: actor.employeeId,
+      activity_type: 'ASSIGNED_TO_AGENT',
+      notes: log.note,
+    },
+  });
+  await tx.auditEvent.create({
+    data: {
+      actor_id: actor.employeeId,
+      action: log.action,
+      entity_type: 'LEAD',
+      entity_id: lead.id,
+      old_value: JSON.stringify({ assigned_to_id: previousOwnerId }),
+      new_value: JSON.stringify({
+        assigned_to_id: toEmployeeId,
+        reason: log.reason,
+        moved: {
+          call_backs: movedCallBacks,
+          opportunities: movedOpportunities,
+          visits: movedVisits,
+        },
+      }),
+    },
+  });
+  return { lead: row, movedCallBacks, movedOpportunities, movedVisits };
 }

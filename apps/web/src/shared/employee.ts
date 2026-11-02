@@ -130,6 +130,19 @@ export const EmployeeResignSchema = z.object({
   resignation_date: z.string().optional(),
   last_working_day: z.string().optional(),
   reason: z.string().optional(),
+  // Who takes over their open work on the last working day (optional).
+  handover_to_id: z.number().int().positive().optional().nullable(),
+});
+
+// Serving notice: change the last day or the hand-over colleague.
+export const EmployeeResignationUpdateSchema = z.object({
+  last_working_day: z.string().optional(),
+  handover_to_id: z.number().int().positive().optional().nullable(),
+});
+
+export const EmployeeHandoverSchema = z.object({
+  to_employee_id: z.number().int().positive(),
+  reason: z.string().trim().max(300).optional(),
 });
 
 export const EmployeePromoteSchema = z

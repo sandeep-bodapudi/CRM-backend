@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Image, Plus, Trash2, ToggleLeft, ToggleRight, Upload, Loader2, Link2 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
 import { mediaUrl } from '../../utils/imageUtils';
 
 interface Offer {
@@ -20,6 +22,24 @@ const AUDIENCE_LABELS: Record<Offer['audience'], string> = {
 
 export const BannerControlWidget: React.FC = () => {
   const { fetchWithAuth } = useAuth();
+  const { showError } = useToast();
+  // The change is shown straight away; if the server refuses it (or the
+  // connection drops) say so and reload the real list. These used to fail
+  // silently, so the screen showed a change that was never saved.
+  const saveOffer = async (url: string, init: RequestInit) => {
+    try {
+      const res = await fetchWithAuth(url, init);
+      if (!res.ok) {
+        await handleApiError(res, showError);
+        fetchOffers();
+      }
+    } catch {
+      showError(
+        toUserFacingError({ message: 'No connection. The change was not saved.', body: {} }),
+      );
+      fetchOffers();
+    }
+  };
   const [offers, setOffers] = useState<Offer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [addMode, setAddMode] = useState<'upload' | 'url'>('upload');
@@ -98,40 +118,25 @@ export const BannerControlWidget: React.FC = () => {
 
   const handleToggleActive = async (offer: Offer) => {
     setOffers((prev) => prev.map((o) => (o.id === offer.id ? { ...o, active: !o.active } : o)));
-    try {
-      await fetchWithAuth(`${API_BASE_URL}/offers/${offer.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active: !offer.active }),
-      });
-    } catch (e) {
-      console.error(e);
-      fetchOffers();
-    }
+    await saveOffer(`${API_BASE_URL}/offers/${offer.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !offer.active }),
+    });
   };
 
   const handleAudienceChange = async (offer: Offer, audience: Offer['audience']) => {
     setOffers((prev) => prev.map((o) => (o.id === offer.id ? { ...o, audience } : o)));
-    try {
-      await fetchWithAuth(`${API_BASE_URL}/offers/${offer.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audience }),
-      });
-    } catch (e) {
-      console.error(e);
-      fetchOffers();
-    }
+    await saveOffer(`${API_BASE_URL}/offers/${offer.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audience }),
+    });
   };
 
   const handleDelete = async (offer: Offer) => {
     setOffers((prev) => prev.filter((o) => o.id !== offer.id));
-    try {
-      await fetchWithAuth(`${API_BASE_URL}/offers/${offer.id}`, { method: 'DELETE' });
-    } catch (e) {
-      console.error(e);
-      fetchOffers();
-    }
+    await saveOffer(`${API_BASE_URL}/offers/${offer.id}`, { method: 'DELETE' });
   };
 
   return (

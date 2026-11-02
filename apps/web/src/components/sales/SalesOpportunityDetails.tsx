@@ -282,6 +282,7 @@ export const SalesOpportunityDetails: React.FC<SalesOpportunityDetailsProps> = (
                   </label>
                   <input
                     type="number"
+                    min={0}
                     value={dealValue}
                     onChange={(e) => setDealValue(e.target.value)}
                     placeholder="e.g. 5000000"

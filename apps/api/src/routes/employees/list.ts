@@ -161,6 +161,12 @@ router.get(
         reportingManagerId: emp.reporting_manager_id,
         dateOfJoining: emp.date_of_joining ? emp.date_of_joining.toISOString().split('T')[0] : '',
         backgroundEducation: emp.background_education || '',
+        resignationDate: emp.resignation_date ? emp.resignation_date.toISOString() : null,
+        lastWorkingDay: emp.last_working_day
+          ? emp.last_working_day.toISOString().split('T')[0]
+          : null,
+        handoverToId: emp.handover_to_id,
+        offboardedAt: emp.offboarded_at ? emp.offboarded_at.toISOString() : null,
       }));
 
       if (isPmPickerLookup) {

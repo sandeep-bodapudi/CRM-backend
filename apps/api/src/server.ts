@@ -69,6 +69,8 @@ import { PortalWorker } from './services/portalWorker';
 import compression from 'compression';
 import { forwardAll } from './utils/forwarder';
 import { clientIp } from './middleware/rateLimiter';
+import { auditWrites, projectSnapshot, propertySnapshot } from './middleware/auditWrites';
+import { requestContext } from './utils/requestContext';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -81,6 +83,8 @@ app.set('trust proxy', 1);
 // below runs and no database connection is opened.
 const FORWARD_ALL_TO = process.env.FORWARD_ALL_TO || '';
 if (FORWARD_ALL_TO) app.use(forwardAll(FORWARD_ALL_TO, clientIp));
+// Who / from where, for audit records written during this request.
+app.use(requestContext);
 
 // Security Middlewares
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -258,6 +262,7 @@ if (mountInternal) {
   app.use('/api/v1/feedback', feedbackRoutes);
   app.use('/api/v1/kiosk-auth', kioskAuthRoutes);
   app.use('/api/v1/kiosk-credentials', kioskAuthRoutes);
+  app.use('/api/v1/attendance/holidays', auditWrites('HOLIDAY'));
   app.use('/api/v1/attendance', attendanceRoutes);
   app.use('/api/v1/md', mdRoutes);
   app.use('/api/v1/work-log', workLogRoutes);
@@ -269,19 +274,19 @@ if (mountInternal) {
   app.use('/api/v1/targets', targetRoutes);
   app.use('/api/v1/employees', employeeRoutes);
   app.use('/api/v1/leads', leadRoutes);
-  app.use('/api/v1/customers', customerRoutes);
-  app.use('/api/v1/properties', propertyRoutes);
+  app.use('/api/v1/customers', auditWrites('CUSTOMER'), customerRoutes);
+  app.use('/api/v1/properties', auditWrites('PROPERTY', propertySnapshot), propertyRoutes);
   app.use('/api/v1/opportunities', opportunityRoutes);
   app.use('/api/v1/installments', installmentRoutes);
-  app.use('/api/v1/projects', projectRoutes);
+  app.use('/api/v1/projects', auditWrites('PROJECT', projectSnapshot), projectRoutes);
   app.use('/api/v1/inventory', inventoryRoutes);
   app.use('/api/v1/site-visits', siteVisitRoutes);
   app.use('/api/v1/demos', demoRoutes);
   app.use('/api/v1/admin', adminRoutes);
   app.use('/api/v1/expense-refunds', expenseRefundRoutes);
   app.use('/api/v1/push', pushRoutes);
-  app.use('/api/v1/announcement', announcementRoutes);
-  app.use('/api/v1/offers', offerRoutes);
+  app.use('/api/v1/announcement', auditWrites('ANNOUNCEMENT'), announcementRoutes);
+  app.use('/api/v1/offers', auditWrites('OFFER'), offerRoutes);
   app.use('/api/v1/bookings', bookingRoutes);
   app.use('/api/v1/payments', paymentRoutes);
   app.use('/api/v1/integration', integrationRoutes);
@@ -289,11 +294,11 @@ if (mountInternal) {
   app.use('/api/v1/analytics', analyticsRoutes);
   app.use('/api/v1/ai', aiSearchRoutes);
   app.use('/api/v1/search', searchRoutes);
-  app.use('/api/v1/message-templates', messageTemplateRoutes);
-  app.use('/api/v1/pm-routing', pmRoutingRoutes);
+  app.use('/api/v1/message-templates', auditWrites('MESSAGE_TEMPLATE'), messageTemplateRoutes);
+  app.use('/api/v1/pm-routing', auditWrites('PM_ROUTING'), pmRoutingRoutes);
   app.use('/api/v1/whatsapp', whatsappRoutes);
   app.use('/api/v1/roles', rolesRoutes);
-  app.use('/api/v1/amenities', amenityRoutes);
+  app.use('/api/v1/amenities', auditWrites('AMENITY'), amenityRoutes);
 }
 
 if (mountPublic) {
@@ -334,7 +339,16 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     return res.status(err.statusCode || err.status || 400).json({ error: err.message });
   }
   if (err && err.name === 'ZodError') {
-    return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    // Same readable message as validateRequestBody ("amount: Number must be
+    // greater than 0"), instead of a bare "Validation failed".
+    const issues: { path: (string | number)[]; message: string }[] = err.errors || [];
+    return res.status(400).json({
+      error:
+        issues
+          .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
+          .join(', ') || 'Validation failed',
+      details: issues.map((i) => ({ field: i.path.join('.'), message: i.message })),
+    });
   }
   // 3. Prisma Errors
   if (err && err.name === 'PrismaClientKnownRequestError') {
