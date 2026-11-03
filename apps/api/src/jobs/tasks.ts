@@ -67,11 +67,17 @@ async function leadsInactiveSince(
     }));
 }
 
-// 1. Lead follow-up reminders — an active lead with no logged activity in 2+
-// days gets a reminder nudge sent to whoever it's assigned to. Runs daily by
-// design: a lead that stays neglected gets nudged again the next day too
-// (a reminder, not a one-time alert) rather than being suppressed after the
-// first notification.
+// Up to `max` leads named in a summary: "Ravi (RRH-LD-1), Sita (RRH-LD-2) and 40 more".
+const leadList = (leads: { customer_name: string; lead_code: string }[], max = 5): string => {
+  const named = leads.slice(0, max).map((l) => `${l.customer_name} (${l.lead_code})`);
+  const more = leads.length - named.length;
+  return more > 0 ? `${named.join(', ')} and ${more} more` : named.join(', ');
+};
+
+// 1. Lead follow-up reminders -- active leads with no logged activity in 2+
+// days. Runs daily, so a lead that stays neglected is nudged again the next
+// day. ONE summary per person: one notification per lead sent a telecaller
+// 2,409 notifications in a day (production, 2 Nov).
 export const leadFollowUpJob = async () => {
   logger.info('Executing Lead Follow-Up Reminders...');
   const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
@@ -90,101 +96,140 @@ export const leadFollowUpJob = async () => {
     ).map((e) => e.id),
   );
 
-  let notifiedCount = 0;
+  const byOwner = new Map<number, typeof staleLeads>();
   for (const lead of staleLeads) {
     if (!lead.assigned_to_id || !activeOwners.has(lead.assigned_to_id)) continue;
-    await notifyEmployee(lead.assigned_to_id, {
+    byOwner.set(lead.assigned_to_id, [...(byOwner.get(lead.assigned_to_id) || []), lead]);
+  }
+  for (const [ownerId, leads] of byOwner) {
+    await notifyEmployee(ownerId, {
       type: 'LEAD_FOLLOW_UP_REMINDER',
       title: 'Follow-up needed',
-      message: `${lead.customer_name} (${lead.lead_code}) has had no activity in 2+ days — give them a call.`,
-      link: `/leads/${lead.id}`,
+      message:
+        leads.length === 1
+          ? `${leadList(leads)} has had no activity in 2+ days -- give them a call.`
+          : `${leads.length} of your leads have had no activity in 2+ days: ${leadList(leads)}.`,
+      link: leads.length === 1 ? `/leads/${leads[0].id}` : '/leads',
     });
-    notifiedCount++;
   }
-  logger.info(`Sent ${notifiedCount} lead follow-up reminder(s).`);
+  logger.info(
+    `Sent follow-up reminders to ${byOwner.size} people for ${[...byOwner.values()].reduce((n, l) => n + l.length, 0)} lead(s).`,
+  );
 };
 
-// 2. Stale lead flagging — an active lead with no logged activity in 5+ days
-// gets escalated to the assigned employee's reporting manager (falling back
-// to the company's MD if they have no manager set, same fallback pattern
-// dailyAttendanceRollupJob uses for HR/MD) so it surfaces for review or pool
-// recovery, not just re-nudged at the assignee. Idempotent per ~5-day
-// stretch of continued neglect via an audit-event check (mirrors the
-// UNINFORMED_ABSENT pattern below) — otherwise a manager would get the same
-// escalation every single day a lead stays stale.
+// 2. Stale lead flagging -- active leads with no logged activity in 5+ days
+// are escalated to the owner's reporting manager (or the company's MD when
+// there is none) for review or pool recovery. Each lead is flagged once per
+// ~5-day stretch of neglect (LEAD_STALE_FLAGGED audit row per lead), but the
+// manager gets ONE summary per run, grouped by owner: one notification per
+// lead sent the MD 3,629 in three hours (production, 2 Nov). Lookups are
+// batched -- the per-lead queries took three hours for that run.
 export const staleLeadFlaggingJob = async () => {
   logger.info('Executing Stale Lead Flagging...');
   const cutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-  const staleLeads = await leadsInactiveSince(cutoff);
+  const staleLeads = (await leadsInactiveSince(cutoff)).filter((l) => l.assigned_to_id);
+  if (staleLeads.length === 0) return;
 
-  let flaggedCount = 0;
-  for (const lead of staleLeads) {
-    if (!lead.assigned_to_id) continue;
+  const already = new Set(
+    (
+      await prisma.auditEvent.findMany({
+        where: {
+          entity_type: 'LEAD',
+          entity_id: { in: staleLeads.map((l) => l.id) },
+          action: 'LEAD_STALE_FLAGGED',
+          created_at: { gte: cutoff },
+        },
+        select: { entity_id: true },
+      })
+    ).map((a) => a.entity_id),
+  );
+  const toFlag = staleLeads.filter((l) => !already.has(l.id));
+  if (toFlag.length === 0) return;
 
-    const alreadyFlagged = await prisma.auditEvent.findFirst({
-      where: {
-        entity_type: 'LEAD',
-        entity_id: lead.id,
-        action: 'LEAD_STALE_FLAGGED',
-        created_at: { gte: cutoff },
-      },
-    });
-    if (alreadyFlagged) continue;
-
-    const assignee = await prisma.employee.findUnique({
-      where: { id: lead.assigned_to_id },
-      select: {
-        id: true,
-        full_name: true,
-        employee_code: true,
-        reporting_manager_id: true,
-        company_id: true,
-        status: true,
-      },
-    });
-    if (!assignee) continue;
-    const ownerName = assignee.full_name || assignee.employee_code;
-
-    let recipientId = assignee.reporting_manager_id;
-    if (!recipientId) {
+  const owners = new Map(
+    (
+      await prisma.employee.findMany({
+        where: { id: { in: [...new Set(toFlag.map((l) => l.assigned_to_id!))] } },
+        select: {
+          id: true,
+          full_name: true,
+          employee_code: true,
+          reporting_manager_id: true,
+          company_id: true,
+          status: true,
+        },
+      })
+    ).map((e) => [e.id, e]),
+  );
+  const mdOfCompany = new Map<number, number | null>();
+  const mdFor = async (companyId: number) => {
+    if (!mdOfCompany.has(companyId)) {
       const md = await prisma.employee.findFirst({
         where: {
-          company_id: assignee.company_id,
+          company_id: companyId,
           status: 'ACTIVE',
           roles: { some: { role: { name: Roles.MD } } },
         },
         select: { id: true },
       });
-      recipientId = md?.id ?? null;
+      mdOfCompany.set(companyId, md?.id ?? null);
     }
+    return mdOfCompany.get(companyId)!;
+  };
+
+  // recipient -> owner -> leads
+  const digest = new Map<number, Map<number, typeof toFlag>>();
+  const flagged: { lead: (typeof toFlag)[number]; toManager: boolean }[] = [];
+  for (const lead of toFlag) {
+    const owner = owners.get(lead.assigned_to_id!);
+    if (!owner) continue;
+    const recipientId = owner.reporting_manager_id ?? (await mdFor(owner.company_id));
     if (!recipientId) {
-      logger.warn(
-        `[Jobs] Lead ${lead.lead_code}: no reporting manager or MD to escalate staleness to.`,
-      );
+      logger.warn(`[Jobs] Lead ${lead.lead_code}: no reporting manager or MD to escalate to.`);
       continue;
     }
+    const byOwner = digest.get(recipientId) || new Map();
+    byOwner.set(owner.id, [...(byOwner.get(owner.id) || []), lead]);
+    digest.set(recipientId, byOwner);
+    flagged.push({ lead, toManager: recipientId === owner.reporting_manager_id });
+  }
 
-    await notifyEmployee(recipientId, {
-      type: 'LEAD_STALE_FLAGGED',
-      title: 'Lead going stale',
-      message:
-        assignee.status === 'ACTIVE'
-          ? `${lead.customer_name} (${lead.lead_code}), assigned to ${ownerName}, has had no activity in 5+ days.`
-          : `${lead.customer_name} (${lead.lead_code}) is still with ${ownerName}, who has left. Hand over their leads from Employees.`,
-      link: `/leads/${lead.id}`,
-    });
-    await prisma.auditEvent.create({
-      data: {
-        actor_id: lead.assigned_to_id,
+  if (flagged.length) {
+    await prisma.auditEvent.createMany({
+      data: flagged.map(({ lead, toManager }) => ({
+        actor_id: lead.assigned_to_id!,
         action: 'LEAD_STALE_FLAGGED',
         entity_type: 'LEAD',
         entity_id: lead.id,
-        reason: `No activity for 5+ days; escalated to ${recipientId === assignee.reporting_manager_id ? 'reporting manager' : 'MD'}.`,
-      },
+        reason: `No activity for 5+ days; escalated to ${toManager ? 'reporting manager' : 'MD'}.`,
+      })),
     });
-    flaggedCount++;
   }
-  logger.info(`Flagged ${flaggedCount} stale lead(s).`);
+
+  for (const [recipientId, byOwner] of digest) {
+    const total = [...byOwner.values()].reduce((n, l) => n + l.length, 0);
+    const lines = [...byOwner.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([ownerId, leads]) => {
+        const owner = owners.get(ownerId)!;
+        const name = owner.full_name || owner.employee_code;
+        return owner.status === 'ACTIVE'
+          ? `${leads.length} with ${name}: ${leadList(leads, 3)}`
+          : `${leads.length} still with ${name}, who has left -- hand over their leads from Employees: ${leadList(leads, 3)}`;
+      });
+    const anyLeaver = [...byOwner.keys()].some((id) => owners.get(id)!.status !== 'ACTIVE');
+    await notifyEmployee(recipientId, {
+      type: 'LEAD_STALE_FLAGGED',
+      title: 'Lead going stale',
+      message: `${total} lead${total === 1 ? ' has' : 's have'} had no activity in 5+ days. ${lines.join('. ')}.`,
+      link: anyLeaver
+        ? '/hr-hub'
+        : total === 1
+          ? `/leads/${[...byOwner.values()][0][0].id}`
+          : '/leads',
+    });
+  }
+  logger.info(`Flagged ${flagged.length} stale lead(s) in ${digest.size} summary notification(s).`);
 };
 
 // 3. Daily attendance rollup: force-checkout anyone still checked in as of
@@ -340,10 +385,13 @@ export const dailyAttendanceRollupJob = async (referenceDate: Date = new Date())
           },
           select: { employee_id: true },
         }),
+        // Approved leave, field work or work from home: they told us, so
+        // never "uninformed" absent -- even if they forgot to check in from
+        // the app on a field / WFH day (production: 3 such penalties).
         prisma.attendanceProposal.findMany({
           where: {
             employee_id: { in: staff.map((s) => s.id) },
-            type: 'LEAVE',
+            type: { in: ['LEAVE', 'FIELD_WORK', 'WORK_FROM_HOME'] },
             status: 'APPROVED',
             target_date: { gte: yesterdayStart, lt: midnightInstant },
           },
