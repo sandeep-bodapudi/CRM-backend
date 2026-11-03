@@ -5,7 +5,12 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { generateAccessToken, generateRefreshToken, REFRESH_TOKEN_TTL_MS } from '../utils/jwt';
-import { authenticateToken, AuthenticatedRequest, needsTwoStep } from '../middleware/auth';
+import {
+  authenticateToken,
+  AuthenticatedRequest,
+  needsTwoStep,
+  twoStepRecommended,
+} from '../middleware/auth';
 import { newTotpSecret, totpUri, verifyTotp } from '../utils/totp';
 import { LoginSchema, ChangePasswordSchema, Roles, withRoleAliases } from '../shared';
 import { validateRequestBody } from '../middleware/validate';
@@ -662,7 +667,7 @@ const DisableTwoStepSchema = z
   .object({ password: z.string().min(1), otp: z.string().trim().min(6).max(10) })
   .strict();
 
-// GET /api/v1/auth/two-step -- is it on, and must it be?
+// GET /api/v1/auth/two-step -- is it on, must it be, and should we suggest it?
 router.get('/two-step', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const employee = await p.employee.findUnique({
@@ -673,6 +678,7 @@ router.get('/two-step', authenticateToken, async (req: AuthenticatedRequest, res
       enabled: !!employee?.totp_enabled_at,
       enabledAt: employee?.totp_enabled_at ?? null,
       required: needsTwoStep(req.user!.roles),
+      recommended: twoStepRecommended(req.user!.roles),
     });
   } catch (error) {
     logger.error('2-step status error:', error);

@@ -24,7 +24,6 @@ import {
   ChevronRight,
   ClipboardCheck,
   Clock,
-  KeyRound,
   Lock,
   MapPin,
   MessageSquareWarning,
@@ -420,15 +419,6 @@ export const TechnicalManagerDashboard: React.FC = () => {
         ],
         to: '/team-today',
         icon: <Users className="w-4 h-4" />,
-      },
-      {
-        n: security.without_two_step.length,
-        text: [
-          'person who must use 2-step login but has not set it up',
-          'people who must use 2-step login but have not set it up',
-        ],
-        to: '#security',
-        icon: <KeyRound className="w-4 h-4" />,
       },
     ];
     return all.filter((a) => a.n > 0);
@@ -940,7 +930,7 @@ export const TechnicalManagerDashboard: React.FC = () => {
           {security.without_two_step.length > 0 && (
             <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3">
               <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4" /> 2-step login not set up yet (
+                <ShieldAlert className="w-4 h-4" /> 2-step login not turned on (optional) (
                 {security.without_two_step.length})
               </div>
               <div className="flex flex-wrap gap-1.5 mt-2">

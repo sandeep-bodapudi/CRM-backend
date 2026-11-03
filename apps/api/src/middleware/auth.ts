@@ -76,14 +76,19 @@ export const authenticateServiceToken = (
 const FIRST_LOGIN_ALLOWED =
   /^\/api\/v1\/auth\/(me|change-password|logout|sessions|app-lock|two-step)(\/|\?|$)/;
 
-// Roles that can approve money or change permissions must turn on 2-step
-// login (architecture review 2026-11-01, #7). Until they do, only the same
-// few routes as a first login work.
+// Roles that can approve money or change permissions are asked to turn on
+// 2-step login (architecture review 2026-11-01, #7). It is OPTIONAL (owner,
+// 2026-11-02): not everyone knows how to use an authenticator app, and a
+// forced setup locked people out of the app. Whoever turns it on is asked
+// for the code at every sign-in. TWO_STEP_REQUIRED=true (Render env) makes
+// it compulsory again for these roles.
 export const TWO_STEP_ROLES: string[] = [Roles.MD, Roles.ADMIN, Roles.FINANCE];
-// TWO_STEP_DISABLED=true (Render env) switches the requirement off -- for the
-// test suite, and as an emergency switch if nobody who can reset it can sign in.
+export const twoStepRecommended = (roles: string[] = []) =>
+  roles.some((r) => TWO_STEP_ROLES.includes(r));
 export const needsTwoStep = (roles: string[] = []) =>
-  process.env.TWO_STEP_DISABLED !== 'true' && roles.some((r) => TWO_STEP_ROLES.includes(r));
+  process.env.TWO_STEP_REQUIRED === 'true' &&
+  process.env.TWO_STEP_DISABLED !== 'true' &&
+  twoStepRecommended(roles);
 
 export const authenticateToken = async (
   req: AuthenticatedRequest,
