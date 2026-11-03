@@ -80,7 +80,7 @@ export async function recheckAbsences(opts: {
       p.attendanceProposal.findMany({
         where: {
           employee_id: { in: ids },
-          type: { in: ['LEAVE', 'ATTENDANCE_CLAIM'] },
+          type: { in: ['LEAVE', 'ATTENDANCE_CLAIM', 'FIELD_WORK', 'WORK_FROM_HOME'] },
           status: 'APPROVED',
           target_date: { gte: start, lt: end },
         },
@@ -107,7 +107,11 @@ export async function recheckAbsences(opts: {
             ? 'approved leave'
             : leaveOf.get(e.actor_id) === 'ATTENDANCE_CLAIM'
               ? 'worked that day (approved)'
-              : null;
+              : leaveOf.get(e.actor_id) === 'FIELD_WORK'
+                ? 'approved field work'
+                : leaveOf.get(e.actor_id) === 'WORK_FROM_HOME'
+                  ? 'approved work from home'
+                  : null;
       if (why) voided.push({ eventId: e.id, employeeId: e.actor_id, date, why });
     }
   }

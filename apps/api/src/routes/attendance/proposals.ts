@@ -580,14 +580,22 @@ router.post(
           .json({ error: `This request was already ${proposal.status.toLowerCase()}.` });
       }
 
-      const updated = await p.attendanceProposal.update({
-        where: { id },
+      // Decide only if still PENDING, in one step: two clicks (or two
+      // approvers) at the same moment used to both pass the check above and
+      // both run the side effects -- two attendance rows for one field-work
+      // day (production, 30 Oct).
+      const claimed = await p.attendanceProposal.updateMany({
+        where: { id, status: 'PENDING' },
         data: {
           status: 'APPROVED',
           reviewed_by: req.user!.employeeId,
           reviewed_at: new Date(),
         },
       });
+      if (claimed.count === 0) {
+        return res.status(409).json({ error: 'This request was already decided.' });
+      }
+      const updated = await p.attendanceProposal.findUniqueOrThrow({ where: { id } });
       // The other days of the same multi-day leave go with it.
       let leaveDays = 1;
       if (updated.type === 'LEAVE') {
@@ -687,8 +695,9 @@ router.post(
         link: '/requests',
       });
 
-      // Approved after the day (late leave approval): cancel the absence recorded for it.
-      if (updated.type === 'LEAVE') {
+      // Approved after the day (late leave / field-work / WFH approval): cancel
+      // the absence recorded for it.
+      if (['LEAVE', 'FIELD_WORK', 'WORK_FROM_HOME'].includes(updated.type)) {
         await recheckAbsences({
           employeeIds: [updated.employee_id],
           actorId: req.user!.employeeId,
@@ -727,14 +736,22 @@ router.post(
           .json({ error: `This request was already ${proposal.status.toLowerCase()}.` });
       }
 
-      const updated = await p.attendanceProposal.update({
-        where: { id },
+      // Decide only if still PENDING, in one step: two clicks (or two
+      // approvers) at the same moment used to both pass the check above and
+      // both run the side effects -- two attendance rows for one field-work
+      // day (production, 30 Oct).
+      const claimed = await p.attendanceProposal.updateMany({
+        where: { id, status: 'PENDING' },
         data: {
           status: 'REJECTED',
           reviewed_by: req.user!.employeeId,
           reviewed_at: new Date(),
         },
       });
+      if (claimed.count === 0) {
+        return res.status(409).json({ error: 'This request was already decided.' });
+      }
+      const updated = await p.attendanceProposal.findUniqueOrThrow({ where: { id } });
       // The other days of the same multi-day leave go with it.
       let leaveDays = 1;
       if (updated.type === 'LEAVE') {

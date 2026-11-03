@@ -521,8 +521,9 @@ router.post(
       const approve = req.body.action === 'APPROVE';
       const ds = getISTComponents(reqRow.target_date).dateString;
 
+      let credit: { id: number } | null = null;
       if (approve && reqRow.type === COMP_OFF) {
-        const credit = await p.compOffCredit.findFirst({
+        credit = await p.compOffCredit.findFirst({
           where: {
             employee_id: reqRow.employee_id,
             status: 'AVAILABLE',
@@ -532,10 +533,6 @@ router.post(
         });
         if (!credit)
           return res.status(409).json({ error: 'They have no comp-off day left to use.' });
-        await p.compOffCredit.update({
-          where: { id: credit.id },
-          data: { status: 'USED', used_date: toHolidayDateKey(ds), proposal_id: reqRow.id },
-        });
       }
 
       // A swap's two halves are decided together.
@@ -550,10 +547,23 @@ router.post(
         reviewed_by: req.user!.employeeId,
         reviewed_at: new Date(),
       };
-      if (reqRow.type === DUTY_DAY || reqRow.type === SWAP_OFF) {
-        await p.attendanceProposal.updateMany({ where: sameBatch, data: decided });
-      } else {
-        await p.attendanceProposal.update({ where: { id }, data: decided });
+      // Decide only while still PENDING, in one step, so two clicks at the
+      // same moment cannot both run the side effects below.
+      const claimed =
+        reqRow.type === DUTY_DAY || reqRow.type === SWAP_OFF
+          ? await p.attendanceProposal.updateMany({ where: sameBatch, data: decided })
+          : await p.attendanceProposal.updateMany({
+              where: { id, status: 'PENDING' },
+              data: decided,
+            });
+      if (claimed.count === 0) {
+        return res.status(409).json({ error: 'This request was already decided.' });
+      }
+      if (credit) {
+        await p.compOffCredit.update({
+          where: { id: credit.id },
+          data: { status: 'USED', used_date: toHolidayDateKey(ds), proposal_id: reqRow.id },
+        });
       }
 
       if (approve && reqRow.type === ATTENDANCE_CLAIM) {

@@ -141,6 +141,34 @@ router.post(
           new_value: JSON.stringify({ type: WFH, target_date: date, reason }),
         },
       });
+      // Tell the people who decide it (HR and the MD). Requests used to reach
+      // nobody until someone happened to open Approvals (production, 2 Nov).
+      const me = await p.employee.findUnique({
+        where: { id: employeeId },
+        select: { company_id: true, full_name: true, employee_code: true },
+      });
+      const approvers = me
+        ? await p.employee.findMany({
+            where: {
+              company_id: me.company_id,
+              status: 'ACTIVE',
+              id: { not: employeeId },
+              roles: { some: { role: { name: { in: [Roles.HR_MANAGER, Roles.MD] } } } },
+            },
+            select: { id: true },
+          })
+        : [];
+      if (approvers.length) {
+        await notifyEmployee(
+          approvers.map((a) => a.id),
+          {
+            type: 'SYSTEM',
+            title: 'Work-from-home request',
+            message: `${me!.full_name || me!.employee_code} asks to work from home on ${date}: ${reason}`,
+            link: '/approvals?tab=attendance',
+          },
+        ).catch((err) => logger.error('[wfh] could not notify approvers:', err));
+      }
       return res
         .status(201)
         .json({ message: 'Work-from-home request sent for approval.', proposalId: proposal.id });
@@ -399,11 +427,9 @@ router.post(
           where: { employee_id: employeeId, submitted_at: dayRange },
         });
         if (!report)
-          return res
-            .status(400)
-            .json({
-              error: 'Send your end-of-day report first (CRM app → My Day), then check out.',
-            });
+          return res.status(400).json({
+            error: 'Send your end-of-day report first (CRM app → My Day), then check out.',
+          });
       }
 
       const minutes = Math.max(0, Math.round((now.getTime() - log.check_in_at.getTime()) / 60000));
