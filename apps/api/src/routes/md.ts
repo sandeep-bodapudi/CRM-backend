@@ -5,6 +5,7 @@ import { authenticateToken, AuthenticatedRequest, requireRole } from '../middlew
 import { getAccessibleCompanyIds, buildEmployeeScope } from '../authz/dataScope';
 import { getISTComponents, getISTMidnightInstant } from '../utils/time';
 import { WORK_LOG_ACTION, parseWorkLog, WorkLogEntry } from './workLog';
+import { CRM_ACTION, crmActionLabel } from '../middleware/recordCrmAction';
 import { requireAuthz } from '../middleware/authz';
 import { Roles, Permissions } from '../shared';
 import { AnalyticsService } from '../services/analytics.service';
@@ -147,6 +148,7 @@ router.get(
         workLogRows,
         earlyExits,
         leaveRequests,
+        crmActionRows,
       ] = await Promise.all([
         p.siteVisitBooking.groupBy({
           by: ['project_manager_id'],
@@ -222,6 +224,13 @@ router.get(
           select: { employee_id: true, target_date: true, status: true },
           orderBy: { target_date: 'asc' },
         }),
+        // Every change each person made in the CRM today (recordCrmAction).
+        p.auditEvent.findMany({
+          where: { actor_id: { in: ids }, action: CRM_ACTION, created_at: inDay },
+          select: { actor_id: true, new_value: true, created_at: true },
+          orderBy: { created_at: 'asc' },
+          take: 5000,
+        }),
       ]);
       const countOf = (rows: any[], key: string, empId: number) =>
         rows.find((r) => r[key] === empId)?._count._all || 0;
@@ -264,7 +273,11 @@ router.get(
             countOf(unitsAdded, 'created_by_id', e.id) +
             countOf(propertiesAdded, 'created_by_id', e.id),
         };
+        const crmActions = crmActionRows
+          .filter((a) => a.actor_id === e.id)
+          .map((a) => ({ at: a.created_at, label: crmActionLabel(a.new_value) }));
         const anyWork =
+          crmActions.length > 0 ||
           workActions > 0 ||
           tasks > 0 ||
           visits > 0 ||
@@ -347,6 +360,8 @@ router.get(
           kind,
           site,
           work_log: workLog,
+          // Everything they changed in the CRM today, oldest first.
+          crm_actions: crmActions,
           attendance: att
             ? {
                 check_in_at: att.check_in_at,
@@ -370,8 +385,15 @@ router.get(
           visits_completed: visits,
           tasks_completed: tasks,
           leads_imported: count(e.id, ['LEAD_CREATED']),
-          first_action: fl?._min.created_at || null,
-          last_action: fl?._max.created_at || null,
+          // Earliest / latest thing they did: lead work or any CRM change.
+          first_action:
+            [fl?._min.created_at, crmActions[0]?.at]
+              .filter((d): d is Date => !!d)
+              .sort((x, y) => x.getTime() - y.getTime())[0] || null,
+          last_action:
+            [fl?._max.created_at, crmActions[crmActions.length - 1]?.at]
+              .filter((d): d is Date => !!d)
+              .sort((x, y) => y.getTime() - x.getTime())[0] || null,
           report: report
             ? {
                 submitted_at: report.submitted_at,

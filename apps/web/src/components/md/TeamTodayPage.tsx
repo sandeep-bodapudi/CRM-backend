@@ -51,6 +51,8 @@ interface Row {
     count: number;
     at: string;
   }[];
+  /** Every change they made in the CRM today, oldest first. */
+  crm_actions?: { at: string; label: string }[];
 }
 
 const KIND_LABEL: Record<Row['kind'], string> = {
@@ -297,6 +299,52 @@ const GrantWfhModal: React.FC<{ rows: Row[]; onClose: () => void }> = ({ rows, o
   );
 };
 
+// "Logged a call on lead #12" -> "Logged a call on lead", to group alike actions.
+const actionKind = (label: string) => label.replace(/\s*#\d+/g, '').trim();
+
+/** Everything one person did in the CRM today: totals by kind, then the full list. */
+const CrmActions: React.FC<{ actions: { at: string; label: string }[] }> = ({ actions }) => {
+  const groups = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of actions) m.set(actionKind(a.label), (m.get(actionKind(a.label)) || 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [actions]);
+  if (actions.length === 0) {
+    return <p className="text-[11px] text-slate-400">No changes made in the CRM today.</p>;
+  }
+  return (
+    <div className="text-[11px] space-y-1.5">
+      <div className="font-bold text-slate-700">
+        {actions.length} thing{actions.length === 1 ? '' : 's'} done in the CRM
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {groups.slice(0, 8).map(([kind, n]) => (
+          <span key={kind} className="bg-slate-100 text-slate-700 rounded-full px-2 py-0.5">
+            {kind}
+            {n > 1 ? ` × ${n}` : ''}
+          </span>
+        ))}
+        {groups.length > 8 && (
+          <span className="text-slate-400 px-1">+{groups.length - 8} more kinds</span>
+        )}
+      </div>
+      <details>
+        <summary className="cursor-pointer text-navy-700 font-semibold">
+          Show every action with its time
+        </summary>
+        <ul className="mt-1 space-y-0.5 max-h-64 overflow-y-auto">
+          {actions.map((a, i) => (
+            <li key={i} className="flex gap-2">
+              <span className="text-slate-400 shrink-0 w-12">{t(a.at)}</span>
+              <span className="text-slate-700">{a.label}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+};
+
 const Stat: React.FC<{ label: string; value: number | string; strong?: boolean }> = ({
   label,
   value,
@@ -466,6 +514,8 @@ export const TeamTodayPage: React.FC = () => {
             </div>
 
             <RoleStats r={r} />
+
+            <CrmActions actions={r.crm_actions || []} />
 
             {(r.work_log || []).length > 0 && (
               <ul className="text-[11px] space-y-1">

@@ -18,6 +18,7 @@ import {
 } from './components/auth/TwoStepSetup';
 import { MDExecutiveDashboard } from './components/dashboards/MDExecutiveDashboard';
 import { AdminCommandCenter } from './components/dashboards/AdminCommandCenter';
+import { TechnicalManagerDashboard } from './components/dashboards/TechnicalManagerDashboard';
 import { TelecallerDashboard } from './components/dashboards/TelecallerDashboard';
 import { PMDashboard } from './components/dashboards/PMDashboard';
 import { StaffDashboard } from './components/dashboards/StaffDashboard';
@@ -272,13 +273,29 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     appLockEnabled,
     lock,
   } = useAuth();
-  // MD/Admin/Finance must turn on 2-step login before using the app.
+  // MD/Admin/Finance are reminded to turn on 2-step login (optional).
   const twoStepRole = !!user?.roles?.some((r: string) => TWO_STEP_ROLES.includes(r));
   const { status: twoStep, reload: reloadTwoStep } = useTwoStepStatus(
     twoStepRole && firstLoginDone,
   );
   const navigate = useNavigate();
   const location = useLocation();
+  const twoStepTipKey = `rrh_two_step_tip_dismissed_${user?.id ?? ''}`;
+  const [twoStepTipDismissed, setTwoStepTipDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(twoStepTipKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const dismissTwoStepTip = () => {
+    setTwoStepTipDismissed(true);
+    try {
+      localStorage.setItem(twoStepTipKey, '1');
+    } catch {
+      // Private mode: it just shows again next time.
+    }
+  };
   const activeTab = location.pathname.replace('/', '') || 'dashboard';
   const [apiStatus, setApiStatus] = useState<string>('Checking...');
   const [showReportModal, setShowReportModal] = useState(false);
@@ -477,12 +494,18 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     return <FirstLoginSetup />;
   }
 
+  // Only blocks when the server makes it compulsory (TWO_STEP_REQUIRED).
   if (twoStep?.required && !twoStep.enabled) {
     return <TwoStepRequiredScreen onDone={reloadTwoStep} />;
   }
+  const showTwoStepTip = !!twoStep?.recommended && !twoStep.enabled && !twoStepTipDismissed;
 
-  const isMD = activeRole === Roles.MD || activeRole === Roles.ADMIN;
-  const isTechAdmin = activeRole === Roles.ADMIN;
+  // A Technical Manager works with Admin's access (their token carries both
+  // roles); switching to either shows the same screens.
+  const isTechManagerRole = activeRole === Roles.TECHNICAL_MANAGER;
+  const isMD = activeRole === Roles.MD || activeRole === Roles.ADMIN || isTechManagerRole;
+  const isTechAdmin = activeRole === Roles.ADMIN || isTechManagerRole;
+  const isTechManager = isTechAdmin && !!user?.roles?.includes(Roles.TECHNICAL_MANAGER);
   const isHRManager = activeRole === Roles.HR_MANAGER;
   const isProjectManager = activeRole === Roles.PROJECT_MANAGER;
   const isTelecaller = activeRole === Roles.TELECALLER;
@@ -550,7 +573,9 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
       <Route
         path="/dashboard"
         element={
-          isMD ? (
+          isTechManager ? (
+            <TechnicalManagerDashboard />
+          ) : isMD ? (
             <MDExecutiveDashboard />
           ) : isTechAdmin ? (
             <AdminCommandCenter />
@@ -887,6 +912,30 @@ const AppShell: React.FC<{ swUpdate: ReturnType<typeof useSwUpdate> }> = ({ swUp
     <AppLayout title={pageTitle}>
       {/* Global Image Banner */}
       <GlobalAnnouncementBanner />
+
+      {/* Optional 2-step login tip; "Not now" hides it on this device. */}
+      {showTwoStepTip && (
+        <div className="bg-navy-50 border-b border-navy-100 px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2 z-30 relative">
+          <span className="text-sm text-navy-900">
+            <b>Optional:</b> turn on 2-step login to protect your account with a code from your
+            phone.
+          </span>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => navigate('/settings')}
+              className="flex-1 sm:flex-none bg-navy-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold"
+            >
+              Set up
+            </button>
+            <button
+              onClick={dismissTwoStepTip}
+              className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold text-navy-700 hover:bg-navy-100"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Push Notification Banner */}
       {isSupported && permission === 'default' && (

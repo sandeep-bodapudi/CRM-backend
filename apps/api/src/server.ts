@@ -70,6 +70,7 @@ import compression from 'compression';
 import { forwardAll } from './utils/forwarder';
 import { clientIp } from './middleware/rateLimiter';
 import { auditWrites, projectSnapshot, propertySnapshot } from './middleware/auditWrites';
+import { recordCrmAction } from './middleware/recordCrmAction';
 import { requestContext } from './utils/requestContext';
 
 const app = express();
@@ -262,6 +263,8 @@ logger.info(
 app.use('/api/v1/health', healthRoutes);
 
 if (mountInternal) {
+  // Every successful change by a signed-in person, for the daily work page.
+  app.use('/api/v1', recordCrmAction);
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/v1/auth/app-lock', webauthnRoutes);
   app.use('/api/v1/feedback', feedbackRoutes);

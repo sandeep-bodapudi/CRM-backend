@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock,
@@ -66,8 +67,12 @@ export const TaskManager: React.FC = () => {
     status?: string;
   } | null>(null);
   const [employees, setEmployees] = useState<EmployeeListItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'my_tasks' | 'team_tasks'>('my_tasks');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  // Dashboards link straight to a filtered list: /tasks?tab=team_tasks&status=OVERDUE.
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'my_tasks' | 'team_tasks'>(
+    searchParams.get('tab') === 'team_tasks' ? 'team_tasks' : 'my_tasks',
+  );
+  const [filterStatus, setFilterStatus] = useState<string>(searchParams.get('status') || 'ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [cheerUpToast, setCheerUpToast] = useState<string | null>(null);

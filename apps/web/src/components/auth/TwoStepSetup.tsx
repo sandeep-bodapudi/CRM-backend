@@ -8,14 +8,16 @@ import { handleApiError, toUserFacingError } from '../../utils/userFacingError';
 import { Roles } from '../../shared';
 
 // 2-step login with an authenticator app (Google Authenticator, Microsoft
-// Authenticator...). Required for MD, Admin and Finance: the server refuses
-// their other requests until it is on (TWO_STEP_SETUP_REQUIRED).
+// Authenticator...). Optional (2026-11-02): MD, Admin and Finance are
+// reminded to turn it on, but nothing is blocked if they don't. It is only
+// compulsory when the server sets TWO_STEP_REQUIRED.
 
 export const TWO_STEP_ROLES: string[] = [Roles.MD, Roles.ADMIN, Roles.FINANCE];
 
 interface TwoStepStatus {
   enabled: boolean;
   required: boolean;
+  recommended?: boolean;
 }
 
 /** Status for the signed-in person; null while loading or on error. */

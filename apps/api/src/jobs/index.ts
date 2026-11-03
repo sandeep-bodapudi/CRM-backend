@@ -12,7 +12,9 @@ async function alertJobFailure(jobName: string, error: unknown) {
   const people = await prisma.employee.findMany({
     where: {
       status: 'ACTIVE',
-      roles: { some: { role: { name: { in: [Roles.MD, Roles.ADMIN] } } } },
+      roles: {
+        some: { role: { name: { in: [Roles.MD, Roles.ADMIN, Roles.TECHNICAL_MANAGER] } } },
+      },
     },
     select: { id: true },
   });
